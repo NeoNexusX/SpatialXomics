@@ -218,7 +218,7 @@
           "en": "AI Assistant",
           "zh-CN": "AI 助手"
         },
-        "active": true,
+        "active": false,
         "requireAuth": true
       },
       {
