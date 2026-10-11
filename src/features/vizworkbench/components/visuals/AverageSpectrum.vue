@@ -247,6 +247,42 @@ function updateSelector() {
   chartInstance.setOption({ graphic: buildSelectorGraphic() as any })
 }
 
+/**
+ * 选中 m/z 落在当前缩放窗口外时，保持窗口宽度平移过去（目标居中）。
+ * 未缩放（全谱可见）或目标已在窗口内时不动作，避免打断用户正在进行的查看；
+ * 注释行点击 / m/z 搜索 / 区域比较表的选择都汇聚到 selectedMzIndex，此处统一接管。
+ */
+function panZoomToSelection() {
+  if (!chartInstance || props.dataMode === 'processed') return
+  const mz = props.selectedMz
+  const data = props.chartData
+  if (mz == null || !data.length) return
+  const zoom = readZoomWindow()
+  if (!zoom) return // 未缩放：目标峰在全谱视图中本就可见
+  if (mz >= zoom[0] && mz <= zoom[1]) return // 已在窗口内：只移红线
+  const width = zoom[1] - zoom[0]
+  const mzMin = data[0]![0]
+  const mzMax = data[data.length - 1]![0]
+  let start = mz - width / 2
+  let end = mz + width / 2
+  // 目标贴近谱边缘时整体平移钳位，尽量保住缩放宽度
+  if (start < mzMin) {
+    start = mzMin
+    end = mzMin + width
+  } else if (end > mzMax) {
+    end = mzMax
+    start = mzMax - width
+  }
+  // inside 与 slider 两个 dataZoom 绑定同一 xAxis，dispatch 一个另一个同步跟随；
+  // 触发的 datazoom 事件会经 scheduleSelectorUpdate 重画红线
+  chartInstance.dispatchAction({
+    type: 'dataZoom',
+    dataZoomIndex: 0,
+    startValue: start,
+    endValue: end,
+  })
+}
+
 function scheduleSelectorUpdate() {
   if (selectorTimer || props.dataMode === 'processed') return
   selectorTimer = window.setTimeout(() => {
@@ -595,11 +631,12 @@ watch(
   { flush: 'post' },
 )
 
-// 选中 m/z 变化时移动红线
+// 选中 m/z 变化时移动红线；目标落在缩放窗口外时先把窗口平移过去
 watch(
   () => props.selectedMzIndex,
   () => {
     if (!chartInstance) return
+    panZoomToSelection()
     updateSelector()
   },
 )
