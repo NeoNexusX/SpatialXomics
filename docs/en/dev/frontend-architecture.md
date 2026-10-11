@@ -5,7 +5,7 @@
 - `src/app`: application shell and global entry components.
 - `src/views`: route pages that compose feature capabilities; existing pages may contain limited page-coordination logic.
 - `src/shared`: HTTP, authentication, configuration, directives (`v-reveal`), generic components, composables, types, and utilities that do not belong to one business feature.
-- `src/features/<module>`: business modules with `api`, `components`, `composables`, `constants`, `mappers`, `services`, `stores`, `types`, or `utils` as needed. Current modules: `assistant`, `auth`, `collections`, `datasets`, `home`, `upload`, `users`, `vizworkbench`, `workspace`.
+- `src/features/<module>`: business modules with `api`, `components`, `composables`, `constants`, `mappers`, `services`, `stores`, `types`, or `utils` as needed. Current modules: `auth`, `collections`, `datasets`, `home`, `upload`, `users`, `vizworkbench`, `workspace`. <!-- The `assistant` (AI assistant) module is temporarily hidden from users; restore it to this list when re-enabling. -->
 - `src/i18n`: the app-wide vue-i18n instance, type definitions, and locale messages. Messages are organized as `locales/{locale}/{namespace}.json`; core namespaces (`common`, `auth`) are loaded at startup, while feature namespaces are lazy-loaded alongside their routes.
 - `src/services`: infrastructure-oriented readers and clients shared by multiple features — Zarr (`zarr`, including its OSS client), clustering, and PubChem.
 - `src/router`: route declarations plus authentication/authorization guards.
