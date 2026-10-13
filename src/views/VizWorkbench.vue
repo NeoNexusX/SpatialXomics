@@ -6,7 +6,7 @@ import ResultHeader from '@/features/vizworkbench/components/visuals/ResultHeade
 import IonImageSection from '@/features/vizworkbench/components/IonImageSection.vue'
 import SpectrumSection from '@/features/vizworkbench/components/SpectrumSection.vue'
 import OverlayControls from '@/features/vizworkbench/components/OverlayControls.vue'
-import AnnotationPanel from '@/features/vizworkbench/components/AnnotationPanel.vue'
+import AnnotationPanel from '@/features/vizworkbench/components/annotation/AnnotationPanel.vue'
 import CompareRegionsPanel from '@/features/vizworkbench/components/CompareRegionsPanel.vue'
 import ComparisonResultsTable from '@/features/vizworkbench/components/ComparisonResultsTable.vue'
 import RegionPreviewThumbnail from '@/features/vizworkbench/components/RegionPreviewThumbnail.vue'
@@ -20,6 +20,7 @@ import {
   getSharedZarrContext,
   disposeZarrState,
   loadIonMatrixByIndex,
+  findClosestMzIndex,
 } from '@/features/vizworkbench/composables/useZarrIonImage'
 import { useDisplayRange } from '@/features/vizworkbench/composables/useDisplayRange'
 import { useOverlayData } from '@/features/vizworkbench/composables/useOverlayData'
@@ -30,7 +31,6 @@ import { useResultMeta } from '@/features/vizworkbench/composables/useResultMeta
 import { useRegionComparison } from '@/features/vizworkbench/composables/useRegionComparison'
 import { ZARR_STORE } from '@/shared/config/defaults'
 import { rgbCss } from '@/features/vizworkbench/utils/regionPalette'
-import { findClosestIndex } from '@/features/vizworkbench/utils/csvAnnotation'
 import {
   createMask,
   exportMask,
@@ -68,15 +68,14 @@ const isStale = computed(() => state?.runId == null)
 
 const {
   datasetName,
-  analyzer,
-  ionSource,
+  acquisition,
   pixelSize,
   pixelSizeUm,
-  polarity,
   spectrumMode,
   storageMode,
   status,
   methods,
+  sourceFile,
 } = useResultMeta(runId)
 
 // ---- 可视化参数 ----
@@ -85,8 +84,8 @@ const colormap = ref('inferno')
 const intensityScale = ref('linear')
 const gamma = ref(1)
 
-// ---- Annotation CSV import panel (left) ----
-// Collapsed by default on all screens (desktop: thin rail; mobile: off-canvas drawer).
+// ---- 注释面板（左侧） ----
+// 默认收起（桌面为细条，小屏为页面流里的一条按钮）
 const annotationExpanded = ref(false)
 
 // ---- Zarr 数据加载 ----
@@ -562,12 +561,7 @@ const spectrumStats = computed(() => ({
 
 const displayInfo = computed(() => ({
   ...imageInfo.value,
-  polarity: polarity.value,
-  analyzer: analyzer.value,
-  ionisationSource: ionSource.value,
   pixelSize: pixelSize.value,
-  spectrumMode: spectrumMode.value,
-  storageMode: storageMode.value,
 }))
 
 // ---- 选中像素坐标（processed 模式） ----
@@ -602,7 +596,7 @@ async function onSearchMz(raw: string) {
     showToast(t('vizworkbench.page.mzAxisNotLoaded'), 'error')
     return
   }
-  const idx = findClosestIndex(axis, target)
+  const idx = findClosestMzIndex(target)
   const nearest = axis[idx]!
   const delta = Math.abs(nearest - target)
   if (delta > mzTolerance.value) {
@@ -675,9 +669,10 @@ async function onSelectPixel(col: number, row: number) {
     <template #left-panel>
       <AnnotationPanel
         v-model:expanded="annotationExpanded"
+        :run-id="runId"
+        :acquisition="acquisition"
         :select-mz-index="handleSelectMzIndex"
         :selected-mz-index="selectedMzIndex"
-        :spectrum-mode="spectrumMode"
       />
     </template>
 
@@ -808,6 +803,8 @@ async function onSelectPixel(col: number, row: number) {
         :channels-mode="channelsMode"
         :histogram="intensityHistogram"
         :info="displayInfo"
+        :acquisition="acquisition"
+        :source-file="sourceFile"
         :methods="methods"
         :sorted-values="sortedNonZero"
         @update:display-min="onDisplayMinChange"

@@ -59,9 +59,7 @@
               class="w-2 h-2 rounded-sm shrink-0"
               :style="{ backgroundColor: `rgb(${cv.color.r},${cv.color.g},${cv.color.b})` }"
             ></span>
-            <span class="text-base-content/60"
-            >{{ cv.mz.toFixed(6) }}</span
-            >
+            <span class="text-base-content/60">{{ cv.mz.toFixed(6) }}</span>
             <span>{{ cv.intensity.toExponential(2) }}</span>
           </div>
         </template>

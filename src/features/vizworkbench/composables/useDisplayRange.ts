@@ -19,7 +19,8 @@ function computeRange(matrix: Float32Array) {
     const v = matrix[i]!
     if (v > 0) nonZeroVals.push(v)
   }
-  if (!nonZeroVals.length) return { displayMin: 0, displayMax: 1, dataMax: 1, sorted: [] as number[] }
+  if (!nonZeroVals.length)
+    return { displayMin: 0, displayMax: 1, dataMax: 1, sorted: [] as number[] }
   const sortedF32 = Float32Array.from(nonZeroVals).sort()
   const p95 = sortedF32[Math.floor(sortedF32.length * 0.95)] ?? sortedF32[sortedF32.length - 1]!
   const dataMax = sortedF32[sortedF32.length - 1]!
@@ -99,21 +100,21 @@ export function useDisplayRange(
     const matrix = ionMatrix.value
     if (!matrix || !matrix.length) {
       return { pixels: '--', nonZero: '--', totalIon: '--' }
-  }
-  const cols = ionCols.value
-  const rows = ionRows.value
-  let nonZero = 0
-  let total = 0
-  for (let i = 0; i < matrix.length; i++) {
-    const value = matrix[i]!
-    if (value > 0) nonZero++
-    total += value
-  }
-  return {
-    pixels: `${cols} × ${rows}`,
-    nonZero: ((nonZero / (rows * cols)) * 100).toFixed(1) + '%',
-    totalIon: total.toExponential(2),
-  }
+    }
+    const cols = ionCols.value
+    const rows = ionRows.value
+    let nonZero = 0
+    let total = 0
+    for (let i = 0; i < matrix.length; i++) {
+      const value = matrix[i]!
+      if (value > 0) nonZero++
+      total += value
+    }
+    return {
+      pixels: `${cols} × ${rows}`,
+      nonZero: ((nonZero / (rows * cols)) * 100).toFixed(1) + '%',
+      totalIon: total.toExponential(2),
+    }
   })
 
   // Methods

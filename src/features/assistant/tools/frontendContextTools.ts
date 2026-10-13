@@ -17,12 +17,8 @@ import {
   buildPixelSpectrumPeaks,
   buildAnnotationTop,
   buildPageState,
-  getAnnotationData,
+  getAnnotationRows,
 } from '../providers/analysisContext'
-import {
-  isotopeEnvelope,
-  chargeFromIonType,
-} from '@/features/vizworkbench/utils/isotope'
 import { DEFAULT_TOP_N, MAX_TOP_N } from '../agentconfig/defaults'
 import type {
   DatasetOverview,
@@ -87,125 +83,87 @@ function renderKmeans(k: KmeansSummary): string {
   return `k=${k.k}\n${sizes}\n${sel}`
 }
 
-function renderAnnotations(rows: AnnotationRow[]): string {
-  if (rows.length === 0) return 'No annotation matches in current context.'
-  // 排序口径头：与 buildAnnotationTop 同一判定（有综合分按其降序，否则
-  // |massError| 升序）。写进输出让模型能向用户说明「前几个」按什么排，
-  // 避免与注释面板（默认 massError 升序）顺序不一致时用户对不上号。
-  const hasComposite = rows.some((r) => r.compositeScore != null)
-  const sortNote = hasComposite
-    ? 'Top matches sorted by composite evidence score (descending) — most confident first. Note: this differs from the annotation panel default (mass error ascending).'
-    : 'Top matches sorted by |mass error| (ascending) — closest mass matches first (no composite evidence score available).'
-  const body = rows
-    .map((a, i) => {
-      // name 截 36 字符：给证据 token 留预算（工具输出有 2000 字符截断）
-      const raw = a.name || (a.candidates && a.candidates[0]) || a.formulaIon || '?'
-      const name = raw.length > 36 ? `${raw.slice(0, 36)}…` : raw
-      const ionType = a.ionType ? ` [${a.ionType}]` : ''
-      const mz = a.matchedMz ?? a.expMz
-      // 有综合分时 err 被 composite 吸收，改用紧凑证据 token：
-      // L4 c=0.87 q=2% add=0.50×2 [msm=0.79 ch=0.95 sp=0.91 ar=0.83]
-      let evidence = ''
-      if (a.compositeScore != null) {
-        const lvl = a.level != null ? ` L${a.level}` : ''
-        const q = a.fdr != null ? ` q=${(a.fdr * 100).toFixed(1)}%` : ''
-        const adduct =
-          a.adductScore != null && (a.adductPeers?.length ?? 0) > 0
-            ? ` add=${a.adductScore.toFixed(2)}×${(a.adductPeers?.length ?? 0) + 1}`
-            : ''
-        const msm = a.msm != null ? ` msm=${a.msm.toFixed(2)}` : ''
-        const ch = a.chaos != null ? ` ch=${a.chaos.toFixed(2)}` : ''
-        const sp = a.spatial != null ? ` sp=${a.spatial.toFixed(2)}` : ''
-        const ar = a.adductCorr != null ? ` ar=${a.adductCorr.toFixed(2)}` : ''
-        evidence = `${lvl} c=${a.compositeScore.toFixed(2)}${q}${adduct}${msm}${ch}${sp}${ar}`
-      } else {
-        evidence = a.massError != null ? ` err=${fmt(Math.abs(a.massError))}` : ''
-      }
-      return `${i + 1}. mz=${fmt(mz ?? undefined)} ${name}${ionType}${evidence}`
-    })
-    .join('\n')
-  return [sortNote, body].join('\n')
+/** 百分数（q 值） */
+function pct(v: number | null | undefined): string {
+  return v == null || !Number.isFinite(v) ? 'N/A' : `${(v * 100).toFixed(1)}%`
 }
 
-/** 单条注释的完整证据（get_annotation_detail 工具的渲染体）：
- *  Tier-1 全字段 + Tier-2 chaos/spatial/spectral/MSM + 多加合物组 +
- *  理论同位素包络。peers 为同分子其他加合物行（供 m/z 与名称）。 */
-export function renderAnnotationDetail(
-  a: AnnotationRow,
-  spatial:
-    | { chaos?: number | null; spatial?: number | null; spectral?: number | null; msm?: number | null; adductCorr?: number | null }
-    | null
-    | undefined,
-  peers: { ionType?: string | null; matchedMz?: number | null; expMz?: number }[],
-): string {
-  const lines: string[] = []
-  lines.push(`name: ${a.name || a.candidates?.[0] || '?'}`)
-  if (a.candidates && a.candidates.length > 1) {
-    lines.push(`candidates (${a.candidates.length}): ${a.candidates.slice(0, 10).join(' | ')}`)
-  }
-  const id = [
-    a.formulaIon ? `formula ${a.formulaIon}` : '',
-    a.ionType ? `ion ${a.ionType}` : '',
-    `expMz ${fmt(a.expMz)}`,
-    a.matchedMz != null ? `matchedMz ${fmt(a.matchedMz)}` : '',
-    a.massError != null ? `err ${fmt(Math.abs(a.massError))}` : '',
-    a.avgIntensity != null ? `avgIntensity ${fmt(a.avgIntensity)}` : '',
-  ]
-    .filter(Boolean)
-    .join(' | ')
-  lines.push(id)
-  lines.push(
-    `status: ${a.matchStatus ?? 'unknown'}` +
-      (a.matchStatus !== 'matched' ? ' (only matched rows carry evidence scores)' : ''),
-  )
-  if (a.matchStatus === 'matched') {
-    lines.push(
-      [
-        `scores: L${a.level ?? '?'}`,
-        `mass=${fmt(a.massScore)}`,
-        a.isotopeScore != null ? `iso=${fmt(a.isotopeScore)}` : 'iso=N/A',
-        a.isotopeObsCount != null ? `(${a.isotopeObsCount}/${a.isotopeExpCount ?? '?'} peaks)` : '',
-        a.adductScore != null ? `adduct=${fmt(a.adductScore)}` : '',
-        `composite=${fmt(a.compositeScore)}`,
-        a.fdr != null ? `fdr=${(a.fdr * 100).toFixed(2)}%` : '',
-      ]
-        .filter(Boolean)
-        .join(' '),
+function ppm(v: number): string {
+  return `${v >= 0 ? '+' : ''}${v.toFixed(1)}ppm`
+}
+
+function renderAnnotations(rows: AnnotationRow[]): string {
+  if (rows.length === 0) return 'No annotations in current context.'
+  const header =
+    'Top annotations by total score (0.7×mass + 0.1×adduct fit + 0.2×spatial; spatial = 0.2×chaos ' +
+    '+ 0.8×same-molecule co-localization, unavailable co-localization counts as 0) with target-decoy ' +
+    'FDR q-values. One row = one adduct ion; ions of the same molecule are separate rows (sib).'
+  const body = rows.map((a) => {
+    // name 截 32 字符：给证据 token 留预算（工具输出有 2000 字符截断）
+    const name = a.name.length > 32 ? `${a.name.slice(0, 32)}…` : a.name
+    const spatial =
+      a.chaos != null
+        ? ` ch=${a.chaos.toFixed(2)}${a.coloc != null ? ` col=${a.coloc.toFixed(2)}` : ''}`
+        : ''
+    const sib = a.siblings.length ? ` sib=${a.siblings.map((x) => x.adduct).join(',')}` : ''
+    const shared = a.samePeak.length ? ` samePeak=${a.samePeak.length}` : ''
+    return (
+      `#${a.rank} ${name} ${a.adduct} mz=${a.obsMz.toFixed(4)} (${ppm(a.errPpm)}) ` +
+      `s=${a.totalScore.toFixed(2)} q=${pct(a.q)} m=${a.massScore.toFixed(2)} ` +
+      `fit=${a.adductFit.toFixed(1)}${spatial}${sib}${shared}`
     )
-    if (spatial) {
-      lines.push(
-        `spatial (Tier-2): chaos=${fmt(spatial.chaos)} sp=${fmt(spatial.spatial)} ` +
-          `spec=${fmt(spatial.spectral)} msm=${fmt(spatial.msm)}` +
-          (spatial.adductCorr != null ? ` adductCorr=${spatial.adductCorr.toFixed(2)}` : ''),
-      )
-    }
-    if (peers.length > 0) {
-      lines.push(
-        `adduct group (M×${peers.length + 1}): ` +
-          peers
-            .map((p) => `${p.ionType ?? '?'} mz=${fmt(p.matchedMz ?? p.expMz)}`)
-            .join(', ') +
-          (spatial?.adductCorr != null
-            ? spatial.adductCorr >= 0.7
-              ? ' [spatially confirmed]'
-              : ' [NOT co-localized — bonus questionable]'
-            : ' [spatial confirmation pending]'),
-      )
-    }
-    const z = chargeFromIonType(a.ionType ?? null)
-    const env = isotopeEnvelope(a.formulaIon ?? null, z)
-    if (env) {
-      const anchor = a.matchedMz ?? a.expMz ?? 0
-      lines.push(
-        'isotope envelope (theory): ' +
-          env
-            .map((p) => {
-              const k = Math.round((p.dm * z) / 1.0033548)
-              return `${k <= 0 ? 'M' : `M+${k}`} ${(p.rel * 100).toFixed(1)}% (${(anchor + p.dm).toFixed(4)})`
-            })
-            .join(' | '),
-      )
-    }
+  })
+  return [header, ...body].join('\n')
+}
+
+/** 单条注释的完整证据（get_annotation_detail 工具的渲染体） */
+export function renderAnnotationDetail(a: AnnotationRow): string {
+  const lines: string[] = []
+  lines.push(`name: ${a.name}`)
+  if (a.candidates.length > 0) {
+    const list = a.candidates.slice(0, 10).map((c) => (c.id ? `${c.name} (${c.id})` : c.name))
+    lines.push(`candidates (${a.candidates.length}): ${list.join(' | ')}`)
+  }
+  lines.push(
+    [
+      `formula ${a.formula}`,
+      `adduct ${a.adduct}`,
+      `theoMz ${a.theoMz.toFixed(4)}`,
+      `obsMz ${a.obsMz.toFixed(4)}`,
+      `err ${ppm(a.errPpm)}`,
+      a.intensity != null ? `intensity ${fmt(a.intensity)}` : '',
+    ]
+      .filter(Boolean)
+      .join(' | '),
+  )
+  const spatialScore = a.spatialScore != null ? a.spatialScore.toFixed(3) : 'N/A'
+  lines.push(
+    `scores: total=${a.totalScore.toFixed(3)} (mass=${a.massScore.toFixed(3)} ` +
+      `adductFit=${a.adductFit.toFixed(2)} spatial=${spatialScore}) q=${pct(a.q)} rank=${a.rank}`,
+  )
+  if (a.chaos != null) {
+    const coloc =
+      a.coloc != null ? ` coloc=${a.coloc.toFixed(3)} (best Pearson with same-molecule ions)` : ''
+    lines.push(`spatial: chaos=${a.chaos.toFixed(3)}${coloc}`)
+  } else {
+    lines.push(
+      'spatial: not scored (only the top-ranked ions and their same-molecule ions are scored)',
+    )
+  }
+  if (a.siblings.length) {
+    const sibs = a.siblings.map(
+      (x) =>
+        `${x.adduct} mz=${x.obsMz.toFixed(4)} rank=${x.rank}` +
+        (x.r != null ? ` r=${x.r.toFixed(2)}` : ''),
+    )
+    lines.push(`same molecule: ${sibs.join('; ')}`)
+  }
+  if (a.missingAdducts.length) {
+    lines.push(`enabled but not detected: ${a.missingAdducts.join(', ')}`)
+  }
+  if (a.samePeak.length) {
+    const others = a.samePeak.map((x) => `${x.name} ${x.adduct}`)
+    lines.push(`same peak also explained by: ${others.join('; ')}`)
   }
   return lines.join('\n')
 }
@@ -377,7 +335,10 @@ export const frontendContextTools: Plugin.Function<void> = (ctx: Context) => {
       category: 'page',
       name: 'get_annotation_top',
       description:
-        'Get top annotation matches (sorted by composite evidence score descending - mass x isotope with target-decoy FDR - when available, else by |mass error|). Rows carry tokens like "L4 c=0.87 q=2% msm=0.79 ch=0.95 sp=0.91" (confidence level, composite, FDR q-value, pySM MSM, level-set chaos, isotope image correlation).',
+        'Get the top annotations ranked by total score (mass error + adduct fit + spatial chaos with ' +
+        'same-molecule co-localization) with target-decoy FDR q-values. One row = one adduct ion. ' +
+        'Tokens: s=total q=FDR m=mass fit=adduct fit ch=chaos col=co-localization sib=other adducts ' +
+        'of the same molecule samePeak=other annotations on the same peak.',
       parameters: {
         topN: {
           type: 'integer',
@@ -398,51 +359,40 @@ export const frontendContextTools: Plugin.Function<void> = (ctx: Context) => {
       category: 'page',
       name: 'get_annotation_detail',
       description:
-        'Get the FULL evidence for one annotation row (get_annotation_top truncates for space): ' +
-        'all Tier-1 scores (mass/isotope/adduct/composite/FDR/level), Tier-2 chaos/spatial/' +
-        'spectral/MSM, the same-molecule adduct group with peer m/z values and co-localization, ' +
-        'all candidate names, and the theoretical isotope envelope. Identify the row by its ' +
-        'matched m/z (as listed by get_annotation_top) or by rowId.',
+        'Get the FULL evidence for one annotation row (get_annotation_top abbreviates): score ' +
+        'breakdown, chaos and co-localization, the other adduct ions of the same molecule with ' +
+        'their Pearson r, enabled adducts that were not detected, other annotations on the same ' +
+        'peak, and all candidate names. Identify the row by rowId, or by observed m/z (the ' +
+        'best-ranked row on the closest peak is returned).',
       parameters: {
-        mz: { type: 'number', description: 'Matched m/z of the row (from get_annotation_top)' },
+        mz: { type: 'number', description: 'Observed m/z of the row (from get_annotation_top)' },
         rowId: { type: 'integer', description: 'Row id if known (takes precedence over mz)' },
       },
       async execute(args) {
         if (args.mz == null && args.rowId == null) {
           throw new Error('Provide "mz" or "rowId" to identify the annotation row')
         }
-        const data = getAnnotationData()
-        if (!data || data.matchedRows.length === 0) {
-          return unavailable('Annotation data')
-        }
-        const rows = data.matchedRows
+        const rows = getAnnotationRows()
+        if (!rows || rows.length === 0) return unavailable('Annotation data')
         let row: AnnotationRow | undefined
         if (args.rowId != null) {
           row = rows.find((r) => r.id === args.rowId)
         } else {
-          let best: AnnotationRow | undefined
-          let bestD = Infinity
-          for (const r of rows) {
-            const d = Math.abs((r.matchedMz ?? r.expMz ?? NaN) - args.mz!)
-            if (Number.isFinite(d) && d < bestD) {
-              bestD = d
-              best = r
-            }
+          const dist = (r: AnnotationRow) => Math.abs(r.obsMz - args.mz!)
+          const minD = rows.reduce((m, r) => Math.min(m, dist(r)), Infinity)
+          // 最近峰也不在 0.5 Da 内 → 视为没有对应注释行；同一峰有多种解释时取排名最高的
+          if (minD <= 0.5) {
+            row = rows
+              .filter((r) => dist(r) - minD <= 1e-9)
+              .reduce((best, r) => (r.rank < best.rank ? r : best))
           }
-          // 最近峰也不在 0.5 Da 内 → 视为没有对应注释行
-          row = bestD <= 0.5 ? best : undefined
         }
         if (!row) {
           return args.rowId != null
             ? `No annotation row with rowId ${args.rowId}. Call get_annotation_top to list valid rows.`
             : `No annotation row matched near m/z ${args.mz}. Call get_annotation_top to list valid rows.`
         }
-        const spatial = data.spatial?.get(row.id ?? -1) ?? null
-        const peers = (row.adductPeerIds ?? [])
-          .map((id) => rows.find((r) => r.id === id))
-          .filter((p): p is AnnotationRow => p != null)
-          .map((p) => ({ ionType: p.ionType, matchedMz: p.matchedMz, expMz: p.expMz }))
-        return renderAnnotationDetail(row, spatial, peers)
+        return renderAnnotationDetail(row)
       },
     }),
   )

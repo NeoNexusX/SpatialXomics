@@ -5,8 +5,8 @@
  * metadataAttrsRef / polarityRef / pixelSpectrum），禁止调 useZarrIonImage()
  * 创建失步实例。
  *
- * 实例级数据（selectedIon / kmeans / annotations）由 ResultDetail.vue 和
- * AnnotationPanel.vue 通过 registerContextProviders / unregisterContextProviders 注入。
+ * 实例级数据（selectedIon / kmeans / annotations）由 VizWorkbench.vue 和注释面板
+ * （useAnnotation）通过 registerContextProviders / unregisterContextProviders 注入。
  */
 
 import {
@@ -41,20 +41,12 @@ export interface AnalysisContextProviders {
     clusterSizes: number[]
     selectedIds: number[]
   } | null
-  annotations?: () => {
-    matchedRows: AnnotationRow[]
-    /** Tier-2 空间分（row id → pySM 参考度量），AnnotationPanel 渐进填充；可缺省 */
-    spatial?: Map<
-      number,
-      {
-        chaos: number | null
-        spatial: number | null
-        spectral: number | null
-        msm: number | null
-        adductCorr?: number | null
-      }
-    > | null
-  } | null /** UMAP 降维/聚类任务状态与栅格概要（不含逐点 embedding——量大且 LLM 用不上） */
+  /**
+   * 注释行（一行 = 一个加合离子，空间分随后台评分逐步补全）。rows 按需构建：
+   * 每次发送都要的页面状态只读 count，不必把全部行展开一遍。
+   */
+  annotations?: () => { count: number; rows: () => AnnotationRow[] } | null
+  /** UMAP 降维/聚类任务状态与栅格概要（不含逐点 embedding——量大且 LLM 用不上） */
   umap?: () => {
     ready: boolean
     visible: boolean
@@ -68,7 +60,7 @@ let providers: AnalysisContextProviders = {}
 
 /**
  * 注册实例级数据 provider（合并语义：多个组件各注册自己的键，互不覆盖）。
- * 由 ResultDetail / AnnotationPanel 的 setup 调用；getter 均为惰性取值。
+ * 由 VizWorkbench / 注释面板的 setup 调用；getter 均为惰性取值。
  */
 export function registerContextProviders(p: AnalysisContextProviders): void {
   providers = { ...providers, ...p }
@@ -77,7 +69,7 @@ export function registerContextProviders(p: AnalysisContextProviders): void {
 /**
  * 注销 provider。
  * 不传 keys 时清空全部（ResultDetail 卸载时用）；
- * 只传自身键时仅移除对应项（AnnotationPanel 卸载时用，避免误清其他组件的注册）。
+ * 只传自身键时仅移除对应项（注释面板卸载时用，避免误清其他组件的注册）。
  */
 export function unregisterContextProviders(keys?: (keyof AnalysisContextProviders)[]): void {
   if (!keys) {
@@ -89,23 +81,9 @@ export function unregisterContextProviders(keys?: (keyof AnalysisContextProvider
   providers = next
 }
 
-/** 注释数据的原始访问（get_annotation_detail 工具用）：matched 行 + Tier-2 空
- *  间分 Map。AnnotationPanel 未打开/未导入时返回 null。 */
-export function getAnnotationData(): {
-  matchedRows: AnnotationRow[]
-  spatial?: Map<
-    number,
-    {
-      chaos: number | null
-      spatial: number | null
-      spectral: number | null
-      msm: number | null
-      adductCorr?: number | null
-    }
-  > | null
-} | null {
-  const p = providers.annotations?.()
-  return p && p.matchedRows ? p : null
+/** 全部注释行（get_annotation_detail 工具用）；注释面板还没有结果时为 null */
+export function getAnnotationRows(): AnnotationRow[] | null {
+  return providers.annotations?.()?.rows() ?? null
 }
 
 // ---- 数据集段构建 ----
@@ -279,38 +257,11 @@ export function buildPixelSpectrumPeaks(
 
 // ---- 注释段 ----
 
+/** 按总分排名的前 topN 行（最多 20） */
 export function buildAnnotationTop(topN: number = 10): AnnotationRow[] {
-  const annotations = providers.annotations?.()
-  if (!annotations || !annotations.matchedRows) return []
-
-  // 只回 matched 行（invalid/unmatched 对模型没有摘要价值）。排序：有综合
-  // 证据分时按其降序（null 沉底，比 |massError| 更能反映可信度）；否则回退
-  // 旧的 |massError| 升序。filter 产生新数组，原地 sort 不动 provider 的数据。
-  const rows = annotations.matchedRows.filter((r) => r.matchStatus === 'matched')
-  const hasComposite = rows.some((r) => r.compositeScore != null)
-  rows.sort((a, b) =>
-    hasComposite
-      ? (b.compositeScore ?? -Infinity) - (a.compositeScore ?? -Infinity)
-      : Math.abs(a.massError ?? Infinity) - Math.abs(b.massError ?? Infinity),
-  )
-  const top = rows.slice(0, Math.min(topN, 20))
-  // Tier-2 空间分按 row id 合并——只并入最终留下的 top 行（可能缺省），
-  // 避免为几千行做整表浅拷贝却只留 ≤20 行
-  const spatial = annotations.spatial
-  if (!spatial) return top
-  return top.map((r) => {
-    const s = spatial.get(r.id ?? -1)
-    return s
-      ? {
-          ...r,
-          chaos: s.chaos ?? undefined,
-          spatial: s.spatial ?? undefined,
-          spectral: s.spectral ?? undefined,
-          msm: s.msm ?? undefined,
-          adductCorr: s.adductCorr ?? undefined,
-        }
-      : r
-  })
+  const rows = getAnnotationRows()
+  if (!rows) return []
+  return [...rows].sort((a, b) => a.rank - b.rank).slice(0, Math.min(topN, 20))
 }
 
 // ---- 汇总 ----
@@ -346,12 +297,7 @@ export function buildPageState(): PageState {
   }
 
   const annotations = providers.annotations?.()
-  if (annotations?.matchedRows) {
-    // 与 buildAnnotationTop 同一谓词（只数 matchStatus === 'matched'），
-    // 否则容差过严全部未命中时，page_state 报「有 N 条注释」而
-    // annotation_top 报「无注释」，两条工具输出互相矛盾。
-    state.annotationCount = annotations.matchedRows.filter((r) => r.matchStatus === 'matched').length
-  }
+  if (annotations) state.annotationCount = annotations.count
 
   const shared = getSharedZarrContext()
   state.meanSpectrumAvailable = !!(shared.meanChartData && shared.meanChartData.length > 0)

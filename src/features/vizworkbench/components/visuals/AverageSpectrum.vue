@@ -509,7 +509,8 @@ function renderChart() {
     lastData === props.chartData &&
     lastSpectrumMode === props.spectrumMode &&
     chartInstance?.getDom() === container
-  ) return
+  )
+    return
   lastData = props.chartData
   lastSpectrumMode = props.spectrumMode
 
@@ -587,8 +588,10 @@ function cleanupChart() {
     onDataZoom = null
   }
   const container = chartContainerRef.value
-  if (nativeMouseDownHandler && container) container.removeEventListener('mousedown', nativeMouseDownHandler, true)
-  if (nativeClickHandler && container) container.removeEventListener('click', nativeClickHandler, true)
+  if (nativeMouseDownHandler && container)
+    container.removeEventListener('mousedown', nativeMouseDownHandler, true)
+  if (nativeClickHandler && container)
+    container.removeEventListener('click', nativeClickHandler, true)
   nativeMouseDownHandler = null
   nativeClickHandler = null
   resizeObserver?.disconnect()

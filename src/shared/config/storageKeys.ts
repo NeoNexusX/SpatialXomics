@@ -26,6 +26,8 @@ export const STORAGE_KEYS = {
   assistantDatasetRun: 'assistant_dataset_run',
   /** 数据集已切换、助手对话待清空的标志（VizWorkbench 写入，useAssistant 模块初始化消费） */
   assistantPendingClear: 'assistant_pending_clear',
+  /** 注释面板的容差 / 加合物开关 / 极性「前缀」；实际键为 前缀 + runId（见 vizworkbench/composables/useAnnotation.ts） */
+  annotationSettings: 'annotation-settings:',
 } as const
 
 /**

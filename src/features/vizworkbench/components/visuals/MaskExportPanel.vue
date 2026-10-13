@@ -1,5 +1,5 @@
 <template>
-  <div class="kawaru-text-81">
+  <div class="kawaru-text-68">
     <!-- Import is available even when there are no locally-created regions. -->
     <div class="flex items-center gap-1 mb-3">
       <input
@@ -9,13 +9,13 @@
         accept=".npz,.csv"
         @change="onImportChange"
       />
-      <button class="btn btn-sm btn-ghost flex-1 kawaru-text-81" @click="importInput?.click()">
+      <button class="btn btn-sm btn-ghost flex-1 kawaru-text-68" @click="importInput?.click()">
         <SvgIcon type="upload" />
         {{ $t('vizworkbench.mask.import') }}
       </button>
       <button
         v-if="importedMaskName"
-        class="btn btn-sm btn-ghost text-error kawaru-text-81"
+        class="btn btn-sm btn-ghost text-error kawaru-text-68"
         :title="$t('vizworkbench.mask.clearImport')"
         @click="emit('clear-imported-mask')"
       >
@@ -33,7 +33,7 @@
          独占一行：与导入按钮同行会把「导入掩膜」文案挤出按钮框 -->
     <button
       v-if="importedMaskName"
-      class="btn btn-sm w-full mb-2 kawaru-text-81"
+      class="btn btn-sm w-full mb-2 kawaru-text-68"
       :class="importedMaskActive ? 'btn-ghost' : 'btn-primary'"
       :title="
         importedMaskActive
@@ -42,7 +42,11 @@
       "
       @click="emit('toggle-imported-mask')"
     >
-      {{ importedMaskActive ? $t('vizworkbench.mask.showOriginal') : $t('vizworkbench.mask.applyMask') }}
+      {{
+        importedMaskActive
+          ? $t('vizworkbench.mask.showOriginal')
+          : $t('vizworkbench.mask.applyMask')
+      }}
     </button>
 
     <!-- Format -->
@@ -52,7 +56,7 @@
         <button
           v-for="f in FORMATS"
           :key="f.value"
-          class="btn btn-xs join-item kawaru-text-81"
+          class="btn btn-xs join-item kawaru-text-68"
           :class="format === f.value ? 'btn-primary' : 'btn-ghost'"
           @click="format = f.value"
         >
@@ -79,7 +83,7 @@
           <label
             v-for="roi in rois"
             :key="roi.id"
-            class="flex items-center gap-1.5 py-0.5 cursor-pointer select-none kawaru-text-87"
+            class="flex items-center gap-1.5 py-0.5 cursor-pointer select-none kawaru-text-75"
           >
             <input
               type="checkbox"
@@ -108,7 +112,7 @@
           <label
             v-for="c in kmeansClusters"
             :key="c.id"
-            class="flex items-center gap-1.5 py-0.5 cursor-pointer select-none kawaru-text-87"
+            class="flex items-center gap-1.5 py-0.5 cursor-pointer select-none kawaru-text-75"
           >
             <input
               type="checkbox"
@@ -133,7 +137,7 @@
       <!-- Actions -->
       <div class="flex items-center gap-1">
         <button
-          class="btn btn-sm btn-primary flex-1 kawaru-text-81"
+          class="btn btn-sm btn-primary flex-1 kawaru-text-68"
           :disabled="selectedCount === 0"
           :title="$t('vizworkbench.mask.exportHint')"
           @click="onExport"
@@ -141,10 +145,10 @@
           <SvgIcon type="download" />
           {{ $t('vizworkbench.mask.export') }}
         </button>
-        <button class="btn btn-ghost btn-sm kawaru-text-81" @click="selectAll">
+        <button class="btn btn-ghost btn-sm kawaru-text-68" @click="selectAll">
           {{ $t('vizworkbench.mask.all') }}
         </button>
-        <button class="btn btn-ghost btn-sm kawaru-text-81" @click="clearAll">
+        <button class="btn btn-ghost btn-sm kawaru-text-68" @click="clearAll">
           {{ $t('common.action.clear') }}
         </button>
       </div>

@@ -1,6 +1,6 @@
 <template>
   <div class="flex flex-wrap items-center gap-3 mb-1 pt-1">
-    <h3 class="kawaru-text-112 font-semibold">{{ title }}</h3>
+    <h3 class="kawaru-text-100 font-semibold">{{ title }}</h3>
     <!-- 右侧控件组统一 kawaru-text-81；daisyUI 的 select/btn 自带 font-size，
          不继承，仍需各自显式挂档位。 -->
     <div class="ml-auto flex flex-wrap items-center gap-2 kawaru-text-81">
@@ -57,13 +57,11 @@
           @blur="onToleranceBlur"
         />
       </div>
-      <!-- Colormap（两种模式都可用；多离子叠加时置灰，颜色由通道决定）
-           宽度用 em 而非 w-28：字号随窗口流体放大，固定 7rem 的盒子在宽屏下可用文字空间
-           反而净缩水（110px − 2.75em），最长的 TIC norm/Viridis 会溢出去压到箭头上。
-           7.5em 扣掉 2.75em 内边距后留 4.75em 文字空间，够放最长的英文标签。 -->
+      <!-- Colormap（两种模式都可用；多离子叠加时置灰，颜色由通道决定）。
+           紧凑宽度随字号缩放，并为色图名称和箭头保留空间。 -->
       <select
         data-testid="colormap-select"
-        class="select select-fluid select-bordered w-[7.5em]"
+        class="select select-fluid select-bordered w-[7em]"
         :class="{ 'opacity-50': channelsMode }"
         :disabled="channelsMode"
         :title="channelsMode ? $t('vizworkbench.ionImage.rangeDisabled') : undefined"
@@ -75,12 +73,10 @@
       <!-- 强度标度：TIC 归一化仅 continuous 模式（processed 本身就是 TIC 图） -->
       <div class="flex items-center gap-1.5">
         <span v-if="normalizationLoading" class="loading loading-spinner loading-xs"></span>
-        <!-- 强度标度的选项会被翻译：中文「TIC 归一化」约 5em，7.5em 的盒子只留 4.75em 会压到箭头，
-             故加宽到 8em（文字空间 5.25em）。w-auto 靠不住——原生 select 的固有宽度不含 select-fluid
-             的 em 内边距换算。色图名不翻译，仍保持 7.5em。 -->
+        <!-- TIC 使用简短标签，宽度仍容纳英文 Linear 和下拉箭头。 -->
         <select
           data-testid="intensity-scale-select"
-          class="select select-fluid select-bordered w-[8em]"
+          class="select select-fluid select-bordered w-[6.5em]"
           :class="[normalizationError ? 'select-error' : '', channelsMode ? 'opacity-50' : '']"
           :disabled="channelsMode"
           :title="

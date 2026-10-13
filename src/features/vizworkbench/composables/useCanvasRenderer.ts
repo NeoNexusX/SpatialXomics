@@ -98,12 +98,7 @@ export function useCanvasRenderer(
    * dark backdrop is skipped: zero-intensity pixels and the letterbox area
    * stay transparent, for PNG export without a background color.
    */
-  function drawScene(
-    ctx: CanvasRenderingContext2D,
-    W: number,
-    H: number,
-    transparentBg: boolean,
-  ) {
+  function drawScene(ctx: CanvasRenderingContext2D, W: number, H: number, transparentBg: boolean) {
     const cols = opts.matrixCols.value
     const rows = opts.matrixRows.value
     if (!cols || !rows) return

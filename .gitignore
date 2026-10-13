@@ -52,6 +52,9 @@ public/AI-Agent代码目录结构说明.md
 # 谱图/通路离线索引（体积大不入库，由 scripts/build-*-index.mjs 本地生成）
 public/data/
 
+# 用户自己的注释数据库（保留在发布目录外，不入库、不分发）
+/local-data/
+
 # 冒烟测试临时脚本/截图（自标注「跑完即删」）与本地二进制参考文件
 /smoke-tmp.mjs
 /smoke-assistant-tmp.png

@@ -1,10 +1,6 @@
 import { computed, ref, type Ref } from 'vue'
 import ROIOverlay from '@/features/vizworkbench/components/visuals/ROIOverlay.vue'
-import {
-  useROI,
-  type DraftROI,
-  type ROIType,
-} from '@/features/vizworkbench/composables/useROI'
+import { useROI, type DraftROI, type ROIType } from '@/features/vizworkbench/composables/useROI'
 import { hexToRgb } from '@/features/vizworkbench/utils/regionPalette'
 
 /**

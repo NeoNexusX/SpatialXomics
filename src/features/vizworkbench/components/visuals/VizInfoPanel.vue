@@ -1,28 +1,51 @@
 <template>
-  <div class="flex flex-col select-none lg:h-full lg:overflow-y-auto scrollbar-thin overflow-x-hidden pr-4 lg:pr-[1em] kawaru-text-87">
+  <div
+    class="flex flex-col select-none lg:h-full lg:overflow-y-auto scrollbar-thin overflow-x-hidden pr-4 lg:pr-[1em] kawaru-text-75"
+  >
     <!-- ─── Info ─── -->
     <CollapsibleSection :title="$t('vizworkbench.info.info')">
-      <div class="space-y-1.5 kawaru-text-81 text-base-content">
-        <div v-for="row in infoRows" :key="row.label" class="flex justify-between">
-          <span>{{ row.label }}</span>
-          <span class="font-mono text-base-content">{{ row.value }}</span>
+      <div class="space-y-1.5 select-text text-base-content">
+        <!-- 长值保持单行，超出部分截断，悬停查看完整内容。 -->
+        <div v-for="row in infoRows" :key="row.label" class="flex min-w-0 gap-3 items-baseline">
+          <span class="shrink-0 whitespace-nowrap kawaru-text-75">{{ row.label }}</span>
+          <span
+            class="min-w-0 flex-1 truncate text-right font-mono kawaru-text-56"
+            :title="row.value"
+            >{{ row.value }}</span
+          >
+        </div>
+      </div>
+    </CollapsibleSection>
+
+    <!-- ─── Sample（只在源数据集记录里有，zarr 不带） ─── -->
+    <CollapsibleSection
+      v-if="sampleRows.length"
+      :title="$t('datasets.overview.sampleInfo')"
+      class="mt-5"
+    >
+      <div class="space-y-1.5 kawaru-text-68 text-base-content">
+        <div v-for="row in sampleRows" :key="row.label" class="flex min-w-0 gap-3">
+          <span class="shrink-0 whitespace-nowrap">{{ row.label }}</span>
+          <span
+            class="min-w-0 flex-1 truncate text-right font-mono text-base-content"
+            :title="row.value"
+            >{{ row.value }}</span
+          >
         </div>
       </div>
     </CollapsibleSection>
 
     <!-- ─── Display Range ─── -->
     <CollapsibleSection :title="$t('vizworkbench.info.displayRange')" class="mt-5">
-      <!-- The two fixed columns keep their width on the wrapper, which sits at the
-           section's base font size: an em width on the same element as kawaru-text-81
-           would resolve against that larger size instead (1.75em -> 1.97em). -->
+      <!-- 标签列宽度使用容器字号，避免与标签自身字号叠加缩放。 -->
       <div class="space-y-2">
         <div class="flex items-center gap-2">
           <div class="w-[2em] text-right">
-            <span class="kawaru-text-81 text-base-content">{{ $t('vizworkbench.info.max') }}</span>
+            <span class="kawaru-text-68 text-base-content">{{ $t('vizworkbench.info.max') }}</span>
           </div>
           <input
             type="text"
-            class="input input-sm input-bordered flex-1 kawaru-text-81 font-mono"
+            class="input input-sm input-bordered flex-1 kawaru-text-68 font-mono"
             :class="{ 'opacity-50': channelsMode }"
             :disabled="channelsMode"
             :title="channelsMode ? $t('vizworkbench.ionImage.rangeDisabled') : undefined"
@@ -30,16 +53,18 @@
             @change="onMaxInput($event)"
           />
           <div class="w-[4em] text-right">
-            <span class="kawaru-text-81 text-base-content font-bold">{{ pctLabel(displayMax) }}</span>
+            <span class="kawaru-text-68 text-base-content font-bold">{{
+              pctLabel(displayMax)
+            }}</span>
           </div>
         </div>
         <div class="flex items-center gap-2">
           <div class="w-[2em] text-right">
-            <span class="kawaru-text-81 text-base-content">{{ $t('vizworkbench.info.min') }}</span>
+            <span class="kawaru-text-68 text-base-content">{{ $t('vizworkbench.info.min') }}</span>
           </div>
           <input
             type="text"
-            class="input input-sm input-bordered flex-1 kawaru-text-81 font-mono"
+            class="input input-sm input-bordered flex-1 kawaru-text-68 font-mono"
             :class="{ 'opacity-50': channelsMode }"
             :disabled="channelsMode"
             :title="channelsMode ? $t('vizworkbench.ionImage.rangeDisabled') : undefined"
@@ -47,7 +72,9 @@
             @change="onMinInput($event)"
           />
           <div class="w-[4em] text-right">
-            <span class="kawaru-text-81 text-base-content font-bold">{{ pctLabel(displayMin) }}</span>
+            <span class="kawaru-text-68 text-base-content font-bold">{{
+              pctLabel(displayMin)
+            }}</span>
           </div>
         </div>
       </div>
@@ -67,7 +94,7 @@
             :style="{ left: markerLeft(displayMax) + '%' }"
           />
         </div>
-        <div class="space-y-1.5 kawaru-text-87 text-base-content">
+        <div class="space-y-1.5 kawaru-text-75 text-base-content">
           <div v-for="row in statisticRows" :key="row.label" class="flex justify-between">
             <span>{{ row.label }}</span>
             <span class="font-mono text-base-content">{{ row.value }}</span>
@@ -77,13 +104,17 @@
     </CollapsibleSection>
 
     <!-- ─── Preprocessing ─── -->
-    <CollapsibleSection v-if="methods.length" :title="$t('common.preprocessing.title')" class="mt-5">
+    <CollapsibleSection
+      v-if="methods.length"
+      :title="$t('common.preprocessing.title')"
+      class="mt-5"
+    >
       <div class="space-y-1">
         <div
           v-for="m in methods"
           :key="m"
           :title="methodLabel(m)"
-          class="kawaru-text-75 text-base-content flex items-center gap-1.5 min-w-0"
+          class="kawaru-text-62 text-base-content flex items-center gap-1.5 min-w-0"
         >
           <span class="shrink-0 w-[0.25em] h-[0.25em] rounded-full bg-blue-400"></span>
           <span class="truncate">{{ methodLabel(m) }}</span>
@@ -100,6 +131,8 @@ import { computed, ref, onMounted, onBeforeUnmount, watch, type PropType } from 
 import CollapsibleSection from '@/shared/components/CollapsibleSection.vue'
 import { methodLabel } from '@/shared/utils/methodsNormalize'
 import { vocabLabel } from '@/features/datasets/constants/vocabLabels'
+import type { File } from '@/features/datasets/types/dataset'
+import type { Acquisition } from '@/features/vizworkbench/types/acquisition'
 import { t } from '@/i18n'
 
 const props = defineProps({
@@ -113,15 +146,14 @@ const props = defineProps({
       pixels?: string
       nonZero?: string
       totalIon?: string
-      polarity?: string
-      analyzer?: string
-      ionisationSource?: string
       pixelSize?: string
-      spectrumMode?: string
-      storageMode?: string
     }>,
     default: () => ({}),
   },
+  /** 采集元数据（useResultMeta 合并 zarr attrs 与源文件记录） */
+  acquisition: { type: Object as PropType<Acquisition | null>, default: null },
+  /** 源数据集的完整文件记录：样本信息只在这里有 */
+  sourceFile: { type: Object as PropType<File | null>, default: null },
   methods: { type: Array as PropType<string[]>, default: () => [] },
   sortedValues: { type: Array as PropType<number[]>, default: () => [] },
   /** 多离子叠加激活：Display Range 不参与叠加渲染，输入框置灰（与工具栏 Colormap 同一语义） */
@@ -157,30 +189,66 @@ function pctLabel(v: number): string {
 
 const statisticRows = computed(() => {
   const items: { label: string; value: string }[] = []
-  if (props.info.pixels) items.push({ label: t('vizworkbench.info.dimensions'), value: props.info.pixels })
-  if (props.info.nonZero) items.push({ label: t('vizworkbench.info.nonZero'), value: props.info.nonZero })
+  if (props.info.pixels)
+    items.push({ label: t('vizworkbench.info.dimensions'), value: props.info.pixels })
+  if (props.info.nonZero)
+    items.push({ label: t('vizworkbench.info.nonZero'), value: props.info.nonZero })
   if (props.info.totalIon) items.push({ label: 'TIC', value: props.info.totalIon })
   return items
 })
 
 const infoRows = computed(() => {
   const items: { label: string; value: string }[] = []
-  const { polarity, analyzer, ionisationSource, pixelSize, spectrumMode, storageMode } = props.info
+  const a = props.acquisition
   // zarr 属性里的极性可能是小写（positive），词表按首字母大写的原值查显示文字
-  if (polarity)
-    items.push({ label: t('common.meta.polarity'), value: vocabLabel(capitalize(polarity)) })
-  if (analyzer) items.push({ label: t('common.meta.analyzer'), value: analyzer })
-  if (ionisationSource)
-    items.push({ label: t('common.meta.ionisationSource'), value: ionisationSource })
-  if (pixelSize) items.push({ label: t('common.meta.pixelSize'), value: pixelSize })
+  if (a?.polarity)
+    items.push({ label: t('common.meta.polarity'), value: vocabLabel(capitalize(a.polarity)) })
+  if (a?.analyzer) items.push({ label: t('common.meta.analyzer'), value: a.analyzer })
+  if (a?.ionSource) items.push({ label: t('common.meta.ionisationSource'), value: a.ionSource })
+  if (props.info.pixelSize)
+    items.push({ label: t('common.meta.pixelSize'), value: props.info.pixelSize })
+  const resolvingPower = formatResolvingPower(a?.resolvingPower, a?.resolvingPowerMz)
+  if (resolvingPower) items.push({ label: t('common.meta.resolvingPower'), value: resolvingPower })
+  // 基质名、溶剂表达式按 vocabLabel 的规则原样显示，涂布方式显示「中文 (English)」
+  if (a?.maldiMatrix)
+    items.push({ label: t('datasets.field.matrix'), value: vocabLabel(a.maldiMatrix) })
+  if (a?.maldiMatrixApplication)
+    items.push({
+      label: t('datasets.field.matrixApplication'),
+      value: vocabLabel(a.maldiMatrixApplication),
+    })
+  if (a?.solvent) items.push({ label: t('common.meta.solvent'), value: a.solvent })
   // 谱图 / 存储模式的取值是专业术语，原样显示
-  if (spectrumMode) items.push({ label: t('common.meta.spectrumMode'), value: spectrumMode })
-  if (storageMode) items.push({ label: t('common.meta.storageMode'), value: storageMode })
+  if (a?.spectrumMode) items.push({ label: t('common.meta.spectrumMode'), value: a.spectrumMode })
+  if (a?.storageMode) items.push({ label: t('common.meta.storageMode'), value: a.storageMode })
   return items
+})
+
+/** 与数据集详情页的「生物与样本信息」同一组字段、同一顺序；空值不显示 */
+const sampleRows = computed(() => {
+  const file = props.sourceFile
+  if (!file) return []
+  return [
+    { label: t('common.meta.organism'), value: file.organism },
+    { label: t('common.meta.organismPart'), value: file.organismPart },
+    { label: t('common.meta.condition'), value: file.condition },
+    { label: t('common.meta.growthConditions'), value: file.sampleGrowthConditions },
+    { label: t('datasets.field.stabilization'), value: file.sampleStabilization },
+    { label: t('common.meta.tissueModification'), value: file.tissueModification },
+  ]
+    .filter((row) => row.value)
+    .map((row) => ({ label: row.label, value: vocabLabel(row.value) }))
 })
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+/** 分辨率附带标定的 m/z（与数据集详情页同一文案）；没有 m/z 时只显示分辨率 */
+function formatResolvingPower(rp: string | undefined, mz: string | undefined): string {
+  if (!rp) return ''
+  if (!mz) return rp
+  return t('datasets.overview.resolvingPowerAt', { mzLabel: 'm/z', mz, rp })
 }
 
 function onMinInput(e: Event) {

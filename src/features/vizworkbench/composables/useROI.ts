@@ -114,7 +114,12 @@ export function useROI(
     return mask
   }
 
-  function computeStats(matrix: Float32Array, w: number, h: number, mask: boolean[][]): ROIStats | null {
+  function computeStats(
+    matrix: Float32Array,
+    w: number,
+    h: number,
+    mask: boolean[][],
+  ): ROIStats | null {
     let sum = 0,
       count = 0,
       min = Infinity,
@@ -155,7 +160,13 @@ export function useROI(
     }
   }
 
-  function confirmROI(matrix: Float32Array, w: number, h: number, draftROI: DraftROI, label?: string): ConfirmedROI | null {
+  function confirmROI(
+    matrix: Float32Array,
+    w: number,
+    h: number,
+    draftROI: DraftROI,
+    label?: string,
+  ): ConfirmedROI | null {
     if (!w || !h) return null
     const mask = generateMask(draftROI, w, h)
     const pixelCount = mask.flat().filter(Boolean).length

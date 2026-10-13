@@ -162,48 +162,44 @@ export interface UmapSummary {
   grid: { width: number; height: number }
 }
 
-/** 注释匹配行（统计摘要用；字段与 useAnnotationMatch 的 MatchedAnnotationRow 对齐） */
+/** 注释行（一行 = 一个加合离子）：注释面板注册给助手的扁平视图，字段与面板的 IonAnnotation 对应 */
 export interface AnnotationRow {
-  /** 行 id（CSV 行序，Tier-2 空间分 Map 的键） */
-  id?: number
-  /** 实验m/z（CSV 解析值；invalid 行为 NaN） */
-  expMz?: number
-  /** 谱轴上最近的 m/z 值（未匹配为 null） */
-  matchedMz?: number | null
-  name?: string
-  candidates?: string[]
-  formulaIon?: string | null
-  ionType?: string | null
-  /** |Δ|（ppm 或 Da，见单位）；未匹配为 null */
-  massError?: number | null
-  /** 平均谱在匹配峰位的强度；未匹配为 null */
-  avgIntensity?: number | null
-  matchStatus?: 'matched' | 'unmatched' | 'invalid'
-  /** Tier-1 证据分（0..1），见 annotationScoring.ts */
-  massScore?: number | null
-  isotopeScore?: number | null
-  /** 期望同位素峰中被观测到的个数 / 总数 */
-  isotopeObsCount?: number | null
-  isotopeExpCount?: number | null
-  compositeScore?: number | null
-  /** target-decoy q 值（0..1，越小越可信） */
-  fdr?: number | null
-  /** 置信等级：4 = 精确质量 + 同位素支持；5 = 仅精确质量 */
-  level?: 4 | 5 | null
-  /** Tier-2 空间证据（pySM 参考度量，Top-K 渐进填充，可能缺省） */
-  chaos?: number | null
-  spatial?: number | null
-  spectral?: number | null
-  msm?: number | null
-  /** 多加合物证据分（0..1）：同一分子以 ≥2 种不同加合物落在不同谱峰
-   *  （CAMERA Σips 组分折算）；null = 不成组。composite 已含该加成。 */
-  adductScore?: number | null
-  /** 同组其他加合物的 ionType 列表 */
-  adductPeers?: string[]
-  /** 同组其他加合物行的 row id（get_annotation_detail 取回 peer 行用） */
-  adductPeerIds?: number[]
-  /** 组内多加合物图像的最大 Pearson（≥0.7 = 空间确认） */
-  adductCorr?: number | null
+  /** 行 id（get_annotation_detail 用） */
+  id: number
+  /** 按总分的排名，1 起 */
+  rank: number
+  /** 第一个候选名（没有候选名时为分子式） */
+  name: string
+  /** 同分子式的候选化合物（id 为库内编号，如 HMDB0240254；没有为空串） */
+  candidates: { id: string; name: string }[]
+  /** 中性分子式 */
+  formula: string
+  /** 加合物（ASCII 写法，如 '[M+H]+'） */
+  adduct: string
+  theoMz: number
+  obsMz: number
+  /** 带符号的质量误差（ppm） */
+  errPpm: number
+  intensity: number | null
+  /** 质量误差分 0..1 */
+  massScore: number
+  /** 加合物与采集条件的适配度 0..1 */
+  adductFit: number
+  /** 空间混乱度（level-set chaos，越高越成块）；null = 未参加空间评分 */
+  chaos: number | null
+  /** 与同分子其他加合离子图像的最大 Pearson（截到 0..1） */
+  coloc: number | null
+  /** 空间分 = 0.2 × chaos + 0.8 × coloc；缺失共定位按 0 计 */
+  spatialScore: number | null
+  totalScore: number
+  /** target-decoy q 值 */
+  q: number | null
+  /** 同一分子的其他加合离子（各自也是独立的行） */
+  siblings: { adduct: string; obsMz: number; r: number | null; rank: number }[]
+  /** 落在同一个峰上的其他注释 */
+  samePeak: { name: string; adduct: string }[]
+  /** 已启用但没检出的加合物 */
+  missingAdducts: string[]
 }
 
 /** buildPageState() 的输出：get_page_state 工具的轻量实时状态汇总（不含重统计） */

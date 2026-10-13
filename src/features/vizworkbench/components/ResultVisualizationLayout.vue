@@ -13,13 +13,13 @@ withDefaults(
 <template>
   <div class="result-page flex flex-col bg-base-100 lg:h-[100dvh] lg:overflow-hidden">
     <div
-      class="flex min-h-0 flex-1 flex-col gap-2 px-3 pb-2 pt-2 lg:flex-row lg:gap-8 lg:overflow-hidden lg:px-6"
+      class="flex min-h-0 flex-1 flex-col gap-1 px-1 pb-2 pt-2 lg:flex-row lg:gap-6 lg:overflow-hidden lg:px-6"
     >
-      <!-- 左列 -->
+      <!-- 展开的左列至少 16rem，保证容差和空间计算的整组控件能放在同一行。 -->
       <div
         :class="[
           'kawaru-text-75 w-full scrollbar-thin lg:h-full lg:min-h-0 lg:min-w-0 lg:self-stretch lg:overflow-y-auto',
-          leftPanelCollapsed ? 'lg:flex-none lg:w-auto' : 'lg:flex-[1_1_0%]',
+          leftPanelCollapsed ? 'lg:flex-none lg:w-auto' : 'lg:min-w-64 lg:flex-[1_1_0%]',
         ]"
       >
         <slot name="left-panel"></slot>

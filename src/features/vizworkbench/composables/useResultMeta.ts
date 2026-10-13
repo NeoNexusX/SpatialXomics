@@ -1,8 +1,11 @@
-import { ref, watch, onUnmounted, type Ref } from 'vue'
-import { metadataAttrsRef, dataModeRef, polarityRef } from '@/features/vizworkbench/composables/useZarrIonImage'
-import { listMyProcesses, listUserFiles } from '@/features/datasets/api/datasetApi'
+import { computed, ref, shallowRef, watch, onUnmounted, type Ref } from 'vue'
+import { metadataAttrsRef, polarityRef } from '@/features/vizworkbench/composables/useZarrIonImage'
+import { getFileMetadata, listMyProcesses } from '@/features/datasets/api/datasetApi'
+import { mapItemToDataset } from '@/features/datasets/mappers/datasetMapper'
+import type { File } from '@/features/datasets/types/dataset'
+import type { Acquisition } from '@/features/vizworkbench/types/acquisition'
+import { deriveAcquisition } from '@/features/vizworkbench/utils/acquisition'
 import { parseAlgorithms } from '@/shared/utils/methodsNormalize'
-import type { DataMode } from '@/services/zarr/types/zarr'
 
 interface VizWorkbenchState {
   runId?: string
@@ -14,25 +17,24 @@ interface VizWorkbenchState {
   status?: string
 }
 
+/**
+ * 结果页元数据。三个原始来源：zarr attrs（随结果加载）、源文件记录（按 filePublicId 请求）、
+ * 处理记录（history.state，缺失时回查「我的处理记录」）。展示字段全部由它们推导，
+ * 不管哪个请求先返回，结果都一样；各字段以谁为准见 types/acquisition.ts。
+ */
 export function useResultMeta(runId: Ref<string>) {
-  const datasetName = ref('')
-  const analyzer = ref('')
-  const ionSource = ref('')
-  const pixelSize = ref('')
-  /** pixelSize 的原始数值（µm），供 mask 导出等需要数字而非格式化字符串的消费方使用。 */
-  const pixelSizeUm = ref<{ x: number; y: number } | null>(null)
-  const spectrumMode = ref('')
-  const storageMode = ref('')
+  const stateName = ref('')
+  const processName = ref('')
   const status = ref('')
   const methods = ref<string[]>([])
   const loading = ref(false)
 
-  /** 当前数据模式（continuous / processed），从 zarr store 获取 */
-  const dataMode = ref<DataMode | null>(null)
+  /**
+   * 源数据集的完整文件记录（GET /files/{public_id}/metadata）。
+   * 基质、溶剂、物种等上传时填写的元信息只存在这里，zarr attrs 里没有。
+   */
+  const sourceFile = shallowRef<File | null>(null)
 
-  // polarity 现在住在模块级 polarityRef（被 annotation 粗过滤共享读取），
-  // 下面 fetchProcessMetaFromApi 的 await 续体必须能识别"这个响应已经过时"，
-  // 否则上一个结果页的迟到响应会把它的 polarity 写进当前结果页的共享状态。
   let disposed = false
   onUnmounted(() => {
     disposed = true
@@ -42,108 +44,68 @@ export function useResultMeta(runId: Ref<string>) {
    *  reuse on /viz). */
   const isStale = (id: string) => disposed || runId.value !== id
 
-  function formatPixelSize(x?: number, y?: number): string {
-    if (x != null && y != null) return `${x} × ${y} µm`
-    return ''
-  }
+  const acquisition = computed<Acquisition>(() =>
+    deriveAcquisition(metadataAttrsRef.value, sourceFile.value, methods.value),
+  )
 
-  /** 与 formatPixelSize 配套：保留原始数值，缺一边则为 null。 */
-  function toPixelSizeUm(x?: number | null, y?: number | null): { x: number; y: number } | null {
-    return x != null && y != null ? { x, y } : null
-  }
+  /** 像素尺寸原始数值（µm），供 mask 导出等需要数字的消费方；缺一边为 null */
+  const pixelSizeUm = computed<{ x: number; y: number } | null>(() => {
+    const a = metadataAttrsRef.value
+    if (a?.pixel_size_horizontal != null && a.pixel_size_vertical != null) {
+      return { x: a.pixel_size_horizontal, y: a.pixel_size_vertical }
+    }
+    const f = sourceFile.value
+    if (f?.pixelSizeHorizontal != null && f.pixelSizeVertical != null) {
+      return { x: f.pixelSizeHorizontal, y: f.pixelSizeVertical }
+    }
+    return null
+  })
+  const pixelSize = computed(() =>
+    pixelSizeUm.value ? `${pixelSizeUm.value.x} × ${pixelSizeUm.value.y} µm` : '',
+  )
 
-  function extractBasename(filename: string): string {
-    return filename.replace(/\.[^.]+$/, '')
-  }
+  const datasetName = computed(
+    () => stateName.value || metadataAttrsRef.value?.name || processName.value,
+  )
 
-  /** Adjust displayed mode based on applied processing methods */
-  function applyProcessingAdjustments() {
-    if (methods.value.includes('Peak Picking')) spectrumMode.value = 'centroid'
-    if (methods.value.includes('Peak Alignment')) storageMode.value = 'continuous'
-  }
+  // 极性同步到模块级 polarityRef（AI 助手的数据集概览读取它）
+  watch(
+    () => acquisition.value.polarity,
+    (p) => (polarityRef.value = p),
+    { immediate: true },
+  )
 
   /**
-   * API 兜底：history.state 只随 router.push 携带，直刷/书签进入时为空。
-   * 此时回退到原接口查询 process（名称/状态/methods）与文件仪器参数，
-   * 只填充当前仍为空缺的字段；zarr metadata 仍由 applyZarrMetadata 补充。
+   * 处理记录兜底：history.state 缺名称 / 状态 / methods 时（Explore 入口不带 status）
+   * 回查「我的处理记录」。只能查到当前用户自己的 run，查不到时这几项留空。
    */
   async function fetchProcessMetaFromApi(id: string) {
-    const needProcess = !datasetName.value || !status.value || !methods.value.length
-    const needInstrument = !analyzer.value && !ionSource.value && !polarityRef.value
-    if (!needProcess && !needInstrument) return
+    if (datasetName.value && status.value && methods.value.length) return
 
     const result = await listMyProcesses(1, 100)
     if (isStale(id)) return
     const process = (result.data || []).find((p: any) => String(p.id) === id)
     if (!process) return
 
-    if (needProcess) {
-      if (!datasetName.value) datasetName.value = extractBasename(process.filename || '')
-      if (!status.value) status.value = (process.status || '').toLowerCase()
-      if (!methods.value.length && process.params_json) {
-        methods.value = parseAlgorithms(process.params_json)
-      }
+    processName.value = (process.filename || '').replace(/\.[^.]+$/, '')
+    if (!status.value) status.value = (process.status || '').toLowerCase()
+    if (!methods.value.length && process.params_json) {
+      methods.value = parseAlgorithms(process.params_json)
     }
-
-    // 仪器参数：zarr attrs 缺失时从文件元数据补齐
-    if (process.filename) {
-      try {
-        const fileResult = await listUserFiles({ filename: process.filename }, 1, 1)
-        if (isStale(id)) return
-        const file = fileResult?.data?.[0] || fileResult?.[0]
-        if (file) {
-          if (!analyzer.value) analyzer.value = file.analyzer || ''
-          if (!ionSource.value) ionSource.value = file.ionisation_source || ''
-          if (!pixelSize.value) {
-            pixelSize.value = formatPixelSize(file.pixel_size_horizontal, file.pixel_size_vertical)
-            pixelSizeUm.value = toPixelSizeUm(file.pixel_size_horizontal, file.pixel_size_vertical)
-          }
-          if (!polarityRef.value) polarityRef.value = file.polarity || ''
-          if (!spectrumMode.value) spectrumMode.value = file.spectrum_mode || ''
-          if (!storageMode.value) storageMode.value = file.storage_mode || ''
-        }
-      } catch {
-        // file lookup is optional
-      }
-    }
-
-    applyProcessingAdjustments()
   }
 
-  /** 从 zarr metadata/zarr.json 读取所有元数据 */
-  function applyZarrMetadata() {
-    const attrs = metadataAttrsRef.value
-    if (!attrs) return
-
-    // 谱图模式
-    if (attrs.centroid_spectrum) spectrumMode.value = 'centroid'
-    else if (attrs.profile_spectrum) spectrumMode.value = 'profile'
-
-    // 数据模式
-    dataMode.value = dataModeRef.value
-
-    // 仪器型号
-    if (attrs.analyzer) analyzer.value = attrs.analyzer
-
-    // 离子源
-    if (attrs.ionisation_source) ionSource.value = attrs.ionisation_source
-
-    // 极性
-    if (attrs.polarity) polarityRef.value = attrs.polarity
-
-    // 存储模式
-    if (attrs.continuous) storageMode.value = 'continuous'
-    else if (attrs.processed) storageMode.value = 'processed'
-
-    // 像素大小
-    if (attrs.pixel_size_horizontal != null && attrs.pixel_size_vertical != null) {
-      pixelSize.value = formatPixelSize(attrs.pixel_size_horizontal, attrs.pixel_size_vertical)
-      pixelSizeUm.value = toPixelSizeUm(attrs.pixel_size_horizontal, attrs.pixel_size_vertical)
-    }
-
-    // 数据集名称（zarr 有则用，否则沿用 router state）
-    if (attrs.name && !datasetName.value) {
-      datasetName.value = attrs.name
+  /**
+   * 按源文件 ID 取完整文件记录。两个入口（工作区列表、数据集 Explore）都随 runId
+   * 携带 filePublicId；该接口任意登录用户可读，别人的公开数据、较早的 run 都能查到。
+   */
+  async function fetchSourceFile(id: string, filePublicId: string | undefined) {
+    if (!filePublicId) return
+    try {
+      const file = mapItemToDataset(await getFileMetadata(filePublicId))
+      if (!isStale(id)) sourceFile.value = file
+    } catch (e) {
+      // 源文件已删除（404）等：只显示 zarr 自带的元信息
+      if (!isStale(id)) console.warn('[useResultMeta] source file metadata unavailable:', e)
     }
   }
 
@@ -154,55 +116,39 @@ export function useResultMeta(runId: Ref<string>) {
     loading.value = true
     try {
       const state = history.state as VizWorkbenchState | null
-
-      // 从 router state 读取 process 层面的信息
-      datasetName.value = state?.datasetName || ''
+      stateName.value = state?.datasetName || ''
+      processName.value = ''
       status.value = (state?.status || '').toLowerCase()
       methods.value = state?.methods || []
+      sourceFile.value = null
 
-      // 从 zarr metadata 覆盖/补充元数据
-      applyZarrMetadata()
-
-      // history.state 缺失时（直刷/书签进入）回退到 API 查询
-      await fetchProcessMetaFromApi(id)
-
-      // 过期请求丢掉结果（快速切换 runId 时避免旧数据覆盖新数据）
-      if (currentRequest !== requestId) return
+      // 源文件元信息与处理记录兜底互不依赖，并行请求
+      await Promise.all([fetchSourceFile(id, state?.filePublicId), fetchProcessMetaFromApi(id)])
     } catch (e) {
-      if (currentRequest !== requestId) return
-      console.error('[useResultMeta] fetch failed:', e)
+      if (currentRequest === requestId) console.error('[useResultMeta] fetch failed:', e)
     } finally {
       if (currentRequest === requestId) loading.value = false
     }
   }
 
-  // 当 runId 变化时重新获取
-  watch(runId, (id) => {
-    if (id) fetchMeta(id)
-  }, { immediate: true })
-
-  // 当 zarr metadata 加载完成后更新（store.init() 会设置 metadataAttrsRef）
-  watch(metadataAttrsRef, () => {
-    applyZarrMetadata()
-  })
-
-  // 当 dataMode 变化时同步
-  watch(dataModeRef, (mode) => {
-    dataMode.value = mode
-  })
+  watch(
+    runId,
+    (id) => {
+      if (id) fetchMeta(id)
+    },
+    { immediate: true },
+  )
 
   return {
     datasetName,
-    analyzer,
-    ionSource,
+    acquisition,
+    spectrumMode: computed(() => acquisition.value.spectrumMode),
+    storageMode: computed(() => acquisition.value.storageMode),
     pixelSize,
     pixelSizeUm,
-    polarity: polarityRef,
-    spectrumMode,
-    storageMode,
     status,
     methods,
     loading,
-    dataMode,
+    sourceFile,
   }
 }

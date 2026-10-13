@@ -4,7 +4,10 @@ import ROIPanel from '@/features/vizworkbench/components/visuals/ROIPanel.vue'
 import MaskExportPanel from '@/features/vizworkbench/components/visuals/MaskExportPanel.vue'
 import IonChannelPanel from '@/features/vizworkbench/components/visuals/IonChannelPanel.vue'
 import CollapsibleSection from '@/shared/components/CollapsibleSection.vue'
-import type { ImportedMaskSummary, MaskExportPayload } from '@/features/vizworkbench/utils/maskExport'
+import type {
+  ImportedMaskSummary,
+  MaskExportPayload,
+} from '@/features/vizworkbench/utils/maskExport'
 import type { IonChannel } from '@/features/vizworkbench/composables/useIonChannels'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -258,7 +261,7 @@ function cancelEnable() {
     <!-- UMAP / KMeans: only available for continuous storage -->
     <div v-if="isContinuous" class="mt-2">
       <label
-        class="flex items-center justify-between mb-2 cursor-pointer select-none kawaru-text-87"
+        class="flex items-center justify-between mb-2 cursor-pointer select-none kawaru-text-75"
         :class="{ 'opacity-60 pointer-events-none': clusteringCreating }"
       >
         <span class="text-base-content">{{ $t('vizworkbench.overlay.enable') }}</span>
@@ -283,7 +286,7 @@ function cancelEnable() {
         <span class="loading loading-spinner loading-xs"></span>
         <span class="flex-1">{{ $t('vizworkbench.overlay.computing') }}</span>
         <button
-          class="btn btn-ghost btn-xs kawaru-text-68"
+          class="btn btn-ghost btn-xs kawaru-text-56"
           :disabled="clusteringRefreshing"
           @click="emit('refresh-clustering')"
         >
@@ -294,7 +297,7 @@ function cancelEnable() {
 
       <div class="flex gap-2">
         <button
-          class="btn btn-sm flex-1 kawaru-text-81 rounded-lg transition-colors"
+          class="btn btn-sm flex-1 kawaru-text-68 rounded-lg transition-colors"
           :class="
             !computationEnabled || !clusteringReady
               ? 'bg-base-200 dark:bg-base-300 text-base-content/40 border-base-300 dark:border-base-400 cursor-not-allowed'
@@ -310,7 +313,7 @@ function cancelEnable() {
           UMAP
         </button>
         <button
-          class="btn btn-sm flex-1 kawaru-text-81 rounded-lg transition-colors"
+          class="btn btn-sm flex-1 kawaru-text-68 rounded-lg transition-colors"
           :class="
             !computationEnabled || !clusteringReady
               ? 'bg-base-200 dark:bg-base-300 text-base-content/40 border-base-300 dark:border-base-400 cursor-not-allowed'
@@ -344,7 +347,7 @@ function cancelEnable() {
           $t('vizworkbench.overlay.unavailable', { error: overlayError })
         }}</span>
         <button
-          class="btn btn-ghost btn-sm text-error kawaru-text-75"
+          class="btn btn-ghost btn-sm text-error kawaru-text-62"
           @click="emit('retry-clustering')"
         >
           {{ $t('common.action.retry') }}
@@ -367,7 +370,7 @@ function cancelEnable() {
         @input="emit('update:umapAlpha', +($event.target as HTMLInputElement).value)"
       />
       <button
-        class="btn btn-sm btn-ghost gap-1 mt-1.5 w-full kawaru-text-75"
+        class="btn btn-sm btn-ghost gap-1 mt-1.5 w-full kawaru-text-62"
         :title="$t('vizworkbench.overlay.exportUmapHint')"
         @click="emit('export-umap')"
       >
@@ -394,7 +397,7 @@ function cancelEnable() {
         @input="emit('update:kmeansAlpha', +($event.target as HTMLInputElement).value)"
       />
       <button
-        class="btn btn-sm btn-ghost gap-1 mt-1.5 w-full kawaru-text-75"
+        class="btn btn-sm btn-ghost gap-1 mt-1.5 w-full kawaru-text-62"
         :title="$t('vizworkbench.overlay.exportKmeansHint')"
         @click="emit('export-kmeans')"
       >
@@ -414,7 +417,7 @@ function cancelEnable() {
           <label
             v-for="c in kmeansClusters"
             :key="c.id"
-            class="flex items-center gap-1.5 py-1 cursor-pointer select-none kawaru-text-87"
+            class="flex items-center gap-1.5 py-1 cursor-pointer select-none kawaru-text-75"
           >
             <input
               type="checkbox"
@@ -436,16 +439,16 @@ function cancelEnable() {
         </div>
         <div class="flex gap-1 mt-2">
           <button
-            class="btn btn-ghost btn-sm kawaru-text-75"
+            class="btn btn-ghost btn-sm kawaru-text-62"
             :title="$t('vizworkbench.overlay.rerunHint')"
             @click="openKmeansDialog"
           >
             {{ $t('vizworkbench.overlay.rerun') }}
           </button>
-          <button class="btn btn-ghost btn-sm kawaru-text-75" @click="emit('kmeans-select-all')">
+          <button class="btn btn-ghost btn-sm kawaru-text-62" @click="emit('kmeans-select-all')">
             {{ $t('vizworkbench.mask.all') }}
           </button>
-          <button class="btn btn-ghost btn-sm kawaru-text-75" @click="emit('kmeans-clear-all')">
+          <button class="btn btn-ghost btn-sm kawaru-text-62" @click="emit('kmeans-clear-all')">
             {{ $t('common.action.clear') }}
           </button>
         </div>
@@ -483,7 +486,7 @@ function cancelEnable() {
   <CollapsibleSection :title="$t('vizworkbench.overlay.export')" class="mt-5">
     <!-- One group per export kind; today only the ROI/cluster mask export -->
     <div>
-      <div class="kawaru-text-81 font-semibold text-base-content mb-2 tracking-wide">
+      <div class="kawaru-text-68 font-semibold text-base-content mb-2 tracking-wide">
         {{ $t('vizworkbench.overlay.roiExport') }}
       </div>
       <MaskExportPanel
@@ -535,7 +538,7 @@ function cancelEnable() {
         type="number"
         :min="K_MIN"
         :max="K_MAX"
-        class="input input-sm input-bordered w-20 kawaru-text-75"
+        class="input input-sm input-bordered w-20 kawaru-text-62"
       />
     </div>
     <p class="text-base-content/60 mt-2">

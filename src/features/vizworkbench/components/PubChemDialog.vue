@@ -89,7 +89,11 @@ async function copyText(text: string) {
     ta.style.opacity = '0'
     document.body.appendChild(ta)
     ta.select()
-    try { document.execCommand('copy') } catch { /* ignore */ }
+    try {
+      document.execCommand('copy')
+    } catch {
+      /* ignore */
+    }
     document.body.removeChild(ta)
   }
 }
@@ -114,7 +118,9 @@ async function copyText(text: string) {
       <!-- Loading -->
       <div v-if="loading" class="py-12 flex flex-col items-center gap-3">
         <span class="loading loading-spinner loading-lg text-primary"></span>
-        <p class="kawaru-text-81 text-base-content/60">{{ $t('vizworkbench.pubchem.searching') }}</p>
+        <p class="kawaru-text-81 text-base-content/60">
+          {{ $t('vizworkbench.pubchem.searching') }}
+        </p>
       </div>
 
       <!-- Error / no results -->
@@ -128,7 +134,9 @@ async function copyText(text: string) {
         <!-- Structure image + basic info：手机端上下堆叠，避免 240px 固定宽的图挤爆信息列 -->
         <div class="flex flex-col sm:flex-row gap-5">
           <!-- 2D structure -->
-          <div class="w-full h-52 sm:shrink-0 sm:w-72 sm:h-72 rounded-lg border border-base-300 bg-white flex items-center justify-center overflow-hidden">
+          <div
+            class="w-full h-52 sm:shrink-0 sm:w-72 sm:h-72 rounded-lg border border-base-300 bg-white flex items-center justify-center overflow-hidden"
+          >
             <img
               v-if="!imageError"
               :src="result.structureImageUrl"
@@ -168,16 +176,28 @@ async function copyText(text: string) {
               </p>
             </div>
             <div>
-              <p class="kawaru-text-81 text-base-content/60">{{ $t('vizworkbench.pubchem.formula') }}</p>
-              <p class="font-mono kawaru-text-95 break-words">{{ result.molecularFormula || '-' }}</p>
+              <p class="kawaru-text-81 text-base-content/60">
+                {{ $t('vizworkbench.pubchem.formula') }}
+              </p>
+              <p class="font-mono kawaru-text-95 break-words">
+                {{ result.molecularFormula || '-' }}
+              </p>
             </div>
             <div>
-              <p class="kawaru-text-95 text-base-content/60">{{ $t('vizworkbench.pubchem.weight') }}</p>
-              <p class="font-mono kawaru-text-95">{{ result.molecularWeight ? result.molecularWeight.toFixed(2) : '-' }}</p>
+              <p class="kawaru-text-95 text-base-content/60">
+                {{ $t('vizworkbench.pubchem.weight') }}
+              </p>
+              <p class="font-mono kawaru-text-95">
+                {{ result.molecularWeight ? result.molecularWeight.toFixed(2) : '-' }}
+              </p>
             </div>
             <div>
-              <p class="kawaru-text-95 text-base-content/60">{{ $t('vizworkbench.pubchem.query') }}</p>
-              <p class="font-mono font-semibold kawaru-text-95 text-base-content break-words">{{ query }}</p>
+              <p class="kawaru-text-95 text-base-content/60">
+                {{ $t('vizworkbench.pubchem.query') }}
+              </p>
+              <p class="font-mono font-semibold kawaru-text-95 text-base-content break-words">
+                {{ query }}
+              </p>
             </div>
           </div>
         </div>
@@ -187,7 +207,9 @@ async function copyText(text: string) {
           <table class="table table-sm">
             <tbody>
               <tr>
-                <td class="font-medium kawaru-text-81 text-base-content/70 w-32 align-top">{{ $t('vizworkbench.pubchem.iupacName') }}</td>
+                <td class="font-medium kawaru-text-81 text-base-content/70 w-32 align-top">
+                  {{ $t('vizworkbench.pubchem.iupacName') }}
+                </td>
                 <td class="kawaru-text-81 break-words">{{ result.iupacName || '-' }}</td>
                 <td class="text-right">
                   <button
@@ -254,7 +276,9 @@ async function copyText(text: string) {
 
       <!-- Footer -->
       <div class="modal-action">
-        <button class="btn btn-sm kawaru-text-75" @click="emit('close')">{{ $t('common.action.close') }}</button>
+        <button class="btn btn-sm kawaru-text-75" @click="emit('close')">
+          {{ $t('common.action.close') }}
+        </button>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop" @click="emit('close')">

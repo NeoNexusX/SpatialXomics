@@ -229,7 +229,9 @@ watch(
 <template>
   <div class="border-0 rounded-none bg-transparent overflow-visible">
     <div class="px-3 pt-2 pb-1.5 flex items-center justify-between">
-      <span class="font-semibold text-base-content kawaru-text-87">{{ $t('vizworkbench.compare.preview') }}</span>
+      <span class="font-semibold text-base-content kawaru-text-87">{{
+        $t('vizworkbench.compare.preview')
+      }}</span>
     </div>
     <div
       v-if="legendsA.length || legendsB.length"

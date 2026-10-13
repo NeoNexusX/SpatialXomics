@@ -60,9 +60,7 @@ export interface IonComparison {
   category: ComparisonCategory
 }
 
-export type RegionSource =
-  | { type: 'cluster'; id: number }
-  | { type: 'roi'; id: string }
+export type RegionSource = { type: 'cluster'; id: number } | { type: 'roi'; id: string }
 
 export interface RegionOption {
   /** String id for <select> value: "cluster:0" or "roi:roi-1" */
@@ -162,17 +160,15 @@ export function useRegionComparison(deps: {
   })
 
   /** Selected A/B options (stale ids filtered out). */
-  const selectedRegionsA = computed(
-    () =>
-      regionAIds.value
-        .map((id) => availableRegions.value.find((r) => r.value === id))
-        .filter((r): r is RegionOption => !!r),
+  const selectedRegionsA = computed(() =>
+    regionAIds.value
+      .map((id) => availableRegions.value.find((r) => r.value === id))
+      .filter((r): r is RegionOption => !!r),
   )
-  const selectedRegionsB = computed(
-    () =>
-      regionBIds.value
-        .map((id) => availableRegions.value.find((r) => r.value === id))
-        .filter((r): r is RegionOption => !!r),
+  const selectedRegionsB = computed(() =>
+    regionBIds.value
+      .map((id) => availableRegions.value.find((r) => r.value === id))
+      .filter((r): r is RegionOption => !!r),
   )
 
   // Group identity colors are fixed (blue A / orange B) regardless of member
@@ -245,10 +241,7 @@ export function useRegionComparison(deps: {
   }
 
   /** OR-combine member rasters into one group mask. */
-  function combineRasters(
-    members: { raster: Uint8Array }[],
-    size: number,
-  ): Uint8Array {
+  function combineRasters(members: { raster: Uint8Array }[], size: number): Uint8Array {
     const combined = new Uint8Array(size)
     for (const m of members) {
       const r = m.raster
@@ -297,9 +290,12 @@ export function useRegionComparison(deps: {
   function buildComparisons(
     nItems: number,
     mzAt: (i: number) => number,
-    sumA: Float64Array, countA: Int32Array,
-    sumB: Float64Array, countB: Int32Array,
-    pixelCountA: number, pixelCountB: number,
+    sumA: Float64Array,
+    countA: Int32Array,
+    sumB: Float64Array,
+    countB: Int32Array,
+    pixelCountA: number,
+    pixelCountB: number,
     noiseFloor: number,
   ): IonComparison[] {
     const minRate = minDetectionRate.value / 100
@@ -368,8 +364,10 @@ export function useRegionComparison(deps: {
 
     // 初始排序：检出率比值偏离 1 最多的排最前（富集标准即检出率比值）
     comparisons.sort((a, b) => {
-      const logA = a.detRatio === Infinity ? Infinity : a.detRatio === 0 ? -Infinity : Math.log2(a.detRatio)
-      const logB = b.detRatio === Infinity ? Infinity : b.detRatio === 0 ? -Infinity : Math.log2(b.detRatio)
+      const logA =
+        a.detRatio === Infinity ? Infinity : a.detRatio === 0 ? -Infinity : Math.log2(a.detRatio)
+      const logB =
+        b.detRatio === Infinity ? Infinity : b.detRatio === 0 ? -Infinity : Math.log2(b.detRatio)
       return Math.abs(logB) - Math.abs(logA)
     })
 
@@ -385,12 +383,8 @@ export function useRegionComparison(deps: {
       return
     }
 
-    const sourcesA = regionAIds.value
-      .map(parseRegion)
-      .filter((s): s is RegionSource => !!s)
-    const sourcesB = regionBIds.value
-      .map(parseRegion)
-      .filter((s): s is RegionSource => !!s)
+    const sourcesA = regionAIds.value.map(parseRegion).filter((s): s is RegionSource => !!s)
+    const sourcesB = regionBIds.value.map(parseRegion).filter((s): s is RegionSource => !!s)
     if (!sourcesA.length || !sourcesB.length) return
 
     comparing.value = true
@@ -468,7 +462,8 @@ export function useRegionComparison(deps: {
           Int32Array.from(bins, (b) => b.count[0]!),
           Float64Array.from(bins, (b) => b.sum[1]!),
           Int32Array.from(bins, (b) => b.count[1]!),
-          maskA.pixelCount, maskB.pixelCount,
+          maskA.pixelCount,
+          maskB.pixelCount,
           noiseFloor,
         )
       } else {
@@ -498,9 +493,12 @@ export function useRegionComparison(deps: {
         comparisons = buildComparisons(
           mzAxis.length,
           (i) => mzAxis[i]!,
-          stats[0]!.sum, stats[0]!.count,
-          stats[1]!.sum, stats[1]!.count,
-          maskA.pixelCount, maskB.pixelCount,
+          stats[0]!.sum,
+          stats[0]!.count,
+          stats[1]!.sum,
+          stats[1]!.count,
+          maskA.pixelCount,
+          maskB.pixelCount,
           noiseFloor,
         )
       }

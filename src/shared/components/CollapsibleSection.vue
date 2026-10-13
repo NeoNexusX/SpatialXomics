@@ -29,11 +29,11 @@ const open = ref(props.defaultOpen)
   <div class="pt-3 border-t border-base-content/40">
     <button
       type="button"
-      class="group flex w-full items-center justify-between gap-2 py-1 text-left cursor-pointer select-none kawaru-text-87"
+      class="group flex w-full items-center justify-between gap-2 py-1 text-left cursor-pointer select-none kawaru-text-75"
       :aria-expanded="open"
       @click="open = !open"
     >
-      <span class="kawaru-text-87 font-semibold text-base-content">{{ title }}</span>
+      <span class="kawaru-text-75 font-semibold text-base-content">{{ title }}</span>
       <SvgIcon
         :type="open ? 'chevron_up' : 'chevron_down'"
         class="w-[1.1em] h-[1.1em] shrink-0 text-base-content/60 group-hover:text-base-content"

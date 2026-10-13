@@ -13,7 +13,7 @@ SpatialXomics is a web platform for mass spectrometry imaging (MSI) data managem
 - **Analysis workspace**: compatible noise reduction, baseline correction, normalization, peak picking, and peak alignment choices based on spectrum/storage mode.
 - **Result visualization**: Continuous ion images and mean spectra; Processed TIC images and per-pixel spectra; display range, gamma, colormap, TIC normalization, and transparent PNG export.
 - **Clustering and regions**: backend-generated UMAP plus browser-local KMeans, cluster filtering, rectangular/freehand ROIs, and multi-region comparison.
-- **Annotations**: CSV import for Continuous + Centroid results, m/z matching in ppm or Da, filtering, export, and PubChem lookup.
+- **Annotations**: Match Continuous + Centroid mean-spectrum peaks against a user-selected database CSV, with ppm/Da tolerance, scores and FDR, filtering, export, and PubChem lookup. The site does not provide or distribute annotation databases.
 
 ## Technology
 

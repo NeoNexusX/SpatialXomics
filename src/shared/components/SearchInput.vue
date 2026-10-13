@@ -17,7 +17,7 @@
       :autocomplete="autocomplete"
       :disabled="disabled"
       class="input input-bordered w-full pl-8"
-      :class="[sizeClass, fluid && 'kawaru-text-95', clearable && modelValue ? 'pr-8' : 'pr-3']"
+      :class="[sizeClass, fluid && 'kawaru-text-100', clearable && modelValue ? 'pr-8' : 'pr-3']"
       @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
       @keydown.enter.prevent="emit('search', ($event.target as HTMLInputElement).value)"
     />
