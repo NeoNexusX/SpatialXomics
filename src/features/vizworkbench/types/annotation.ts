@@ -63,6 +63,9 @@ export interface PeakTable {
   axisIndex: Int32Array
 }
 
+/** 化合物来源等级（库模板的可选 Origin 列），按排序先后：内源 → 预期内源 → 未定 → 外源 */
+export type CandidateOrigin = 'endogenous' | 'expected' | 'unknown' | 'exogenous'
+
 /** 注释库里的一个化合物（库模板的一行） */
 export interface Candidate {
   /** 库内编号，如 HMDB0240254；没有为空串 */
@@ -70,6 +73,8 @@ export interface Candidate {
   name: string
   /** 没有为空串 */
   inchi: string
+  /** 来源等级；库里没有 Origin 列或值认不出时缺省 */
+  origin?: CandidateOrigin
 }
 
 /**
@@ -216,9 +221,16 @@ export interface RunSummary {
   timingMs: number
 }
 
+/** 总分三部分的权重（或面板上输入的比例数，按和归一化后才是权重） */
+export interface ScoreWeights {
+  mass: number
+  adduct: number
+  spatial: number
+}
+
 export interface EngineConfig {
-  /** 总分权重：质量 / 加合适配度 / 空间 */
-  weights: { mass: number; adduct: number; spatial: number }
+  /** 总分权重：质量 / 加合适配度 / 空间，三者之和为 1 */
+  weights: ScoreWeights
   /** 空间分内部权重；没有可用共定位证据时 coloc 按 0 计 */
   spatialWeights: { chaos: number; coloc: number }
   /** σ = 容差 × massSigma */

@@ -1,10 +1,12 @@
 /**
  * 空间评分的取图队列。
  *
- * zarr store 和 OSS 凭证都在主线程，离子图在这里读取，副本交给 worker 计算混乱度和
- * 相关。按任务优先级排队，并发 3 个；同一张图同时只发一次请求；LRU 按字节封顶
- * （全分辨率 Float32 离子图，大图 4 MB 以上一张）。worker 按峰缓存混乱度、按峰对
- * 缓存相关，本批已经交过去的峰和峰对不再取图。
+ * zarr store 和 OSS 凭证都在主线程，离子图在这里读取，交给 worker 计算混乱度和相关。
+ * ion_image 按 m/z 轴顺序把多张整图打包进一个 chunk 存，所以按轴下标从小到大读：同一
+ * chunk 里的图挨着读，每个 chunk 只下载、解压一次。每个峰只读一次；worker 留着的图超出
+ * 内存上限被释放、之后又要用时，在回复里列出要重读的峰，排在最前面读。
+ * 开始时先读排名最前的几组（表格首屏），表格请求的组（可见行、悬停行）也提到前面。
+ * 在读和等 worker 处理的图按字节封顶：worker 算得慢时读取跟着放慢。
  */
 
 import { onUnmounted } from 'vue'
@@ -14,36 +16,53 @@ import {
   mzAxisRef,
 } from '@/features/vizworkbench/composables/useZarrIonImage'
 import { hotspotClip } from '@/features/vizworkbench/utils/annotation/chaos'
-import { pairKey, pearsonUnionMask } from '@/features/vizworkbench/utils/annotation/pearson'
+import { pearsonUnionMask } from '@/features/vizworkbench/utils/annotation/pearson'
 import { toleranceDa } from '@/features/vizworkbench/utils/annotation/tolerance'
 import type { SpatialJob, Tolerance } from '@/features/vizworkbench/types/annotation'
 
+/** 详情卡按需算相关时的离子图缓存 */
 const IMAGE_CACHE_BYTES = 128 * 1024 * 1024
-const CONCURRENCY = 3
+/** 在读和等 worker 处理的图的总字节上限 */
+const IN_FLIGHT_BYTES = 32 * 1024 * 1024
+const MIN_IN_FLIGHT = 4
+const MAX_IN_FLIGHT = 256
+/** 一个峰最多读几次（读取出错时重试） */
+const MAX_ATTEMPTS = 2
+/** 开始时先读排名最前的几组 */
+const FIRST_JOBS = 24
+
+interface Read {
+  axis: number
+  attempt: number
+}
 
 export function useAnnotationSpatial(opts: {
   /** 当前容差（决定取图窗口） */
   tolerance: () => Tolerance | null
   /**
-   * 一个任务的图取齐了（与 job.axisIndices 一一对应；null = 读取失败，undefined = 这个峰的
-   * 混乱度和它所在的峰对都已交给过 worker，没有取图）。传入的是副本
+   * 把一个峰的离子图交给 worker（null = 读取失败），buffer 会被转移。worker 处理完后 resolve，
+   * 带回要重读的峰
    */
-  onImages: (
-    job: SpatialJob,
-    images: (Float32Array | null | undefined)[],
+  send: (
+    axis: number,
+    image: Float32Array | null,
     width: number,
     height: number,
-  ) => void
+  ) => Promise<number[]>
 }) {
-  let queue: SpatialJob[] = []
-  /** queue[head] 起是还没开始的任务：出队只移动下标（几万个任务时数组 shift 是 O(n)） */
-  let head = 0
-  let inFlight = 0
   let generation = 0
   let disposed = false
-  /** 本批已交给 worker 的有效图的峰，以及同一任务里一起交过去的峰对（pairKey） */
-  let sentAxes = new Set<number>()
-  let sentPairs = new Set<string>()
+  let inFlight = 0
+  /** 本批要读的全部峰，按轴下标从小到大；cursor 之前的已经轮到过 */
+  let sweep: number[] = []
+  let cursor = 0
+  /** 提前读的峰：越新的请求越靠前 */
+  let bumped: number[] = []
+  /** 重读与出错重试：最先读 */
+  let urgent: Read[] = []
+  /** 本批已经开始读的峰（重读和重试不受限） */
+  let started = new Set<number>()
+  let jobAxes = new Map<string, number[]>()
 
   /** 键 = 轴下标 + 取图窗口；换容差不用清。换了数据集（m/z 轴）下标含义就变了，必须清 */
   const cache = new Map<string, Float32Array>()
@@ -72,17 +91,30 @@ export function useAnnotationSpatial(opts: {
     }
   }
 
-  function loadImage(axisIndex: number): Promise<Float32Array> {
+  /** 一个峰在当前容差下的取图窗口；数据或容差不可用时为 null */
+  function windowOf(axisIndex: number): number | null {
     const tol = opts.tolerance()
     const axis = mzAxisRef.value
-    if (!tol || !axis || axisIndex < 0 || axisIndex >= axis.length) {
-      return Promise.reject(new Error('ion image unavailable'))
-    }
+    if (!tol || !axis || axisIndex < 0 || axisIndex >= axis.length) return null
+    return toleranceDa(axis[axisIndex]!, tol)
+  }
+
+  /** 读一个峰的离子图，每次都是新数组（交给 worker 时直接转移） */
+  function readImage(axisIndex: number): Promise<Float32Array> {
+    const tolDa = windowOf(axisIndex)
+    if (tolDa == null) return Promise.reject(new Error('ion image unavailable'))
+    return loadIonMatrixByIndex(axisIndex, tolDa)
+  }
+
+  /** 带缓存的读取（详情卡按需算相关） */
+  function loadImage(axisIndex: number): Promise<Float32Array> {
+    const tolDa = windowOf(axisIndex)
+    if (tolDa == null) return Promise.reject(new Error('ion image unavailable'))
+    const axis = mzAxisRef.value
     if (axis !== cacheAxis) {
       clearCache()
       cacheAxis = axis
     }
-    const tolDa = toleranceDa(axis[axisIndex]!, tol)
     const key = cacheKey(axisIndex, tolDa)
     const hit = cache.get(key)
     if (hit) {
@@ -111,37 +143,49 @@ export function useAnnotationSpatial(opts: {
     return shape ? { width: shape.width, height: shape.height } : null
   }
 
-  /** 峰本身没交过，或它和任务里另一个峰的峰对没交过，worker 才需要这张图 */
-  function needsImage(axis: number, job: SpatialJob): boolean {
-    return (
-      !sentAxes.has(axis) ||
-      job.axisIndices.some((other) => other !== axis && !sentPairs.has(pairKey(axis, other)))
-    )
+  function inFlightLimit(): number {
+    const d = dims()
+    const bytes = d ? d.width * d.height * 4 : 0
+    if (!(bytes > 0)) return MIN_IN_FLIGHT
+    return Math.min(MAX_IN_FLIGHT, Math.max(MIN_IN_FLIGHT, Math.floor(IN_FLIGHT_BYTES / bytes)))
   }
 
-  async function runJob(job: SpatialJob, gen: number): Promise<void> {
+  function nextRead(): Read | undefined {
+    const first = urgent.shift()
+    if (first) return first
+    while (bumped.length > 0) {
+      const axis = bumped.shift()!
+      if (!started.has(axis)) return claim(axis)
+    }
+    while (cursor < sweep.length) {
+      const axis = sweep[cursor++]!
+      if (!started.has(axis)) return claim(axis)
+    }
+    return undefined
+  }
+
+  function claim(axis: number): Read {
+    started.add(axis)
+    return { axis, attempt: 1 }
+  }
+
+  async function readAndSend({ axis, attempt }: Read, gen: number): Promise<void> {
     try {
-      const images = await Promise.all(
-        job.axisIndices.map((idx) =>
-          needsImage(idx, job) ? loadImage(idx).catch(() => null) : undefined,
-        ),
-      )
+      let image: Float32Array | null = null
+      try {
+        image = await readImage(axis)
+      } catch {
+        if (gen === generation && attempt < MAX_ATTEMPTS) {
+          urgent.push({ axis, attempt: attempt + 1 })
+          return
+        }
+      }
       if (gen !== generation || disposed) return
       const d = dims()
-      if (!d) return
-      // 与 worker 判定有效图的条件相同：这些峰的混乱度和它们两两的相关会在 worker 里缓存
-      const sent = job.axisIndices.filter((_, k) => images[k]?.length === d.width * d.height)
-      sent.forEach((axis, i) => {
-        sentAxes.add(axis)
-        for (let j = i + 1; j < sent.length; j++) sentPairs.add(pairKey(axis, sent[j]!))
-      })
-      // 副本交给 worker（转移副本的 buffer，缓存里的原图不动）
-      opts.onImages(
-        job,
-        images.map((img) => (img ? new Float32Array(img) : img)),
-        d.width,
-        d.height,
-      )
+      const ok = image != null && d != null && image.length === d.width * d.height
+      const reread = await opts.send(axis, ok ? image : null, d?.width ?? 0, d?.height ?? 0)
+      if (gen !== generation || disposed) return
+      for (const a of reread) urgent.push({ axis: a, attempt: 1 })
     } finally {
       if (gen === generation) {
         inFlight--
@@ -151,38 +195,49 @@ export function useAnnotationSpatial(opts: {
   }
 
   function pump(): void {
-    while (!disposed && inFlight < CONCURRENCY && head < queue.length) {
-      const job = queue[head++]!
+    const limit = inFlightLimit()
+    while (!disposed && inFlight < limit) {
+      const next = nextRead()
+      if (!next) return
       inFlight++
-      void runJob(job, generation)
+      void readAndSend(next, generation)
     }
   }
 
   /** 开始一批新任务（丢弃上一批） */
   function start(jobs: SpatialJob[]): void {
     cancel()
-    queue = [...jobs].sort((a, b) => a.priority - b.priority)
+    jobAxes = new Map(jobs.map((j) => [j.job, j.axisIndices]))
+    sweep = [...new Set(jobs.flatMap((j) => j.axisIndices))].sort((a, b) => a - b)
+    const first = [...jobs].sort((a, b) => a.priority - b.priority).slice(0, FIRST_JOBS)
+    bump(first.map((j) => j.job))
     pump()
   }
 
   function cancel(): void {
     generation++
     inFlight = 0
-    queue = []
-    head = 0
-    sentAxes = new Set()
-    sentPairs = new Set()
+    sweep = []
+    cursor = 0
+    bumped = []
+    urgent = []
+    started = new Set()
+    jobAxes = new Map()
   }
 
-  /** 把这些任务提到队首（可见行、悬停行） */
+  /** 把这些任务还没读的峰提到前面（开始时的首屏、可见行、悬停行） */
   function bump(jobKeys: string[]): void {
-    if (jobKeys.length === 0) return
-    const want = new Set(jobKeys)
-    const pending = queue.slice(head)
-    const front = pending.filter((j) => want.has(j.job))
+    const front: number[] = []
+    const seen = new Set<number>()
+    for (const key of jobKeys) {
+      for (const axis of jobAxes.get(key) ?? []) {
+        if (started.has(axis) || seen.has(axis)) continue
+        seen.add(axis)
+        front.push(axis)
+      }
+    }
     if (front.length === 0) return
-    queue = [...front, ...pending.filter((j) => !want.has(j.job))]
-    head = 0
+    bumped = [...front, ...bumped.filter((axis) => !seen.has(axis))]
     pump()
   }
 

@@ -1,12 +1,17 @@
 /**
  * 注释管线（纯计算，worker / 主线程兜底 / 单测共用）。
  *
- *  run():           匹配 → 关联同分子、同峰 → 打分 → decoy 走同一流程 → 初始 q → 排名 → 空间任务
- *  applySpatial():  收到一个分子组的离子图 → 混乱度（按峰缓存）+ 组内两两 Pearson（按峰对缓存）
- *                   → 回填空间分与总分；最后一个任务完成时用同一套 decoy 重算 q 和排名
+ *  run():         匹配 → 关联同分子、同峰 → 打分 → decoy 走同一流程 → 初始 q → 排名 → 空间任务
+ *  applyImage():  收到一个峰的离子图 → 截顶后算混乱度（按峰缓存）、与已经到了的配对峰算 Pearson
+ *                 （按峰对缓存）→ 峰和峰对都有结果的分子组回填空间分与总分；最后一个任务完成时
+ *                 用同一套 decoy 重算 q 和排名
  *
  * 空间评分默认覆盖全部目标与 decoy。比例小于 100% 时，按初始总分取指定比例的目标行
  * 所在分子组（含组内全部加合离子），以及初始总分不低于同一阈值的 decoy 所在的组。
+ *
+ * 每个峰的图只需送来一次（主线程按 m/z 顺序读）。还有峰对要算的峰留着截顶后的图，总量超出
+ * 上限时先释放下一次用到最晚的；之后配对峰到了而它不在，就请主线程重读。混乱度和相关只取决于
+ * 图本身，结果与送图的顺序无关。
  */
 
 import { ADDUCT_BY_ID, adductMz, type AdductDef, type AdductId } from '@/shared/chem/adducts'
@@ -43,6 +48,9 @@ export interface SessionInput {
 /** 限定比例时 decoy 空间任务的上限（选中目标行数的倍数）；全部计算时不设上限 */
 const DECOY_JOB_FACTOR = 2
 
+/** 留着的截顶图的总字节上限 */
+const RETAIN_BYTES = 256 * 1024 * 1024
+
 /** 目标分子组的空间任务键（主线程据此把可见行的任务提前） */
 export function targetJobKey(moleculeId: number): string {
   return `t${moleculeId}`
@@ -67,7 +75,38 @@ interface JobState {
   ionIds: number[]
   /** decoy 组：成员在 decoy 列式数组里的下标 */
   decoyIdx: number[]
+  /** 还没有结果的峰与峰对数，为 0 时打分 */
+  left: number
   done: boolean
+}
+
+/** 空间任务里的一个峰 */
+interface AxisState {
+  axis: number
+  /** 含这个峰的任务 */
+  jobs: JobState[]
+  /** 要和它算相关的峰（各任务里的其他峰，去重），与 pairKeys 一一对应 */
+  partners: number[]
+  pairKeys: string[]
+  /** 还没有结果的峰对数 */
+  pending: number
+  /** 图送来过（读取失败也算） */
+  delivered: boolean
+  failed: boolean
+  /** 截顶后的图：还有峰对要用时留着 */
+  clip: Float32Array | null
+  /** 已请求重读，还没送到 */
+  rereading: boolean
+}
+
+/** 一张图带来的变化 */
+interface Changes {
+  ions: IonPatch[]
+  pairs: [string, number | null][]
+  /** 完成的任务数 */
+  jobs: number
+  /** 要主线程重读的峰 */
+  reread: number[]
 }
 
 export class AnnotationSession {
@@ -86,13 +125,22 @@ export class AnnotationSession {
 
   private readonly jobs = new Map<string, JobState>()
   private jobsDone = 0
+  private readonly axes = new Map<number, AxisState>()
+  /** 还没有结果的峰对 → 含它的任务 */
+  private readonly pairJobs = new Map<string, JobState[]>()
+  /** 留着截顶图的峰 */
+  private readonly retained = new Set<AxisState>()
+  private retainedBytes = 0
+  private readonly retainBytes: number
   private readonly chaosByAxis = new Map<number, number>()
   private readonly pairR = new Map<string, number | null>()
   private summary!: RunSummary
 
-  constructor(input: SessionInput) {
+  /** retainBytes：留着的截顶图的总字节上限（单测用小值验证重读） */
+  constructor(input: SessionInput, opts: { retainBytes?: number } = {}) {
     this.input = input
     this.defs = input.adducts.map((a) => ({ ...ADDUCT_BY_ID[a.id], fit: a.fit }))
+    this.retainBytes = opts.retainBytes ?? RETAIN_BYTES
   }
 
   run(): AnnotationResult {
@@ -269,7 +317,7 @@ export class AnnotationSession {
       const ionIds = this.molecules.get(ion.moleculeId)!.ionIds
       const axisIndices = uniqueAxes(ionIds.map((id) => this.ions[id]!.axisIndex))
       for (const id of ionIds) this.ions[id]!.scores.spatialState = 'queued'
-      this.jobs.set(job, { axisIndices, ionIds, decoyIdx: [], done: false })
+      this.jobs.set(job, { axisIndices, ionIds, decoyIdx: [], left: 0, done: false })
       out.push({ job, axisIndices, priority: ion.rank })
     }
 
@@ -282,122 +330,227 @@ export class AnnotationSession {
     groups.forEach(({ key, idx }, n) => {
       const axisIndices = uniqueAxes(idx.map((i) => this.dAxis[i]!))
       const job = `d${key}`
-      this.jobs.set(job, { axisIndices, ionIds: [], decoyIdx: idx, done: false })
+      this.jobs.set(job, { axisIndices, ionIds: [], decoyIdx: idx, left: 0, done: false })
       out.push({ job, axisIndices, priority: tier.length + 1 + n })
     })
+    this.indexSpatialJobs()
     return out
   }
 
+  /** 每个任务等它的峰和组内两两峰对都有结果；建峰 → 任务、峰对 → 任务的索引 */
+  private indexSpatialJobs(): void {
+    for (const job of this.jobs.values()) {
+      const axes = job.axisIndices
+      job.left = axes.length + (axes.length * (axes.length - 1)) / 2
+      for (let i = 0; i < axes.length; i++) {
+        const a = this.axisState(axes[i]!)
+        a.jobs.push(job)
+        for (let j = i + 1; j < axes.length; j++) {
+          const key = pairKey(axes[i]!, axes[j]!)
+          const jobs = this.pairJobs.get(key)
+          if (jobs) {
+            jobs.push(job)
+            continue
+          }
+          this.pairJobs.set(key, [job])
+          const b = this.axisState(axes[j]!)
+          a.partners.push(b.axis)
+          a.pairKeys.push(key)
+          a.pending++
+          b.partners.push(a.axis)
+          b.pairKeys.push(key)
+          b.pending++
+        }
+      }
+    }
+  }
+
+  private axisState(axis: number): AxisState {
+    let st = this.axes.get(axis)
+    if (!st) {
+      st = {
+        axis,
+        jobs: [],
+        partners: [],
+        pairKeys: [],
+        pending: 0,
+        delivered: false,
+        failed: false,
+        clip: null,
+        rereading: false,
+      }
+      this.axes.set(axis, st)
+    }
+    return st
+  }
+
   /**
-   * 一个任务的离子图到了（与 axisIndices 一一对应，null = 读取失败，undefined = 主线程
-   * 判定这个峰的混乱度和所在峰对都已算过、没有传图）。任务未知或已处理过时返回 null。
+   * 一个峰的离子图到了（null 或尺寸不对 = 读取失败）。返回这张图带来的变化（没有时为 null）
+   * 和要主线程重读的峰：送来过、图已释放、现在配对峰到了又要用它。
+   * 不在任何任务里的峰、重复送来的图不产生变化。
    */
-  applySpatial(
-    job: string,
-    images: (Float32Array | null | undefined)[],
+  applyImage(
+    axis: number,
+    image: Float32Array | null,
     width: number,
     height: number,
-  ): SpatialPatch | null {
-    const state = this.jobs.get(job)
-    if (!state || state.done) return null
-    state.done = true
+  ): { patch: SpatialPatch | null; reread: number[] } {
+    const st = this.axes.get(axis)
+    const changes: Changes = { ions: [], pairs: [], jobs: 0, reread: [] }
+    if (st) {
+      st.rereading = false
+      if (image && image.length === width * height) this.receive(st, image, width, height, changes)
+      else this.fail(st, changes)
+    }
+    return { patch: this.patchOf(changes), reread: changes.reread }
+  }
+
+  /** 截顶后算混乱度（只在第一次送来时），再与留着图的配对峰算 Pearson */
+  private receive(
+    st: AxisState,
+    image: Float32Array,
+    width: number,
+    height: number,
+    changes: Changes,
+  ): void {
+    // 失败过的峰不再用；图还留着或峰对都有结果了：重复送来的图没有新东西
+    if (st.failed || st.clip || (st.delivered && st.pending === 0)) return
+    const { minPixels } = this.input.config
+    const clip = hotspotClip(image, 99)
+    if (!st.delivered) {
+      st.delivered = true
+      const chaos = countNonZero(clip) < minPixels ? 0 : (measureOfChaos(clip, width, height) ?? 0)
+      // 恰为 1 的退化结果记 0
+      this.chaosByAxis.set(st.axis, chaos === 1 ? 0 : chaos)
+      for (const job of st.jobs) this.progress(job, changes)
+    }
+    st.partners.forEach((p, k) => {
+      const key = st.pairKeys[k]!
+      if (!this.pairJobs.has(key)) return
+      const other = this.axes.get(p)!
+      if (other.clip) {
+        const r = pearsonUnionMask(clip, other.clip, minPixels)
+        this.pairR.set(key, r)
+        changes.pairs.push([key, r])
+        this.resolvePair(key, st, other, changes)
+      } else if (other.delivered && !other.rereading) {
+        // 配对峰的图已经释放：请主线程重读，这张图留着等它
+        other.rereading = true
+        changes.reread.push(p)
+      }
+    })
+    if (st.pending > 0) this.retain(st, clip)
+  }
+
+  /** 读取失败：没有混乱度（第一次就失败时），和它的峰对都不再算 */
+  private fail(st: AxisState, changes: Changes): void {
+    if (st.failed || st.clip) return
+    st.failed = true
+    if (!st.delivered) {
+      st.delivered = true
+      for (const job of st.jobs) this.progress(job, changes)
+    }
+    st.partners.forEach((p, k) => {
+      const key = st.pairKeys[k]!
+      if (this.pairJobs.has(key)) this.resolvePair(key, st, this.axes.get(p)!, changes)
+    })
+  }
+
+  /** 峰对有了结果（算出 r，或一侧读取失败）：推进含它的任务，两个峰都少一个待算的峰对 */
+  private resolvePair(key: string, a: AxisState, b: AxisState, changes: Changes): void {
+    const jobs = this.pairJobs.get(key)!
+    this.pairJobs.delete(key)
+    for (const job of jobs) this.progress(job, changes)
+    for (const st of [a, b]) if (--st.pending === 0 && st.clip) this.release(st)
+  }
+
+  /** 任务的一个峰或峰对有了结果；全都有了就打分 */
+  private progress(job: JobState, changes: Changes): void {
+    if (--job.left > 0 || job.done) return
+    job.done = true
     this.jobsDone++
-
-    const failed = new Set<number>()
-    const newPairs = this.measure(state.axisIndices, images, width, height, failed)
-
-    const patches: IonPatch[] = []
-    const ionAxes = state.ionIds.map((id) => this.ions[id]!.axisIndex)
-    state.ionIds.forEach((id, k) => {
+    changes.jobs++
+    const ionAxes = job.ionIds.map((id) => this.ions[id]!.axisIndex)
+    job.ionIds.forEach((id, k) => {
       const ion = this.ions[id]!
-      ion.scores = this.scoreSpatial(k, ionAxes, failed, ion.scores.mass, ion.fit)
-      patches.push({ id, scores: { ...ion.scores } })
+      ion.scores = this.scoreSpatial(k, ionAxes, ion.scores.mass, ion.fit)
+      changes.ions.push({ id, scores: { ...ion.scores } })
     })
-    const decoyAxes = state.decoyIdx.map((i) => this.dAxis[i]!)
-    state.decoyIdx.forEach((di, k) => {
-      this.dTotal[di] = this.scoreSpatial(
-        k,
-        decoyAxes,
-        failed,
-        this.dMass[di]!,
-        this.dFit[di]!,
-      ).total
+    const decoyAxes = job.decoyIdx.map((i) => this.dAxis[i]!)
+    job.decoyIdx.forEach((di, k) => {
+      this.dTotal[di] = this.scoreSpatial(k, decoyAxes, this.dMass[di]!, this.dFit[di]!).total
     })
+  }
 
-    const final = this.jobsDone === this.jobs.size
+  /** 没有变化时为 null；最后一个任务完成时用同一套 decoy 重算 q 和排名，带全量 q 与 rank */
+  private patchOf(changes: Changes): SpatialPatch | null {
+    if (changes.jobs === 0 && changes.pairs.length === 0) return null
+    const final = changes.jobs > 0 && this.jobsDone === this.jobs.size
     if (final) {
       this.assignQ()
       this.assignRanks()
-      const byId = new Map(patches.map((p) => [p.id, p]))
+      const byId = new Map(changes.ions.map((p) => [p.id, p]))
       for (const ion of this.ions) {
         const p = byId.get(ion.id)
         if (p) Object.assign(p, { q: ion.q, rank: ion.rank })
-        else patches.push({ id: ion.id, q: ion.q, rank: ion.rank })
+        else changes.ions.push({ id: ion.id, q: ion.q, rank: ion.rank })
       }
       this.summary.qCounts = this.qCounts()
     }
     this.summary.spatial = { total: this.jobs.size, done: this.jobsDone }
-    return { ions: patches, pairR: newPairs, summary: { ...this.summary }, final }
+    return { ions: changes.ions, pairR: changes.pairs, summary: { ...this.summary }, final }
+  }
+
+  /** 留着截顶图；超出上限时释放下一次用到最晚的 */
+  private retain(st: AxisState, clip: Float32Array): void {
+    st.clip = clip
+    this.retained.add(st)
+    this.retainedBytes += clip.byteLength
+    while (this.retainedBytes > this.retainBytes) {
+      let victim: AxisState | null = null
+      let latest = -Infinity
+      for (const s of this.retained) {
+        const next = this.nextUse(s)
+        if (next > latest) {
+          latest = next
+          victim = s
+        }
+      }
+      // 留着的都在等配对峰重读：暂时超出上限
+      if (!victim) break
+      this.release(victim)
+    }
+  }
+
+  private release(st: AxisState): void {
+    this.retainedBytes -= st.clip!.byteLength
+    st.clip = null
+    this.retained.delete(st)
   }
 
   /**
-   * 截顶后算各峰的混乱度（按峰缓存）与组内两两 Pearson（按峰对缓存）；返回新算出的峰对。
-   * 同一个峰会出现在许多目标 / decoy 任务里，截顶按需进行：混乱度和峰对都已缓存的峰不再截顶。
+   * 图下一次用到的位置：还没送来的配对峰里最小的轴下标（主线程按 m/z 顺序送图）。
+   * 有配对峰送来过、图已释放、正在重读：这张图要等它，-Infinity 表示不能释放
    */
-  private measure(
-    axes: number[],
-    images: (Float32Array | null | undefined)[],
-    width: number,
-    height: number,
-    failed: Set<number>,
-  ): [string, number | null][] {
-    const { minPixels } = this.input.config
-    const valid = new Map<number, Float32Array>()
-    axes.forEach((axis, k) => {
-      const img = images[k]
-      if (img === undefined) return
-      if (img && img.length === width * height) valid.set(axis, img)
-      else failed.add(axis)
-    })
-    const clipped = new Map<number, Float32Array>()
-    const clipOf = (axis: number): Float32Array => {
-      let clip = clipped.get(axis)
-      if (!clip) clipped.set(axis, (clip = hotspotClip(valid.get(axis)!, 99)))
-      return clip
+  private nextUse(st: AxisState): number {
+    let next = Infinity
+    for (let k = 0; k < st.partners.length; k++) {
+      if (!this.pairJobs.has(st.pairKeys[k]!)) continue
+      const p = st.partners[k]!
+      if (this.axes.get(p)!.delivered) return -Infinity
+      if (p < next) next = p
     }
-    for (const axis of valid.keys()) {
-      if (this.chaosByAxis.has(axis)) continue
-      const clip = clipOf(axis)
-      const chaos = countNonZero(clip) < minPixels ? 0 : (measureOfChaos(clip, width, height) ?? 0)
-      // 恰为 1 的退化结果记 0
-      this.chaosByAxis.set(axis, chaos === 1 ? 0 : chaos)
-    }
-    const newPairs: [string, number | null][] = []
-    const ok = [...valid.keys()]
-    for (let i = 0; i < ok.length; i++) {
-      for (let j = i + 1; j < ok.length; j++) {
-        const key = pairKey(ok[i]!, ok[j]!)
-        if (this.pairR.has(key)) continue
-        const r = pearsonUnionMask(clipOf(ok[i]!), clipOf(ok[j]!), minPixels)
-        this.pairR.set(key, r)
-        newPairs.push([key, r])
-      }
-    }
-    return newPairs
+    return next
   }
 
   /** 组内第 k 个成员的空间分：混乱度与组内最大有效相关（r > 0.1）的加权和 */
-  private scoreSpatial(
-    k: number,
-    groupAxes: number[],
-    failed: Set<number>,
-    mass: number,
-    fit: number,
-  ): IonScores {
+  private scoreSpatial(k: number, groupAxes: number[], mass: number, fit: number): IonScores {
     const cfg = this.input.config
     const axis = groupAxes[k]!
     const chaos = this.chaosByAxis.get(axis)
-    if (chaos == null) return unscored(mass, fit, failed.has(axis) ? 'error' : 'na', cfg)
+    if (chaos == null) {
+      return unscored(mass, fit, this.axes.get(axis)?.failed ? 'error' : 'na', cfg)
+    }
     let coloc: number | null = null
     for (let j = 0; j < groupAxes.length; j++) {
       const other = groupAxes[j]!

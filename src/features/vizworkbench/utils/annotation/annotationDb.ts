@@ -9,6 +9,8 @@
  *  - Formula：中性分子式（必需）
  *  - Mass：单同位素中性质量（Da）；缺失或无效时按分子式计算
  *  - ID / Name / InChI：可选；InChI 含逗号，按 CSV 规则用双引号包起来
+ *  - Origin：可选，来源等级 endogenous / expected / unknown / exogenous（不区分大小写，认不出的
+ *    按没有处理）；同一分子式的候选按这个先后排，同级保持文件里的先后（见 origin.ts）
  * 列名不区分大小写，也认几种常见写法（见下方别名表）。旧的「按加合物展开」格式
  * （formula, Ion type, Exp. m/z, Candidate_1..N）同样可读：同一分子式的多行合并，
  * 中性质量按分子式计算，不用其中的 m/z。
@@ -31,6 +33,7 @@ import {
   parseNumberCell,
   splitCsvLine,
 } from './csv'
+import { originRank, parseOrigin } from './origin'
 
 export interface DbEntryInput {
   formula: string
@@ -39,7 +42,10 @@ export interface DbEntryInput {
   candidates?: Candidate[]
 }
 
-/** 按分子式合并、补算质量、按质量排序；分子式为空、质量也算不出的条目丢弃 */
+/**
+ * 按分子式合并、补算质量、按质量排序；分子式为空、质量也算不出的条目丢弃。
+ * 同一分子式的候选按来源等级稳定排序：没有来源标签时都算 unknown，顺序不变
+ */
 export function buildAnnotationDb(
   meta: { id: string; label: string; version: string },
   entries: Iterable<DbEntryInput>,
@@ -69,7 +75,9 @@ export function buildAnnotationDb(
     ...meta,
     mass: Float64Array.from(rows, (r) => r[1].mass),
     formula: rows.map((r) => r[0]),
-    candidates: rows.map((r) => r[1].candidates),
+    candidates: rows.map((r) =>
+      r[1].candidates.sort((a, b) => originRank(a.origin) - originRank(b.origin)),
+    ),
   }
 }
 
@@ -77,6 +85,7 @@ const ID_ALIASES = ['id', 'hmdb id', 'hmdb_id', 'accession', 'compound id', 'com
 const NAME_ALIASES = ['name', 'compound', 'compound name', 'candidate']
 const FORMULA_ALIASES = ['formula', 'neutral formula', 'molecular formula']
 const INCHI_ALIASES = ['inchi']
+const ORIGIN_ALIASES = ['origin']
 const MASS_ALIASES = [
   'mass',
   'monoisotopic mass',
@@ -123,6 +132,7 @@ export function parseAnnotationDbCsv(
   const nameCol = findColumn(headers, NAME_ALIASES)
   const inchiCol = findColumn(headers, INCHI_ALIASES)
   const massCol = findColumn(headers, MASS_ALIASES)
+  const originCol = findColumn(headers, ORIGIN_ALIASES)
   // 旧格式：一行带 Candidate_1..N 多个候选名
   const numberedNameCols = headers
     .map((h, i) => ({ i, n: normalizeHeader(h).match(/^candidate[_\s-]*(\d+)$/)?.[1] }))
@@ -136,16 +146,18 @@ export function parseAnnotationDbCsv(
       const cell = (i: number) => (i >= 0 ? (f[i] ?? '') : '')
       const id = cell(idCol)
       const inchi = cell(inchiCol)
+      const origin = parseOrigin(cell(originCol))
       const names = [nameCol, ...numberedNameCols].map(cell).filter((v) => !isBlank(v))
       // 只有编号、没有名称时用编号当名称，保证每个候选都有可显示的名字
       if (names.length === 0 && id) names.push(id)
       yield {
         formula: cell(formulaCol),
         mass: massCol >= 0 ? parseNumberCell(f[massCol]) : null,
-        // 编号和 InChI 属于这一行的第一个名称；旧格式里其余候选名只有名称
-        candidates: names.map((name, k) =>
-          k === 0 ? { id, name, inchi } : { id: '', name, inchi: '' },
-        ),
+        // 编号、InChI 和来源属于这一行的第一个名称；旧格式里其余候选名只有名称
+        candidates: names.map((name, k): Candidate => {
+          if (k > 0) return { id: '', name, inchi: '' }
+          return origin ? { id, name, inchi, origin } : { id, name, inchi }
+        }),
       }
     }
   }

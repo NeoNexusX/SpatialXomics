@@ -13,6 +13,7 @@ import type { AdductId } from '@/shared/chem/adducts'
 import type {
   AnnotationResult,
   IonAnnotation,
+  SpatialJob,
   SpatialPatch,
 } from '@/features/vizworkbench/types/annotation'
 
@@ -33,13 +34,14 @@ function run(
   csv: string,
   adducts: { id: AdductId; fit: number }[],
   spatialPct = DEFAULT_ENGINE_CONFIG.spatialPct,
+  weights = DEFAULT_ENGINE_CONFIG.weights,
 ) {
   const session = new AnnotationSession({
     db,
     peaks: testPeaks(csv),
     adducts,
     tolerance: { value: 5, unit: 'ppm', origin: 'user' },
-    config: { ...DEFAULT_ENGINE_CONFIG, spatialPct, seed: 7 },
+    config: { ...DEFAULT_ENGINE_CONFIG, weights, spatialPct, seed: 7 },
   })
   return { session, result: session.run() }
 }
@@ -51,6 +53,7 @@ function ionsOf(result: AnnotationResult, name: string): IonAnnotation[] {
 
 const W = 40
 const H = 40
+const WEIGHTS = DEFAULT_ENGINE_CONFIG.weights
 
 /**
  * 两个亮度不同的成块区域：低阈值下 2 个连通区域、高阈值下只剩亮的那个。
@@ -71,6 +74,29 @@ function twoBlobs(scale = 1): Float32Array {
     }
   }
   return img
+}
+
+/** 把一个任务的图按峰逐个交给会话，合并这些图带来的变化；都没有变化时为 null */
+function deliverJob(
+  session: AnnotationSession,
+  job: SpatialJob,
+  images: (Float32Array | null)[],
+  width = W,
+  height = H,
+): SpatialPatch | null {
+  let merged: SpatialPatch | null = null
+  for (let k = 0; k < job.axisIndices.length; k++) {
+    const { patch } = session.applyImage(job.axisIndices[k]!, images[k] ?? null, width, height)
+    if (!patch) continue
+    merged = merged
+      ? {
+          ...patch,
+          ions: [...merged.ions, ...patch.ions],
+          pairR: [...merged.pairR, ...patch.pairR],
+        }
+      : patch
+  }
+  return merged
 }
 
 describe('AnnotationSession (positive fixture)', () => {
@@ -125,20 +151,32 @@ describe('AnnotationSession (positive fixture)', () => {
     for (const line of lines) expect(line[spatialColumn]).toBe('0.0000')
   })
 
+  it('scores totals with the configured weights', () => {
+    const weights = { mass: 0.5, adduct: 0.2, spatial: 0.3 }
+    const { result } = run(positiveCsv, POSITIVE, DEFAULT_ENGINE_CONFIG.spatialPct, weights)
+    expect(result.ions.length).toBeGreaterThan(0)
+    // 空间分还没算：总分 = 质量与适配度两项
+    for (const ion of result.ions) {
+      expect(ion.scores.total).toBeCloseTo(0.5 * ion.scores.mass + 0.2 * ion.scores.adduct, 9)
+    }
+  })
+
   it('gives failed spatial jobs no spatial contribution', () => {
     const fresh = run(positiveCsv, POSITIVE)
     const job = fresh.result.jobs[0]!
-    const patch = fresh.session.applySpatial(
-      job.job,
+    const patch = deliverJob(
+      fresh.session,
+      job,
       job.axisIndices.map(() => null),
-      W,
-      H,
     )!
     expect(patch.ions.length).toBeGreaterThan(0)
     for (const ion of patch.ions) {
       expect(ion.scores!.spatialState).toBe('error')
       expect(ion.scores!.spatial).toBeNull()
-      expect(ion.scores!.total).toBeCloseTo(0.7 * ion.scores!.mass + 0.1 * ion.scores!.adduct, 9)
+      expect(ion.scores!.total).toBeCloseTo(
+        WEIGHTS.mass * ion.scores!.mass + WEIGHTS.adduct * ion.scores!.adduct,
+        9,
+      )
     }
   })
 
@@ -156,7 +194,7 @@ describe('AnnotationSession (positive fixture)', () => {
         return 4 + 0.05 * common + Math.sqrt(1 - 0.05 ** 2) * independent
       }),
     )
-    const patch = fresh.session.applySpatial(job.job, images, W, H)!
+    const patch = deliverJob(fresh.session, job, images)!
     expect(patch.pairR).toHaveLength(3)
     for (const [, r] of patch.pairR) {
       expect(r).toBeGreaterThan(0)
@@ -169,7 +207,9 @@ describe('AnnotationSession (positive fixture)', () => {
       expect(scores!.coloc).toBe(0)
       expect(scores!.spatial).toBeCloseTo(0.2 * scores!.chaos!, 9)
       expect(scores!.total).toBeCloseTo(
-        0.7 * scores!.mass + 0.1 * scores!.adduct + 0.2 * scores!.spatial!,
+        WEIGHTS.mass * scores!.mass +
+          WEIGHTS.adduct * scores!.adduct +
+          WEIGHTS.spatial * scores!.spatial!,
         9,
       )
     }
@@ -182,7 +222,7 @@ describe('AnnotationSession (positive fixture)', () => {
     expect(job.axisIndices.length).toBe(3)
     // 三个加合离子的图分布相同（强度不同）→ 两两 r ≈ 1
     const images = job.axisIndices.map((_, k) => twoBlobs(k + 1))
-    const patch = session.applySpatial(job.job, images, W, H)!
+    const patch = deliverJob(session, job, images)!
     const scored = patch.ions.filter((p) => pc.some((i) => i.id === p.id))
     expect(scored).toHaveLength(3)
     for (const p of scored) {
@@ -192,8 +232,8 @@ describe('AnnotationSession (positive fixture)', () => {
       expect(p.scores!.spatial!).toBeGreaterThan(p.scores!.chaos!)
     }
     expect(patch.pairR).toHaveLength(3)
-    // 同一任务不会处理两次
-    expect(session.applySpatial(job.job, images, W, H)).toBeNull()
+    // 重复送来的图不会再处理
+    expect(deliverJob(session, job, images)).toBeNull()
 
     // 其余任务给散点图；最后一个任务带全量 q 与排名
     let last = patch
@@ -204,7 +244,7 @@ describe('AnnotationSession (positive fixture)', () => {
         for (let i = 0; i < img.length; i += 13) img[i] = 1
         return img
       })
-      last = session.applySpatial(j.job, speckle, W, H) ?? last
+      last = deliverJob(session, j, speckle) ?? last
     }
     expect(last.final).toBe(true)
     expect(last.summary.spatial.done).toBe(last.summary.spatial.total)
@@ -276,12 +316,15 @@ describe('spatial calculation scope', () => {
     const image = new Float32Array(25).fill(1)
     let last: SpatialPatch | null = null
     for (const job of result.jobs) {
-      const patch = session.applySpatial(
-        job.job,
+      // 峰被前面的任务送过时，这个任务可能已经完成
+      const patch = deliverJob(
+        session,
+        job,
         job.axisIndices.map(() => image),
         5,
         5,
-      )!
+      )
+      if (!patch) continue
       for (const ion of patch.ions) {
         if (ion.scores?.spatialState === 'done') scored.add(ion.id)
       }

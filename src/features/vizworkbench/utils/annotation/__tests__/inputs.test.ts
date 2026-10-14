@@ -88,6 +88,29 @@ describe('annotation database', () => {
     expect(db.candidates[0]).toEqual([{ id: 'B1', name: 'B1', inchi: '' }])
   })
 
+  it('reads the optional Origin column and lists candidates endogenous first', () => {
+    const csv = [
+      'ID,Name,Formula,InChI,Mass,Origin',
+      'H6,Hexose U1,C6H12O6,,,unknown',
+      'H5,Hexose X,C6H12O6,,,Exogenous',
+      'H4,Hexose E1,C6H12O6,,,endogenous',
+      'H3,Hexose P,C6H12O6,,,expected',
+      'H2,Hexose E2,C6H12O6,,,endogenous',
+      'H1,Hexose U2,C6H12O6,,,not a level',
+    ].join('\n')
+    const db = parseAnnotationDbCsv(csv, META)
+    // 按等级排，同级保持文件里的先后；认不出的值不带标签，排在未定一级
+    expect(db.candidates[0]!.map((c) => [c.name, c.origin])).toEqual([
+      ['Hexose E1', 'endogenous'],
+      ['Hexose E2', 'endogenous'],
+      ['Hexose P', 'expected'],
+      ['Hexose U1', 'unknown'],
+      ['Hexose U2', undefined],
+      ['Hexose X', 'exogenous'],
+    ])
+    expect('origin' in db.candidates[0]![4]!).toBe(false)
+  })
+
   it('still reads the older adduct-expanded format by formula', () => {
     const csv = [
       'formula,Ion type,Exp. m/z,Candidate_1,Candidate_2,Candidate_3',

@@ -209,9 +209,10 @@ Annotation requires aligned **centroid** data (continuous storage) and a mean sp
 Click **Choose annotation CSV** to open a local file. The file is read and saved in the current browser without being uploaded to a server. The panel can restore the last user-selected database, clear it, or open a replacement.
 
 - The database template is `ID,Name,Formula,InChI,Mass`, one compound per row. `Formula` is required; `Mass` is the monoisotopic neutral mass in Da and is calculated from the formula when missing. Other columns are optional. Compounds sharing a formula are grouped as candidates.
+- An optional `Origin` column labels where a compound comes from: `endogenous`, `expected` (expected endogenous), `unknown` or `exogenous`. Candidates of a formula are listed in that order, keeping the file order within a level, and the first one is the displayed name. Origin only sets this order and the labels; it is not part of the total score and does not change q-values. Without the column, candidates keep the file order.
 - **Encoding**: UTF-8 (with or without BOM) and GBK/GB18030; the delimiter is detected automatically.
 - Peaks come directly from the dataset's mean spectrum. Zero-intensity points are excluded; the slider drops the weakest 0–99% by intensity rank (default 0%). The percentage counts peaks and takes effect when the slider is released. Every retained peak has its original m/z-axis index for ion images and navigation.
-- Click **Start** beside **Spatial scoring** to run annotation. Opening the panel, returning to a result, or changing the database, peak filter, tolerance, spatial percentage or adducts never starts matching automatically. Changed conditions clear the previous results and require another click. Each result remembers only its settings.
+- Click **Start** beside **Spatial scoring** to run annotation. Opening the panel, returning to a result, or changing the database, peak filter, tolerance, spatial percentage, score weights or adducts never starts matching automatically. Changed conditions clear the previous results and require another click. Each result remembers only its settings.
 
 ### Conditions
 
@@ -219,6 +220,7 @@ The conditions card summarizes the settings used and collapses to a one-line sum
 
 - **Dataset**: polarity, ion source, matrix, analyzer and solvent from the dataset metadata. If the polarity is missing, choose it here.
 - **Tolerance**: when left empty, the default comes from the analyzer (Orbitrap 5 ppm, FTICR 3 ppm, timsTOF/Q-TOF 10 ppm, TOF 20 ppm, 10 ppm if unknown). You can enter your own value in ppm or Da.
+- **Score weights**: three inputs for mass : adduct fit : spatial, each at least 0.1 with decimals allowed; the three must add up to 10, defaulting to 6 : 1 : 3. Each total-score weight is its value divided by 10 (0.6 / 0.1 / 0.3 by default). Entries outside 0.1–9.8 are ignored; clearing an input restores its default, and the button beside the inputs restores 6 : 1 : 3. While the sum is not 10, the inputs are outlined in red and annotation cannot start. Click **Start** to rerun after changes; q-values are re-estimated from the new total scores.
 - **Adducts**: filtered by polarity, then each adduct gets a fit (0–1) from the ion source, matrix and solvent additives; adducts with fit 0 are not enabled. Expand the multi-select list to check or uncheck individual adducts. Automatic and manual selections retain their colors; each row shows its fit, with mass shift and conditions available on hover.
 
 | Adduct | Default fit | Conditions |
@@ -238,13 +240,13 @@ The conditions card summarizes the settings used and collapses to a one-line sum
 
 ### Scoring & FDR
 
-The total score of a row is a weighted sum of three parts:
+The total score of a row is a weighted sum of three parts. The weights can be changed under **Score weights** in Conditions (above); the table lists the defaults, and the detail card's score breakdown shows the weights used by the current run:
 
-| Part | Weight | Meaning |
+| Part | Default weight | Meaning |
 | --- | --- | --- |
-| Mass | 0.7 | Higher for smaller mass errors (1 at zero error, about 0.14 at the tolerance edge) |
+| Mass | 0.6 | Higher for smaller mass errors (1 at zero error, about 0.14 at the tolerance edge) |
 | Adduct fit | 0.1 | How well the adduct suits the acquisition conditions |
-| Spatial | 0.2 | 0.2 × spatial chaos + 0.8 × same-molecule co-localization (below) |
+| Spatial | 0.3 | 0.2 × spatial chaos + 0.8 × same-molecule co-localization (below) |
 
 The FDR is estimated with a target-decoy approach: each formula is also paired with chemically implausible adducts (such as [M+Pt]⁺) as decoys, which go through the same matching and scoring. Each row gets a q-value; smaller is more credible.
 
@@ -260,11 +262,12 @@ Scores update in place while this runs; when it finishes, rows are re-ranked and
 ### Table & Detail Card
 
 - Each row has two lines: the name (+N means N more candidate names for the same formula) and the q-value, colored by level (green ≤10%, yellow ≤20%, gray otherwise); then the adduct, observed m/z and mass error. Hover the q-value to see the total score.
+- When the database has an `Origin` column, the small label after the name shows the origin of the displayed name: Endo, Expected or Exo (unknown is not shown). Exo means every candidate of that formula is exogenous.
 - The small chips at the end of the second line are other adduct ions of the same molecule; click one to jump to its row. Hovering a row lightly highlights the other rows of the same molecule. The stacked layers icon indicates multiple annotation results for the same peak.
 - **Click a row** to switch the ion image to its m/z and highlight the spectrum peak.
-- **Hover a row** for about 1 s to open the detail card (it can be pinned). From top to bottom: q-value, total score with rank, and mass error; a score table listing raw scores, total-score weights and contributions for mass, adduct fit, spatial, and its chaos and co-localization components; observed and theoretical m/z to 6 decimal places and intensity sit immediately below the total; the other adduct ions of the molecule with their spatial r against this ion, each with a circular-arrow jump button, with a primary-color "Only this" button beside the section heading; other annotations on the same peak, also with circular-arrow jump buttons; candidate compounds with their database IDs (well-known IDs such as HMDB open the database page), InChI copy and PubChem lookup. Uncomputed spatial scores and their total-score contributions both read 0; uncomputed chaos and co-localization read "–".
+- **Hover a row** for about 1 s to open the detail card (it can be pinned). From top to bottom: q-value, total score with rank, and mass error; a score table listing raw scores, total-score weights and contributions for mass, adduct fit, spatial, and its chaos and co-localization components; observed and theoretical m/z to 6 decimal places and intensity sit immediately below the total; the other adduct ions of the molecule with their spatial r against this ion, each with a circular-arrow jump button, with a primary-color "Only this" button beside the section heading; other annotations on the same peak, ordered by origin and then rank, also with circular-arrow jump buttons; candidate compounds with their origin labels and database IDs (well-known IDs such as HMDB open the database page), InChI copy and PubChem lookup. Uncomputed spatial scores and their total-score contributions both read 0; uncomputed chaos and co-localization read "–".
 - **q-value levels** (≤5% / ≤10% / ≤20% / All) sit above the table, each with its row count.
-- **Filter**: the button next to the search box opens an adduct multi-select list, rows with sibling ions, and sorting (total score by default, q-value, spatial score, mass error, m/z or intensity, with a reverse button). Select multiple adducts to keep any of those ions, or clear the selection to show all. The button shows how many of these differ from the defaults. Search covers name, formula and m/z; the detail card also offers "Show only this molecule".
+- **Filter**: the button next to the search box opens an adduct multi-select list, rows with sibling ions, and sorting (total score by default, q-value, spatial score, mass error, m/z, intensity, or origin with endogenous first and rank within a level, with a reverse button). Select multiple adducts to keep any of those ions, or clear the selection to show all. The button shows how many of these differ from the defaults. Search covers name, formula and m/z; the detail card also offers "Show only this molecule".
 
 Click **PubChem** to open a lookup dialog that searches PubChem by compound name and shows the structure, CID, IUPAC name, SMILES, and InChIKey, with copy buttons and a link to the PubChem page.
 
@@ -272,4 +275,4 @@ Click **PubChem** to open a lookup dialog that searches PubChem by compound name
 
 ### Export
 
-The **Download** button exports the current table (filters and sort applied) as `<runId>_annotations.csv`: one row per ion with the candidate compounds and IDs, all scores, the q-value, the other adduct ions of the same molecule (with r), and other annotations on the same peak.
+The **Download** button exports the current table (filters and sort applied) as `<runId>_annotations.csv`: one row per ion with the origin of the displayed name (Origin), the candidate compounds and IDs, all scores, the q-value, the other adduct ions of the same molecule (with r), and other annotations on the same peak.

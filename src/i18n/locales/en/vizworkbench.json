@@ -249,6 +249,10 @@
       "toleranceFallback": "Default {value} ppm (analyzer unknown)",
       "spatialCalculation": "Spatial scoring",
       "spatialReset": "Score all matches",
+      "scoreWeights": "Score weights",
+      "scoreWeightInput": "{part} weight",
+      "scoreWeightsReset": "Reset to default weights {ratio}",
+      "scoreWeightsSummary": "Weights {ratio}",
       "adducts": "Adducts",
       "adductSelected": "{count} selected",
       "noAdductsSelected": "No adducts enabled",
@@ -295,7 +299,8 @@
         "spatial": "Spatial score",
         "error": "Mass error",
         "mz": "m/z",
-        "intensity": "Intensity"
+        "intensity": "Intensity",
+        "origin": "Origin (endogenous first)"
       },
       "reverseSort": "Reverse order",
       "moleculeFilter": "Molecule",
@@ -327,6 +332,19 @@
       "samePeakTitle": "Other annotations on the same peak",
       "samePeakNote": "Different adducts with nearly the same mass cannot be told apart by mass alone; use co-localization or MS/MS",
       "candidates": "Candidates ({count})",
+      "origin": {
+        "endogenous": "Endo",
+        "expected": "Expected",
+        "unknown": "Unknown",
+        "exogenous": "Exo"
+      },
+      "originHint": {
+        "endogenous": "Endogenous: labelled endogenous in the database and detected in samples or part of a metabolic pathway. Origin only orders candidates; it is not part of the total score",
+        "expected": "Expected endogenous: labelled endogenous in the database but never detected. Origin only orders candidates; it is not part of the total score",
+        "unknown": "Origin unknown: the database has too little information about where this compound comes from",
+        "exogenous": "Exogenous: drug, plant, food or synthetic origin",
+        "allExogenous": "Every candidate is exogenous (drug, plant, food or synthetic origin)"
+      },
       "searchPubchem": "Search PubChem",
       "copyInchi": "Copy InChI",
       "openInDatabase": "Open in database",
@@ -345,7 +363,7 @@
       "startShort": "Start",
       "startHint": "Choose the annotation CSV file to match the peaks",
       "importDb": "Choose CSV",
-      "dbFormat": "Format: ID, Name, Formula, InChI, Mass, one compound per row (Formula required)",
+      "dbFormat": "Format: ID, Name, Formula, InChI, Mass, one compound per row (Formula required; an optional Origin column marks endogenous / exogenous compounds)",
       "dbClear": "Clear the selected annotation database",
       "dbImported": "Imported database {file}: {count} formulas",
       "dbCsvEmpty": "The database CSV is empty.",
@@ -361,6 +379,7 @@
       "meanLoading": "Loading the mean spectrum…",
       "meanMissing": "This dataset has no mean spectrum, so it cannot be annotated",
       "needPolarity": "Choose the polarity in the conditions first",
+      "needScoreWeightsSum": "The three score weights must add up to {total} (now {sum})",
       "needAdducts": "Turn on at least one adduct"
     }
   }

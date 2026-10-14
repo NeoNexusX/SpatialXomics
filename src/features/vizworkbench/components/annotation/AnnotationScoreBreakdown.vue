@@ -2,15 +2,19 @@
 /** 原始分、总分权重与贡献；空间子项只在空间评分完成后显示实测值。 */
 import { computed } from 'vue'
 import { t } from '@/i18n'
-import { fmtIntensity, fmtMz } from '@/features/vizworkbench/utils/annotation/format'
+import { fmtIntensity, fmtMz, fmtWeightPct } from '@/features/vizworkbench/utils/annotation/format'
 import { colocScore, DEFAULT_ENGINE_CONFIG } from '@/features/vizworkbench/utils/annotation/score'
-import type { IonAnnotation } from '@/features/vizworkbench/types/annotation'
+import type { IonAnnotation, ScoreWeights } from '@/features/vizworkbench/types/annotation'
 
-const props = defineProps<{
-  ion: IonAnnotation
-}>()
+const props = withDefaults(
+  defineProps<{
+    ion: IonAnnotation
+    /** 本次运行用的总分权重（已归一化） */
+    weights?: ScoreWeights
+  }>(),
+  { weights: () => DEFAULT_ENGINE_CONFIG.weights },
+)
 
-const W = DEFAULT_ENGINE_CONFIG.weights
 const SW = DEFAULT_ENGINE_CONFIG.spatialWeights
 const hasSpatial = computed(() => props.ion.scores.spatial != null)
 
@@ -19,6 +23,7 @@ function numberText(value: number | null): string {
 }
 
 const rows = computed(() => {
+  const W = props.weights
   const s = props.ion.scores
   const spatial = s.spatial ?? 0
   const coloc = hasSpatial.value ? colocScore(s.coloc) : null
@@ -97,7 +102,7 @@ const rows = computed(() => {
           <td class="py-1.5 pl-2 text-right font-mono">
             {{ numberText(row.value) }}
           </td>
-          <td class="py-1.5 pl-2 text-right font-mono">{{ Math.round(row.weight * 100) }}%</td>
+          <td class="py-1.5 pl-2 text-right font-mono">{{ fmtWeightPct(row.weight) }}</td>
           <td class="py-1.5 pl-2 text-right font-mono">
             {{ numberText(row.contribution) }}
           </td>

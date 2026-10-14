@@ -3,16 +3,17 @@
  *
  * 协议：
  *   main → worker
- *     { type: 'db', id, fileName, text }                        解析库 CSV，成功则替换当前库
+ *     { type: 'db', id, fileName, text }                          解析库 CSV，成功则替换当前库
  *     { type: 'run', runKey, peaks, adducts, tolerance, config }
- *     { type: 'spatial', runKey, job, images, width, height }   一个空间任务的离子图
+ *     { type: 'spatial', id, runKey, axis, image, width, height } 一个峰的离子图（null = 读取失败）
  *   worker → main
  *     { type: 'db', id, info } / { type: 'dbError', id, message, code }
  *     { type: 'result', runKey, result }
- *     { type: 'patch', runKey, patch }
+ *     { type: 'spatial', id, runKey, patch, reread }              这张图处理完：变化与要重读的峰
  *     { type: 'error', runKey, message }
  *
- * 库解析失败时保留原来的库。runKey 不是当前运行的 spatial 消息直接丢弃（主线程已经开始了新的运行）。
+ * 库解析失败时保留原来的库。每条 spatial 消息都回复（主线程据此控制在途的图）；runKey 不是
+ * 当前运行的只回复、不处理（主线程已经开始了新的运行）。
  */
 
 import type {
@@ -35,9 +36,10 @@ export type AnnotationWorkerRequest =
   | ({ type: 'run' } & RunRequest)
   | {
       type: 'spatial'
+      id: number
       runKey: number
-      job: string
-      images: (Float32Array | null | undefined)[]
+      axis: number
+      image: Float32Array | null
       width: number
       height: number
     }
@@ -46,7 +48,7 @@ export type AnnotationWorkerResponse =
   | { type: 'db'; id: number; info: AnnotationDbInfo }
   | { type: 'dbError'; id: number; message: string; code: AnnotationDbCsvErrorCode | null }
   | { type: 'result'; runKey: number; result: AnnotationResult }
-  | { type: 'patch'; runKey: number; patch: SpatialPatch }
+  | { type: 'spatial'; id: number; runKey: number; patch: SpatialPatch | null; reread: number[] }
   | { type: 'error'; runKey: number; message: string }
 
 let db: AnnotationDb | null = null
@@ -75,19 +77,24 @@ self.onmessage = (e: MessageEvent<AnnotationWorkerRequest>) => {
     return
   }
   const runKey = req.runKey
+  if (req.type === 'spatial') {
+    let patch: SpatialPatch | null = null
+    let reread: number[] = []
+    try {
+      if (session && runKey === sessionKey) {
+        ;({ patch, reread } = session.applyImage(req.axis, req.image, req.width, req.height))
+      }
+    } catch (err) {
+      post({ type: 'error', runKey, message: errorMessage(err) })
+    }
+    post({ type: 'spatial', id: req.id, runKey, patch, reread })
+    return
+  }
   try {
-    if (req.type === 'run') {
-      if (!db) throw new Error('annotation database not set')
-      session = new AnnotationSession({ db, ...req })
-      sessionKey = runKey
-      post({ type: 'result', runKey, result: session.run() })
-      return
-    }
-    if (req.type === 'spatial') {
-      if (!session || runKey !== sessionKey) return
-      const patch = session.applySpatial(req.job, req.images, req.width, req.height)
-      if (patch) post({ type: 'patch', runKey, patch })
-    }
+    if (!db) throw new Error('annotation database not set')
+    session = new AnnotationSession({ db, ...req })
+    sessionKey = runKey
+    post({ type: 'result', runKey, result: session.run() })
   } catch (err) {
     post({ type: 'error', runKey, message: errorMessage(err) })
   }

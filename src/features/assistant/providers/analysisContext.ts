@@ -22,6 +22,7 @@ import type {
   KmeansSummary,
   UmapSummary,
   AnnotationRow,
+  AnnotationScoreWeights,
   PageState,
 } from '../agenttypes/assistant'
 import { STATS_SAMPLE_PIXELS } from '../agentconfig/defaults'
@@ -43,9 +44,14 @@ export interface AnalysisContextProviders {
   } | null
   /**
    * 注释行（一行 = 一个加合离子，空间分随后台评分逐步补全）。rows 按需构建：
-   * 每次发送都要的页面状态只读 count，不必把全部行展开一遍。
+   * 每次发送都要的页面状态只读 count，不必把全部行展开一遍。weights 为本次运行的
+   * 总分权重（已归一化，用户可在注释条件里调）。
    */
-  annotations?: () => { count: number; rows: () => AnnotationRow[] } | null
+  annotations?: () => {
+    count: number
+    rows: () => AnnotationRow[]
+    weights?: AnnotationScoreWeights
+  } | null
   /** UMAP 降维/聚类任务状态与栅格概要（不含逐点 embedding——量大且 LLM 用不上） */
   umap?: () => {
     ready: boolean
@@ -84,6 +90,11 @@ export function unregisterContextProviders(keys?: (keyof AnalysisContextProvider
 /** 全部注释行（get_annotation_detail 工具用）；注释面板还没有结果时为 null */
 export function getAnnotationRows(): AnnotationRow[] | null {
   return providers.annotations?.()?.rows() ?? null
+}
+
+/** 当前注释结果的总分权重；没有结果或 provider 没给时为 null */
+export function getAnnotationWeights(): AnnotationScoreWeights | null {
+  return providers.annotations?.()?.weights ?? null
 }
 
 // ---- 数据集段构建 ----

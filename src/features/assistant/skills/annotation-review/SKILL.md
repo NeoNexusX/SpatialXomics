@@ -13,7 +13,7 @@ judgment criteria — never a bare "this is X".
 1. `get_page_state` — confirm annotation count > 0; note polarity.
 2. `get_annotation_top` (topN up to 20). One row = one adduct ion; rows carry tokens:
    `#1 PC 34:1 [M+H]+ mz=760.5856 (+0.6ppm) s=0.94 q=0.4% m=0.97 fit=1.0 ch=0.95 col=0.91 sib=[M+Na]+,[M+K]+ samePeak=1`
-   - `s` — total score = 0.7×mass + 0.1×adduct fit + 0.2×spatial (higher = stronger). Spatial = 0.2×chaos + 0.8×co-localization; missing co-localization and uncomputed spatial scores count as 0.
+   - `s` — total score = weighted sum of mass, adduct fit and spatial (higher = stronger). The user sets the weights in the annotation conditions (default 0.6×mass + 0.1×adduct fit + 0.3×spatial); the `get_annotation_top` header states the weights in use. Spatial = 0.2×chaos + 0.8×co-localization; missing co-localization and uncomputed spatial scores count as 0.
    - `q` — target-decoy FDR q-value (smaller = more credible).
    - `m` — mass-error score (1 = exact, ~0.14 at the tolerance edge).
    - `fit` — how plausible this adduct is for the acquisition (ion source, matrix, solvent, polarity).
@@ -21,7 +21,8 @@ judgment criteria — never a bare "this is X".
    - `col` — best Pearson between this ion's image and the images of the same molecule's other adducts. It only raises the spatial score.
    - `sib` — other adduct ions of the same molecule (each is its own row).
    - `samePeak` — number of other annotations explaining the same peak.
-3. For any row you will discuss in depth, call `get_annotation_detail(mz)` — score breakdown, sibling ions with their r, undetected enabled adducts, same-peak alternatives, candidate list.
+   - `origin` — provenance label of the named compound, from the annotation database's optional Origin column: `endo` (endogenous: detected in samples or in a metabolic pathway), `expected` (labelled endogenous, never detected), `exo` (drug, plant, food or synthetic). Absent = unknown or no labels. Candidates of a formula are listed endogenous first, so `exo` means every candidate is exogenous.
+3. For any row you will discuss in depth, call `get_annotation_detail(mz)` — score breakdown, sibling ions with their r, undetected enabled adducts, same-peak alternatives with their origin, candidate list with each candidate's origin.
 
 ## 2. Judgment criteria (verdict matrix)
 | Verdict | Criteria (all required unless noted) |
@@ -35,6 +36,7 @@ judgment criteria — never a bare "this is X".
 Additional checks:
 - **Same-peak ambiguity**: a classic case is [M+Na]⁺ of one lipid vs [M+H]⁺ of another (e.g. PC 34:1 [M+Na]⁺ and PC 36:4 [M+H]⁺ differ by 2.4 mDa). Prefer the explanation whose siblings co-localize; otherwise say MS/MS is needed.
 - **Isomers**: one row is a sum composition (formula); multiple candidate names are isomers, not separate identifications.
+- **Origin is a prior, not evidence**: it decides which candidate name is shown first and orders same-peak alternatives; it is not part of the total score or q. Prefer an endogenous name among isomers, and when a same-peak alternative is endogenous while the shown row is `exo`, mention it — but never upgrade or downgrade a verdict on origin alone. An `exo` row in tissue is usually a mismatch, contamination, or a dosed compound; say which is likely.
 - **Matrix/background peaks** can have high chaos (uniform coverage on and off tissue); check the ion image before calling them biological.
 - **Pixel-size sanity**: any spatial claim needs the pixel size from the dataset context; features < 2× pixel size are noise.
 

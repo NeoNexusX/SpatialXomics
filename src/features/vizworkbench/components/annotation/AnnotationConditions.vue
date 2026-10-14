@@ -1,20 +1,29 @@
 <script setup lang="ts">
 /**
  * 注释条件卡：数据集采集条件、注释库（被匹配的对象，可导入自己的库）、峰（平均轴上
- * 参与匹配的点，滑动条去掉强度最低的 n%）、容差、空间计算比例、加合物开关。
+ * 参与匹配的点，滑动条去掉强度最低的 n%）、容差、空间计算比例、评分权重、加合物开关。
  * 第一次出结果后自动收起成一行摘要。
  */
 import { computed, inject, ref, watch } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 import AdductMultiSelect, { type AdductOption } from './AdductMultiSelect.vue'
 import { ANNOTATION_KEY } from '@/features/vizworkbench/composables/useAnnotation'
-import { adductDisplay } from '@/features/vizworkbench/utils/annotation/format'
+import { adductDisplay, fmtScoreRatio } from '@/features/vizworkbench/utils/annotation/format'
 import { keptCount, MAX_CUT_PCT } from '@/features/vizworkbench/utils/annotation/peaks'
+import {
+  DEFAULT_SCORE_RATIO,
+  MAX_SCORE_RATIO,
+  MIN_SCORE_RATIO,
+} from '@/features/vizworkbench/utils/annotation/score'
 import {
   adductReasonText,
   adductRequirementText,
 } from '@/features/vizworkbench/utils/annotation/adductRuleText'
-import type { AdductId, ResolvedAdduct } from '@/features/vizworkbench/types/annotation'
+import type {
+  AdductId,
+  ResolvedAdduct,
+  ScoreWeights,
+} from '@/features/vizworkbench/types/annotation'
 import { t } from '@/i18n'
 
 const emit = defineEmits<{ (e: 'import'): void }>()
@@ -30,6 +39,11 @@ const {
   tolUnit,
   spatialPct,
   setSpatialPct,
+  scoreRatio,
+  scoreRatioValid,
+  hasCustomScoreRatio,
+  setScoreRatio,
+  resetScoreRatio,
   adducts,
   enabledAdducts,
   hasAdductOverrides,
@@ -144,6 +158,11 @@ const summaryLine = computed(() =>
       ? t('vizworkbench.annotation.peaksShort', { count: peakStats.value.kept })
       : '',
     `${tolerance.value.value} ${tolerance.value.unit}`,
+    hasCustomScoreRatio.value
+      ? t('vizworkbench.annotation.scoreWeightsSummary', {
+          ratio: fmtScoreRatio(scoreRatio.value),
+        })
+      : '',
     enabledAdducts.value.map((a) => adductDisplay(a.def.id)).join(' '),
   ]
     .filter(Boolean)
@@ -174,6 +193,28 @@ function onSpatialPctInput(e: Event): void {
   if (input.value === '') setSpatialPct(null)
   else if (input.validity.valid) setSpatialPct(input.valueAsNumber)
   input.value = String(spatialPct.value)
+}
+
+/** 评分权重的三个输入框，顺序即比例顺序；名称只放在悬停提示和无障碍标签里 */
+const weightParts = computed(() =>
+  (
+    [
+      { key: 'mass', part: t('vizworkbench.annotation.massScore') },
+      { key: 'adduct', part: t('vizworkbench.annotation.adductFit') },
+      { key: 'spatial', part: t('vizworkbench.annotation.spatialScore') },
+    ] as const
+  ).map(({ key, part }) => ({
+    key,
+    inputLabel: t('vizworkbench.annotation.scoreWeightInput', { part }),
+  })),
+)
+
+/** 清空 = 这一项恢复默认；超出 0.1–9.8 时保持原值。三项之和不为 10 时由 blockedReason 拦住开始 */
+function onScoreRatioInput(key: keyof ScoreWeights, e: Event): void {
+  const input = e.target as HTMLInputElement
+  if (input.value === '') setScoreRatio(key, null)
+  else if (input.validity.valid) setScoreRatio(key, input.valueAsNumber)
+  input.value = String(scoreRatio.value[key])
 }
 </script>
 
@@ -392,6 +433,45 @@ function onSpatialPctInput(e: Event): void {
             ></span>
             {{ $t('vizworkbench.annotation.startShort') }}
           </button>
+        </div>
+      </div>
+
+      <!-- 评分权重：质量 : 加合适配度 : 空间三个比例数（各不小于 0.1，和为 10），除以 10 即总分权重 -->
+      <div class="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-2">
+        <span class="min-w-24 w-[28%] shrink-0 whitespace-nowrap text-base-content/50">{{
+          $t('vizworkbench.annotation.scoreWeights')
+        }}</span>
+        <div class="flex min-w-0 flex-1 basis-44 flex-col gap-2">
+          <div class="flex min-w-0 items-baseline gap-1">
+            <template v-for="(part, i) in weightParts" :key="part.key">
+              <span v-if="i > 0" class="shrink-0 text-base-content/40" aria-hidden="true">:</span>
+              <input
+                :value="scoreRatio[part.key]"
+                type="number"
+                :min="MIN_SCORE_RATIO"
+                :max="MAX_SCORE_RATIO"
+                step="any"
+                :aria-label="part.inputLabel"
+                :aria-invalid="!scoreRatioValid"
+                :title="part.inputLabel"
+                class="input input-bordered input-sm min-w-10 w-0 flex-1 kawaru-text-62"
+                :class="{ 'input-error': !scoreRatioValid }"
+                @change="onScoreRatioInput(part.key, $event)"
+              />
+            </template>
+            <button
+              v-if="hasCustomScoreRatio"
+              class="btn btn-ghost btn-sm btn-square shrink-0 self-center"
+              :title="
+                $t('vizworkbench.annotation.scoreWeightsReset', {
+                  ratio: fmtScoreRatio(DEFAULT_SCORE_RATIO),
+                })
+              "
+              @click="resetScoreRatio"
+            >
+              <SvgIcon type="refresh" class="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
 

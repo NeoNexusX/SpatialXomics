@@ -249,6 +249,10 @@
       "toleranceFallback": "默认 {value} ppm（分析器未知）",
       "spatialCalculation": "空间计算",
       "spatialReset": "恢复全部计算",
+      "scoreWeights": "评分权重",
+      "scoreWeightInput": "{part}权重",
+      "scoreWeightsReset": "恢复默认权重 {ratio}",
+      "scoreWeightsSummary": "权重 {ratio}",
       "adducts": "加合物",
       "adductSelected": "已选 {count} 项",
       "noAdductsSelected": "未启用加合物",
@@ -295,7 +299,8 @@
         "spatial": "空间分",
         "error": "质量误差",
         "mz": "m/z",
-        "intensity": "强度"
+        "intensity": "强度",
+        "origin": "来源（内源在前）"
       },
       "reverseSort": "反向排序",
       "moleculeFilter": "只看分子",
@@ -327,6 +332,19 @@
       "samePeakTitle": "同一峰上的其他注释",
       "samePeakNote": "加合物不同、质量相近，单看质量无法区分，需结合共定位或 MS/MS 判断",
       "candidates": "候选（{count}）",
+      "origin": {
+        "endogenous": "内源",
+        "expected": "预期",
+        "unknown": "未定",
+        "exogenous": "外源"
+      },
+      "originHint": {
+        "endogenous": "内源：注释库标为内源，且在样本中检出过或属于代谢通路。来源只决定候选先后，不计入总分",
+        "expected": "预期内源：注释库标为内源，但没有检出记录。来源只决定候选先后，不计入总分",
+        "unknown": "来源未定：注释库里没有足够的来源信息",
+        "exogenous": "外源：药物、植物、食物或合成来源",
+        "allExogenous": "全部候选都是外源（药物、植物、食物或合成来源）"
+      },
       "searchPubchem": "在 PubChem 中搜索",
       "copyInchi": "复制 InChI",
       "openInDatabase": "在数据库中打开",
@@ -345,7 +363,7 @@
       "startShort": "开始",
       "startHint": "选择注释 CSV 文件，用峰进行匹配",
       "importDb": "选择注释 CSV",
-      "dbFormat": "格式：ID, Name, Formula, InChI, Mass，一行一个化合物（Formula 必需）",
+      "dbFormat": "格式：ID, Name, Formula, InChI, Mass，一行一个化合物（Formula 必需；可选 Origin 列标注内源 / 外源）",
       "dbClear": "清除已选择的注释库",
       "dbImported": "已导入数据库 {file}：{count} 个分子式",
       "dbCsvEmpty": "数据库 CSV 是空的。",
@@ -361,6 +379,7 @@
       "meanLoading": "正在加载平均谱…",
       "meanMissing": "这个数据集没有平均谱，无法注释",
       "needPolarity": "先在条件里选择极性",
+      "needScoreWeightsSum": "评分权重三项之和须为 {total}，当前为 {sum}",
       "needAdducts": "至少启用一种加合物"
     }
   }
