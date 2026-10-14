@@ -22,6 +22,7 @@ import {
   type QLevel,
 } from '@/features/vizworkbench/composables/useAnnotation'
 import { moleculeName } from '@/features/vizworkbench/utils/annotation/format'
+import { SCORE_RATIO_TOTAL, scoreRatioSum } from '@/features/vizworkbench/utils/annotation/score'
 import type { Acquisition } from '@/features/vizworkbench/types/acquisition'
 import { useToast } from '@/shared/composables/useToast'
 import { t } from '@/i18n'
@@ -55,6 +56,7 @@ const {
   ensureDb,
   started,
   blockedReason,
+  scoreRatio,
   runState,
   runError,
   summary,
@@ -91,10 +93,22 @@ const SORT_OPTIONS: { value: AnnotationSortKey; label: () => string }[] = [
   { value: 'error', label: () => t('vizworkbench.annotation.sort.error') },
   { value: 'mz', label: () => t('vizworkbench.annotation.sort.mz') },
   { value: 'intensity', label: () => t('vizworkbench.annotation.sort.intensity') },
+  { value: 'origin', label: () => t('vizworkbench.annotation.sort.origin') },
 ]
 const selectedSortLabel = computed(
   () => SORT_OPTIONS.find((option) => option.value === sortKey.value)?.label() ?? '',
 )
+
+/** 条件不全、跑不起来时的提示 */
+const blockedText = computed(() => {
+  if (blockedReason.value === 'polarity') return t('vizworkbench.annotation.needPolarity')
+  if (blockedReason.value === 'adducts') return t('vizworkbench.annotation.needAdducts')
+  return t('vizworkbench.annotation.needScoreWeightsSum', {
+    total: SCORE_RATIO_TOTAL,
+    // 小数相加的浮点误差不显示
+    sum: Number(scoreRatioSum(scoreRatio.value).toFixed(6)),
+  })
+})
 
 const spatialProgress = computed(() => summary.value?.spatial ?? { total: 0, done: 0 })
 const spatialRunning = computed(
@@ -304,11 +318,7 @@ async function onDrop(e: DragEvent) {
           </template>
           <template v-else>
             <SvgIcon type="info" class="h-6 w-6 text-base-content/40" />
-            {{
-              blockedReason === 'polarity'
-                ? $t('vizworkbench.annotation.needPolarity')
-                : $t('vizworkbench.annotation.needAdducts')
-            }}
+            {{ blockedText }}
           </template>
         </div>
 

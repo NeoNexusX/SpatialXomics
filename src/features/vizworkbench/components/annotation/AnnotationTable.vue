@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 注释表格（虚拟滚动，行高固定）。一行 = 一个加合离子，只放判断要用的信息：
- *   第 1 行：名称（+N 个候选）· 同峰多解释 ⚠ · q（按档位着色）
+ *   第 1 行：名称 · 来源标签（未定不显示）· +N 个候选 · 同峰多解释 ⚠ · q（按档位着色）
  *   第 2 行：加合物 · 实测 m/z · ppm · 同分子其他加合离子的小标签（点击跳转）
  * 分子式、总分、分数拆解等放在详情卡里。悬停一行显示详情卡，并浅色高亮同分子的
  * 其他行；详情卡可以钉住。
@@ -10,6 +10,7 @@ import { computed, inject, nextTick, onUnmounted, ref, watch } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 import PubChemDialog from '@/features/vizworkbench/components/PubChemDialog.vue'
 import AnnotationDetailCard from '@/features/vizworkbench/components/annotation/AnnotationDetailCard.vue'
+import OriginBadge from '@/features/vizworkbench/components/annotation/OriginBadge.vue'
 import { ANNOTATION_KEY } from '@/features/vizworkbench/composables/useAnnotation'
 import {
   adductDisplay,
@@ -22,6 +23,7 @@ import {
   qLevelClass,
   siblingIons,
 } from '@/features/vizworkbench/utils/annotation/format'
+import { moleculeOrigin } from '@/features/vizworkbench/utils/annotation/origin'
 import type { IonAnnotation } from '@/features/vizworkbench/types/annotation'
 
 const ROW_H = 70
@@ -252,6 +254,7 @@ onUnmounted(() => {
           <span class="min-w-0 truncate font-medium text-base-content kawaru-text-81">
             {{ moleculeName(mol) }}
           </span>
+          <OriginBadge :origin="moleculeOrigin(mol)" molecule hide-unknown />
           <span
             v-if="(mol?.candidates.length ?? 0) > 1"
             class="shrink-0 kawaru-text-56 text-base-content/40"

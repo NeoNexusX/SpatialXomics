@@ -39,6 +39,7 @@ import {
   samePeakIons,
   siblingIons,
 } from '@/features/vizworkbench/utils/annotation/format'
+import { moleculeOrigin, originRank } from '@/features/vizworkbench/utils/annotation/origin'
 import {
   MAX_CUT_PCT,
   rankByIntensity,
@@ -46,7 +47,13 @@ import {
 } from '@/features/vizworkbench/utils/annotation/peaks'
 import { pairKey } from '@/features/vizworkbench/utils/annotation/pearson'
 import { compareIons, targetJobKey } from '@/features/vizworkbench/utils/annotation/pipeline'
-import { DEFAULT_ENGINE_CONFIG } from '@/features/vizworkbench/utils/annotation/score'
+import {
+  DEFAULT_ENGINE_CONFIG,
+  DEFAULT_SCORE_RATIO,
+  isValidScoreRatio,
+  isValidScoreRatioPart,
+  normalizeScoreRatio,
+} from '@/features/vizworkbench/utils/annotation/score'
 import {
   sharedAnnotationIons,
   sharedAnnotationMolecules,
@@ -62,6 +69,7 @@ import type {
   Molecule,
   PeakTable,
   RunSummary,
+  ScoreWeights,
   SpatialPatch,
 } from '@/features/vizworkbench/types/annotation'
 import type { AdductId } from '@/shared/chem/adducts'
@@ -76,8 +84,11 @@ import { useToast } from '@/shared/composables/useToast'
 import { t } from '@/i18n'
 
 export type QLevel = 'all' | 0.05 | 0.1 | 0.2
-/** 每个排序键的默认方向都是「好的在前」（m/z 为从小到大），sortReverse 反过来 */
-export type AnnotationSortKey = 'total' | 'q' | 'spatial' | 'error' | 'mz' | 'intensity'
+/**
+ * 每个排序键的默认方向都是「好的在前」（m/z 为从小到大，来源为内源在前），sortReverse 反过来；
+ * 同一档里都按排名
+ */
+export type AnnotationSortKey = 'total' | 'q' | 'spatial' | 'error' | 'mz' | 'intensity' | 'origin'
 export type DbState = 'idle' | 'loading' | 'ready' | 'error'
 export type RunState = 'idle' | 'running' | 'done' | 'error'
 /** 平均谱：加载中 / 数据集没有（或和 m/z 轴对不上）/ 可用 */
@@ -93,6 +104,8 @@ interface StoredSettings {
   cutPct?: number
   /** 空间计算覆盖的匹配行百分比；缺省 = 100% */
   spatialPct?: number
+  /** 总分权重比例（质量 : 加合适配度 : 空间，各 0.1–9.8，和为 10）；缺省 = 默认比例 */
+  weights?: ScoreWeights
 }
 
 function readSettings(runId: string): StoredSettings | null {
@@ -116,6 +129,15 @@ function normalizeSpatialPct(value: number | null | undefined): number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100
     ? value
     : DEFAULT_ENGINE_CONFIG.spatialPct
+}
+
+/** 存下的权重比例；没有（旧设置）、单项越界或和不为 10（改到一半离开）时用默认比例 */
+function storedScoreRatio(value: ScoreWeights | undefined): ScoreWeights {
+  if (value) {
+    const ratio = { mass: value.mass, adduct: value.adduct, spatial: value.spatial }
+    if (isValidScoreRatio(ratio)) return ratio
+  }
+  return { ...DEFAULT_SCORE_RATIO }
 }
 
 /** runId → 32 位种子：同一结果页每次跑出的 decoy 相同 */
@@ -180,6 +202,31 @@ export function useAnnotation(opts: {
 
   function setSpatialPct(value: number | null): void {
     spatialPct.value = normalizeSpatialPct(value)
+  }
+
+  /**
+   * 面板上输入的权重比例（每项 0.1–9.8，和须为 10）；运行时除以三项之和得到总分权重。
+   * 一次只能改一项，改的过程中和可以暂时不为 10，此时不能开始（blockedReason = 'weights'）
+   */
+  const scoreRatio = shallowRef<ScoreWeights>({ ...DEFAULT_SCORE_RATIO })
+  const scoreRatioValid = computed(() => isValidScoreRatio(scoreRatio.value))
+  const scoreWeights = computed(() => normalizeScoreRatio(scoreRatio.value))
+  const hasCustomScoreRatio = computed(() =>
+    (Object.keys(DEFAULT_SCORE_RATIO) as (keyof ScoreWeights)[]).some(
+      (k) => scoreRatio.value[k] !== DEFAULT_SCORE_RATIO[k],
+    ),
+  )
+
+  /** 改一项比例：null = 这一项恢复默认；超出单项范围时不改，返回 false */
+  function setScoreRatio(key: keyof ScoreWeights, value: number | null): boolean {
+    const v = value ?? DEFAULT_SCORE_RATIO[key]
+    if (!isValidScoreRatioPart(v)) return false
+    scoreRatio.value = { ...scoreRatio.value, [key]: v }
+    return true
+  }
+
+  function resetScoreRatio(): void {
+    scoreRatio.value = { ...DEFAULT_SCORE_RATIO }
   }
 
   const metadataPolarityMissing = computed(
@@ -373,14 +420,14 @@ export function useAnnotation(opts: {
 
   const spatial = useAnnotationSpatial({
     tolerance: () => tolerance.value,
-    onImages: (job, images, width, height) =>
-      engine.spatial(runKey, job.job, images, width, height),
+    send: (axis, image, width, height) => engine.spatial(runKey, axis, image, width, height),
   })
 
   /** 开始了却跑不起来的原因（面板提示） */
-  const blockedReason = computed<'polarity' | 'adducts' | null>(() => {
+  const blockedReason = computed<'polarity' | 'adducts' | 'weights' | null>(() => {
     if (!context.value.polarity) return 'polarity'
-    return enabledAdducts.value.length === 0 ? 'adducts' : null
+    if (enabledAdducts.value.length === 0) return 'adducts'
+    return scoreRatioValid.value ? null : 'weights'
   })
 
   function resetResult(): void {
@@ -452,6 +499,7 @@ export function useAnnotation(opts: {
     if (!available.value || !p || !db.value || dbState.value !== 'ready') return null
     if (blockedReason.value) return null
     const tol = tolerance.value
+    const w = scoreWeights.value
     return JSON.stringify([
       opts.runId.value,
       p.mz.length,
@@ -460,6 +508,7 @@ export function useAnnotation(opts: {
       tol.value,
       tol.unit,
       spatialPct.value,
+      [w.mass, w.adduct, w.spatial],
       enabledAdducts.value.map((a) => [a.def.id, a.fit]),
     ])
   })
@@ -495,6 +544,7 @@ export function useAnnotation(opts: {
       tolerance: { ...tolerance.value },
       config: {
         ...DEFAULT_ENGINE_CONFIG,
+        weights: { ...scoreWeights.value },
         spatialPct: spatialPct.value,
         seed: hashSeed(opts.runId.value),
       },
@@ -547,6 +597,8 @@ export function useAnnotation(opts: {
         return ion.obsMz
       case 'intensity':
         return Number.isFinite(ion.intensity) ? -ion.intensity : null
+      case 'origin':
+        return originRank(moleculeOrigin(molecules.value.get(ion.moleculeId)))
     }
   }
 
@@ -666,6 +718,7 @@ export function useAnnotation(opts: {
       tolValue.value = s?.tolValue ?? null
       tolUnit.value = s?.tolUnit ?? 'ppm'
       spatialPct.value = normalizeSpatialPct(s?.spatialPct)
+      scoreRatio.value = storedScoreRatio(s?.weights)
       adductOverrides.value = s?.overrides ?? {}
       polarityOverride.value = s?.polarity ?? null
       cutPct.value = Math.min(MAX_CUT_PCT, Math.max(0, s?.cutPct ?? 0))
@@ -678,17 +731,21 @@ export function useAnnotation(opts: {
   // 进入面板时恢复用户自己的库；没有库时显示文件选择入口。
   void ensureDb()
 
-  watch([tolValue, tolUnit, spatialPct, adductOverrides, polarityOverride, cutPct], () => {
-    if (restoring || !opts.runId.value) return
-    writeSettings(opts.runId.value, {
-      tolValue: tolValue.value,
-      tolUnit: tolUnit.value,
-      spatialPct: spatialPct.value,
-      overrides: adductOverrides.value,
-      polarity: polarityOverride.value,
-      cutPct: cutPct.value,
-    })
-  })
+  watch(
+    [tolValue, tolUnit, spatialPct, scoreRatio, adductOverrides, polarityOverride, cutPct],
+    () => {
+      if (restoring || !opts.runId.value) return
+      writeSettings(opts.runId.value, {
+        tolValue: tolValue.value,
+        tolUnit: tolUnit.value,
+        spatialPct: spatialPct.value,
+        weights: { ...scoreRatio.value },
+        overrides: adductOverrides.value,
+        polarity: polarityOverride.value,
+        cutPct: cutPct.value,
+      })
+    },
+  )
 
   // ---- AI 助手 -------------------------------------------------------------
   function toAssistantRow(ion: IonAnnotation): AnnotationRow {
@@ -697,7 +754,12 @@ export function useAnnotation(opts: {
       id: ion.id,
       rank: ion.rank,
       name: moleculeName(m),
-      candidates: (m?.candidates ?? []).map((c) => ({ id: c.id, name: c.name })),
+      origin: moleculeOrigin(m) ?? null,
+      candidates: (m?.candidates ?? []).map((c) => ({
+        id: c.id,
+        name: c.name,
+        origin: c.origin ?? null,
+      })),
       formula: m?.formula ?? '',
       adduct: adductLabel(ion.adduct),
       theoMz: ion.theoMz,
@@ -717,9 +779,10 @@ export function useAnnotation(opts: {
         r: pairRFor(ion, s) ?? null,
         rank: s.rank,
       })),
-      samePeak: samePeakIons(ion, ionById.value).map((s) => ({
+      samePeak: samePeakIons(ion, ionById.value, molecules.value).map((s) => ({
         name: moleculeName(molecules.value.get(s.moleculeId)),
         adduct: adductLabel(s.adduct),
+        origin: moleculeOrigin(molecules.value.get(s.moleculeId)) ?? null,
       })),
       missingAdducts: (m?.missing ?? []).map((x) => adductLabel(x.adduct)),
     }
@@ -728,7 +791,11 @@ export function useAnnotation(opts: {
   registerContextProviders({
     annotations: () =>
       ions.value.length > 0
-        ? { count: ions.value.length, rows: () => ions.value.map(toAssistantRow) }
+        ? {
+            count: ions.value.length,
+            rows: () => ions.value.map(toAssistantRow),
+            weights: { ...scoreWeights.value },
+          }
         : null,
   })
 
@@ -751,6 +818,12 @@ export function useAnnotation(opts: {
     tolUnit,
     spatialPct,
     setSpatialPct,
+    scoreRatio,
+    scoreRatioValid,
+    scoreWeights,
+    hasCustomScoreRatio,
+    setScoreRatio,
+    resetScoreRatio,
     adducts,
     enabledAdducts,
     hasAdductOverrides,

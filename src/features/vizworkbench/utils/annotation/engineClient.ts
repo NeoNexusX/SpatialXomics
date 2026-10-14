@@ -30,14 +30,17 @@ export interface EngineClient {
    */
   loadDb(fileName: string, text: string): Promise<AnnotationDbInfo>
   run(req: RunRequest): void
-  /** images 的 buffer 会被转移，调用方传副本；null = 读取失败，undefined = 未传图（已缓存） */
+  /**
+   * 一个峰的离子图交给会话（null = 读取失败），image 的 buffer 会被转移。会话处理完后 resolve，
+   * 带回要重读的峰；运行已过期、worker 崩溃或已释放时为空。不会 reject
+   */
   spatial(
     runKey: number,
-    job: string,
-    images: (Float32Array | null | undefined)[],
+    axis: number,
+    image: Float32Array | null,
     width: number,
     height: number,
-  ): void
+  ): Promise<number[]>
   dispose(): void
 }
 
@@ -70,6 +73,9 @@ export function createEngineClient(
   /** 已发给 worker、还没回复的库解析 */
   const pendingDb = new Map<number, PendingDb>()
   let dbSeq = 0
+  /** 已发给 worker、还没处理完的离子图：回复时带回要重读的峰 */
+  const pendingSpatial = new Map<number, (reread: number[]) => void>()
+  let spatialSeq = 0
   // 主线程兜底
   let mainDb: AnnotationDb | null = null
   let session: AnnotationSession | null = null
@@ -113,10 +119,18 @@ export function createEngineClient(
     }
   }
 
+  /** 没有回复的离子图按空结果收尾：它们属于已经作废的那次 worker 会话 */
+  function settleSpatial(): void {
+    const waiting = [...pendingSpatial.values()]
+    pendingSpatial.clear()
+    for (const resolve of waiting) resolve([])
+  }
+
   function markBroken(): void {
     broken = true
     worker?.terminate()
     worker = null
+    settleSpatial()
     if (disposed) return
     // 崩溃时正在进行的运行改到主线程重跑，还没回复的库改在主线程解析
     if (lastRun) runOnMain(lastRun)
@@ -144,8 +158,12 @@ export function createEngineClient(
       const msg = e.data
       if (msg.type === 'db' || msg.type === 'dbError') onDbReply(msg)
       else if (msg.type === 'result') handlers.onResult(msg.runKey, msg.result)
-      else if (msg.type === 'patch') handlers.onPatch(msg.runKey, msg.patch)
-      else handlers.onError(msg.runKey, msg.message)
+      else if (msg.type === 'spatial') {
+        if (msg.patch) handlers.onPatch(msg.runKey, msg.patch)
+        const resolve = pendingSpatial.get(msg.id)
+        pendingSpatial.delete(msg.id)
+        resolve?.(msg.reread)
+      } else handlers.onError(msg.runKey, msg.message)
     }
     worker.onerror = () => markBroken()
     return worker
@@ -171,29 +189,40 @@ export function createEngineClient(
       }
       w.postMessage({ type: 'run', ...req } satisfies AnnotationWorkerRequest)
     },
-    spatial(runKey, job, images, width, height) {
+    spatial(runKey, axis, image, width, height) {
+      if (disposed) return Promise.resolve([])
       const w = ensureWorker()
       if (!w) {
-        if (!session || runKey !== sessionKey) return
-        const patch = session.applySpatial(job, images, width, height)
+        if (!session || runKey !== sessionKey) return Promise.resolve([])
+        const { patch, reread } = session.applyImage(axis, image, width, height)
         if (patch) handlers.onPatch(runKey, patch)
-        return
+        return Promise.resolve(reread)
       }
-      const transfer = images
-        .filter((img): img is Float32Array => img != null)
-        .map((img) => img.buffer)
-      w.postMessage(
-        { type: 'spatial', runKey, job, images, width, height } satisfies AnnotationWorkerRequest,
-        transfer,
-      )
+      const id = ++spatialSeq
+      return new Promise<number[]>((resolve) => {
+        pendingSpatial.set(id, resolve)
+        w.postMessage(
+          {
+            type: 'spatial',
+            id,
+            runKey,
+            axis,
+            image,
+            width,
+            height,
+          } satisfies AnnotationWorkerRequest,
+          image ? [image.buffer] : [],
+        )
+      })
     },
     dispose() {
       disposed = true
       worker?.terminate()
       worker = null
       session = null
-      // 页面已卸载：还没解析完的库不再回调
+      // 页面已卸载：还没解析完的库不再回调，还没处理完的图按空结果收尾
       pendingDb.clear()
+      settleSpatial()
     },
   }
 }

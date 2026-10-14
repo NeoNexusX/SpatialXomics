@@ -163,6 +163,12 @@ export interface UmapSummary {
 }
 
 /** 注释行（一行 = 一个加合离子）：注释面板注册给助手的扁平视图，字段与面板的 IonAnnotation 对应 */
+/**
+ * 化合物来源等级（注释库的 Origin 列）：内源 / 预期内源 / 未定 / 外源。来自库的来源信息，
+ * 只决定候选先后，不是谱图证据，不计入总分
+ */
+export type AnnotationOrigin = 'endogenous' | 'expected' | 'unknown' | 'exogenous'
+
 export interface AnnotationRow {
   /** 行 id（get_annotation_detail 用） */
   id: number
@@ -170,8 +176,10 @@ export interface AnnotationRow {
   rank: number
   /** 第一个候选名（没有候选名时为分子式） */
   name: string
-  /** 同分子式的候选化合物（id 为库内编号，如 HMDB0240254；没有为空串） */
-  candidates: { id: string; name: string }[]
+  /** 第一个候选的来源等级（候选按等级排过：exogenous 说明全部候选都是外源）；库里没有标签时为 null */
+  origin: AnnotationOrigin | null
+  /** 同分子式的候选化合物（id 为库内编号，如 HMDB0240254；没有为空串），内源在前 */
+  candidates: { id: string; name: string; origin: AnnotationOrigin | null }[]
   /** 中性分子式 */
   formula: string
   /** 加合物（ASCII 写法，如 '[M+H]+'） */
@@ -196,10 +204,17 @@ export interface AnnotationRow {
   q: number | null
   /** 同一分子的其他加合离子（各自也是独立的行） */
   siblings: { adduct: string; obsMz: number; r: number | null; rank: number }[]
-  /** 落在同一个峰上的其他注释 */
-  samePeak: { name: string; adduct: string }[]
+  /** 落在同一个峰上的其他注释，先按来源等级、再按排名 */
+  samePeak: { name: string; adduct: string; origin: AnnotationOrigin | null }[]
   /** 已启用但没检出的加合物 */
   missingAdducts: string[]
+}
+
+/** 注释总分的权重（归一化，三者之和为 1）：totalScore = mass·massScore + adduct·adductFit + spatial·spatialScore */
+export interface AnnotationScoreWeights {
+  mass: number
+  adduct: number
+  spatial: number
 }
 
 /** buildPageState() 的输出：get_page_state 工具的轻量实时状态汇总（不含重统计） */

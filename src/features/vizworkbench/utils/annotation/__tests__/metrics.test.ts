@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { hotspotClip, measureOfChaos } from '../chaos'
 import { pairKey, pearsonUnionMask } from '../pearson'
 import { qValues } from '../fdr'
-import { colocScore, DEFAULT_ENGINE_CONFIG, massScore, spatialScore, totalScore } from '../score'
+import {
+  colocScore,
+  DEFAULT_ENGINE_CONFIG,
+  DEFAULT_SCORE_RATIO,
+  isValidScoreRatio,
+  isValidScoreRatioPart,
+  massScore,
+  normalizeScoreRatio,
+  spatialScore,
+  totalScore,
+} from '../score'
 import { dbSliceFor, matchTargets } from '../match'
 import { fmtMz } from '../format'
 
@@ -133,10 +143,53 @@ describe('scores', () => {
 
   it('counts uncomputed spatial scores as zero without changing computed scores', () => {
     const cfg = DEFAULT_ENGINE_CONFIG
-    expect(totalScore(1, 1, null, cfg)).toBeCloseTo(0.8, 9)
+    expect(totalScore(1, 1, null, cfg)).toBeCloseTo(0.7, 9)
     expect(totalScore(0, 0, null, cfg)).toBe(0)
-    expect(totalScore(1, 1, 0.95, cfg)).toBeCloseTo(0.99, 9)
-    expect(totalScore(1, 0, 0, cfg)).toBe(0.7)
+    expect(totalScore(1, 1, 0.95, cfg)).toBeCloseTo(0.985, 9)
+    expect(totalScore(1, 0, 0, cfg)).toBe(0.6)
+  })
+})
+
+describe('score weight ratio', () => {
+  it('defaults to 6 : 1 : 3, i.e. weights 0.6 / 0.1 / 0.3', () => {
+    expect(DEFAULT_SCORE_RATIO).toEqual({ mass: 6, adduct: 1, spatial: 3 })
+    expect(DEFAULT_ENGINE_CONFIG.weights).toEqual({ mass: 0.6, adduct: 0.1, spatial: 0.3 })
+  })
+
+  it('divides each part by the sum', () => {
+    const w = normalizeScoreRatio({ mass: 5, adduct: 2, spatial: 3 })
+    expect(w.mass).toBeCloseTo(0.5, 12)
+    expect(w.adduct).toBeCloseTo(0.2, 12)
+    expect(w.spatial).toBeCloseTo(0.3, 12)
+  })
+
+  it.each([
+    [{ mass: 6, adduct: 1, spatial: 3 }],
+    [{ mass: 0.1, adduct: 0.1, spatial: 9.8 }],
+    [{ mass: 0.1, adduct: 0.2, spatial: 9.7 }],
+    [{ mass: 3.33, adduct: 3.33, spatial: 3.34 }],
+  ])('accepts %o (each ≥ 0.1, summing to 10)', (ratio) => {
+    expect(isValidScoreRatio(ratio)).toBe(true)
+  })
+
+  it.each([
+    [{ mass: 6, adduct: 1, spatial: 2 }],
+    [{ mass: 6, adduct: 1, spatial: 3.5 }],
+    [{ mass: 0, adduct: 1, spatial: 9 }],
+    [{ mass: 0.05, adduct: 0.95, spatial: 9 }],
+    [{ mass: NaN, adduct: 1, spatial: 9 }],
+  ])('rejects %o', (ratio) => {
+    expect(isValidScoreRatio(ratio)).toBe(false)
+  })
+
+  it.each([
+    [0.1, true],
+    [9.8, true],
+    [0.09, false],
+    [9.81, false],
+    [Number.POSITIVE_INFINITY, false],
+  ])('limits a single part %s to 0.1–9.8', (value, ok) => {
+    expect(isValidScoreRatioPart(value)).toBe(ok)
   })
 })
 

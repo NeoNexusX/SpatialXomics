@@ -18,6 +18,7 @@ import {
   buildAnnotationTop,
   buildPageState,
   getAnnotationRows,
+  getAnnotationWeights,
 } from '../providers/analysisContext'
 import { DEFAULT_TOP_N, MAX_TOP_N } from '../agentconfig/defaults'
 import type {
@@ -26,7 +27,9 @@ import type {
   UmapSummary,
   KmeansSummary,
   SpectrumPeak,
+  AnnotationOrigin,
   AnnotationRow,
+  AnnotationScoreWeights,
   PageState,
 } from '../agenttypes/assistant'
 
@@ -92,12 +95,33 @@ function ppm(v: number): string {
   return `${v >= 0 ? '+' : ''}${v.toFixed(1)}ppm`
 }
 
-function renderAnnotations(rows: AnnotationRow[]): string {
+/** 注释面板的默认总分权重（provider 没给权重时用） */
+const DEFAULT_ANNOTATION_WEIGHTS: AnnotationScoreWeights = { mass: 0.6, adduct: 0.1, spatial: 0.3 }
+
+/** 权重系数：最多两位小数，去掉末尾的 0（0.7、0.05、0.33） */
+function weightText(v: number): string {
+  return String(Number(v.toFixed(2)))
+}
+
+/** 注释列表里的来源等级短写 */
+const ORIGIN_TOKEN: Record<AnnotationOrigin, string> = {
+  endogenous: 'endo',
+  expected: 'expected',
+  unknown: 'unknown',
+  exogenous: 'exo',
+}
+
+function renderAnnotations(
+  rows: AnnotationRow[],
+  weights: AnnotationScoreWeights = DEFAULT_ANNOTATION_WEIGHTS,
+): string {
   if (rows.length === 0) return 'No annotations in current context.'
   const header =
-    'Top annotations by total score (0.7×mass + 0.1×adduct fit + 0.2×spatial; spatial = 0.2×chaos ' +
-    '+ 0.8×same-molecule co-localization, unavailable co-localization counts as 0) with target-decoy ' +
-    'FDR q-values. One row = one adduct ion; ions of the same molecule are separate rows (sib).'
+    `Top annotations by total score (${weightText(weights.mass)}×mass + ` +
+    `${weightText(weights.adduct)}×adduct fit + ${weightText(weights.spatial)}×spatial, weights set ` +
+    'by the user in the annotation conditions; spatial = 0.2×chaos + 0.8×same-molecule ' +
+    'co-localization, unavailable co-localization counts as 0) with target-decoy FDR q-values. ' +
+    'One row = one adduct ion; ions of the same molecule are separate rows (sib).'
   const body = rows.map((a) => {
     // name 截 32 字符：给证据 token 留预算（工具输出有 2000 字符截断）
     const name = a.name.length > 32 ? `${a.name.slice(0, 32)}…` : a.name
@@ -107,10 +131,12 @@ function renderAnnotations(rows: AnnotationRow[]): string {
         : ''
     const sib = a.siblings.length ? ` sib=${a.siblings.map((x) => x.adduct).join(',')}` : ''
     const shared = a.samePeak.length ? ` samePeak=${a.samePeak.length}` : ''
+    // 未定不写，省字符
+    const origin = a.origin && a.origin !== 'unknown' ? ` origin=${ORIGIN_TOKEN[a.origin]}` : ''
     return (
       `#${a.rank} ${name} ${a.adduct} mz=${a.obsMz.toFixed(4)} (${ppm(a.errPpm)}) ` +
       `s=${a.totalScore.toFixed(2)} q=${pct(a.q)} m=${a.massScore.toFixed(2)} ` +
-      `fit=${a.adductFit.toFixed(1)}${spatial}${sib}${shared}`
+      `fit=${a.adductFit.toFixed(1)}${spatial}${sib}${shared}${origin}`
     )
   })
   return [header, ...body].join('\n')
@@ -120,8 +146,17 @@ function renderAnnotations(rows: AnnotationRow[]): string {
 export function renderAnnotationDetail(a: AnnotationRow): string {
   const lines: string[] = []
   lines.push(`name: ${a.name}`)
+  if (a.origin) {
+    lines.push(
+      `origin: ${a.origin} (provenance label from the annotation database; it only orders ` +
+        'candidates, endogenous first, and is not spectral evidence)',
+    )
+  }
   if (a.candidates.length > 0) {
-    const list = a.candidates.slice(0, 10).map((c) => (c.id ? `${c.name} (${c.id})` : c.name))
+    const list = a.candidates.slice(0, 10).map((c) => {
+      const tags = [c.id, c.origin].filter(Boolean).join(', ')
+      return tags ? `${c.name} (${tags})` : c.name
+    })
     lines.push(`candidates (${a.candidates.length}): ${list.join(' | ')}`)
   }
   lines.push(
@@ -162,7 +197,7 @@ export function renderAnnotationDetail(a: AnnotationRow): string {
     lines.push(`enabled but not detected: ${a.missingAdducts.join(', ')}`)
   }
   if (a.samePeak.length) {
-    const others = a.samePeak.map((x) => `${x.name} ${x.adduct}`)
+    const others = a.samePeak.map((x) => `${x.name} ${x.adduct}${x.origin ? ` (${x.origin})` : ''}`)
     lines.push(`same peak also explained by: ${others.join('; ')}`)
   }
   return lines.join('\n')
@@ -338,7 +373,9 @@ export const frontendContextTools: Plugin.Function<void> = (ctx: Context) => {
         'Get the top annotations ranked by total score (mass error + adduct fit + spatial chaos with ' +
         'same-molecule co-localization) with target-decoy FDR q-values. One row = one adduct ion. ' +
         'Tokens: s=total q=FDR m=mass fit=adduct fit ch=chaos col=co-localization sib=other adducts ' +
-        'of the same molecule samePeak=other annotations on the same peak.',
+        'of the same molecule samePeak=other annotations on the same peak ' +
+        'origin=provenance label of the named compound from the database (endo / expected / exo; ' +
+        'exo means every candidate is exogenous), a prior that orders candidates, not evidence.',
       parameters: {
         topN: {
           type: 'integer',
@@ -347,7 +384,7 @@ export const frontendContextTools: Plugin.Function<void> = (ctx: Context) => {
       },
       async execute(args) {
         const n = Math.min(Math.max(args.topN ?? DEFAULT_TOP_N, 1), MAX_TOP_N)
-        return renderAnnotations(buildAnnotationTop(n))
+        return renderAnnotations(buildAnnotationTop(n), getAnnotationWeights() ?? undefined)
       },
     }),
   )

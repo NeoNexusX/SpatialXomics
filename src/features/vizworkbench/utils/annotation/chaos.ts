@@ -119,16 +119,51 @@ export function measureOfChaos(
   return Number.isFinite(score) ? score : null
 }
 
+/**
+ * a 里第 k 小（0 起）的值，与升序排序后的 a[k] 相同；会原地打乱 a。a 里不能有 NaN。
+ * 快速选择平均 O(n)，比整体排序快数倍；分区轮数异常多时（刻意构造的输入）改为排序剩下的区间。
+ */
+function selectKth(a: Float32Array, k: number): number {
+  let lo = 0
+  let hi = a.length - 1
+  let rounds = 64 + 2 * Math.ceil(Math.log2(a.length + 1))
+  while (hi > lo) {
+    if (--rounds < 0) {
+      a.subarray(lo, hi + 1).sort()
+      break
+    }
+    // 三数取中作枢轴：已排好序或分段有序的数据不会退化
+    const x = a[lo]!
+    const y = a[(lo + hi) >>> 1]!
+    const z = a[hi]!
+    const pivot = x < y ? (y < z ? y : x < z ? z : x) : x < z ? x : y < z ? z : y
+    let i = lo
+    let j = hi
+    while (i <= j) {
+      while (a[i]! < pivot) i++
+      while (a[j]! > pivot) j--
+      if (i <= j) {
+        const t = a[i]!
+        a[i++] = a[j]!
+        a[j--] = t
+      }
+    }
+    // [lo, j] ≤ 枢轴，[i, hi] ≥ 枢轴，两者之间都等于枢轴
+    if (k <= j) hi = j
+    else if (k >= i) lo = i
+    else return pivot
+  }
+  return a[k]!
+}
+
 /** 热点去除：把超过非零像素第 percentile 百分位的值截到该百分位 */
 export function hotspotClip(img: Float32Array, percentile = 99): Float32Array {
   const n = countNonZero(img)
   if (n === 0) return img
-  // 类型化数组的默认排序就是数值升序，比带比较函数的普通数组排序快数倍
   const nz = new Float32Array(n)
   for (let i = 0, k = 0; i < img.length; i++) if (img[i]! > 0) nz[k++] = img[i]!
-  nz.sort()
   const idx = Math.min(n - 1, Math.ceil((percentile / 100) * n) - 1)
-  const cap = nz[Math.max(0, idx)]!
+  const cap = selectKth(nz, Math.max(0, idx))
   const out = new Float32Array(img.length)
   for (let i = 0; i < img.length; i++) out[i] = img[i]! > cap ? cap : img[i]!
   return out

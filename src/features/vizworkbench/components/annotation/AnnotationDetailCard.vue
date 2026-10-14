@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
  * 注释详情卡，从上到下按「先结论、后证据」排：
- *   名称 · 加合物 · 分子式 → q / 总分 / ppm 三个关键数 → 分数及空间子项、实测结果 →
- *   同分子的其他加合离子（空间相关 r + 跳转）→ 同一峰上的其他注释 → 候选名。
+ *   名称（来源标签）· 加合物 · 分子式 → q / 总分 / ppm 三个关键数 → 分数及空间子项、实测结果 →
+ *   同分子的其他加合离子（空间相关 r + 跳转）→ 同一峰上的其他注释（先按来源等级、再按排名）→
+ *   候选名（各带来源标签）。
  * 原始分、权重和贡献列在评分表中，实测 / 理论 m/z 与强度紧接总分。
  *
  * 空间计算比例小于 100% 时，范围外的离子打开卡片后按需算它与兄弟离子的 r，只展示、
@@ -11,6 +12,7 @@
 import { computed, inject, watch } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 import AnnotationScoreBreakdown from './AnnotationScoreBreakdown.vue'
+import OriginBadge from './OriginBadge.vue'
 import { ANNOTATION_KEY } from '@/features/vizworkbench/composables/useAnnotation'
 import {
   adductDisplay,
@@ -24,6 +26,7 @@ import {
   samePeakIons,
   siblingIons,
 } from '@/features/vizworkbench/utils/annotation/format'
+import { moleculeOrigin } from '@/features/vizworkbench/utils/annotation/origin'
 import { MIN_COLOC_CORRELATION } from '@/features/vizworkbench/utils/annotation/score'
 import type { IonAnnotation } from '@/features/vizworkbench/types/annotation'
 import { t } from '@/i18n'
@@ -37,7 +40,7 @@ const emit = defineEmits<{
 }>()
 
 const ann = inject(ANNOTATION_KEY)!
-const { molecules, ionById, pairRFor, computePairOnDemand, moleculeFilter } = ann
+const { molecules, ionById, pairRFor, computePairOnDemand, moleculeFilter, scoreWeights } = ann
 
 const molecule = computed(() => molecules.value.get(props.ion.moleculeId))
 
@@ -53,7 +56,7 @@ const visibleSiblings = computed(() =>
   siblings.value.filter(({ r }) => r == null || r >= MIN_COLOC_CORRELATION),
 )
 
-const samePeak = computed(() => samePeakIons(props.ion, ionById.value))
+const samePeak = computed(() => samePeakIons(props.ion, ionById.value, molecules.value))
 
 /** 共定位 r 是否只是展示用（本行没有参加空间评分） */
 const rDisplayOnly = computed(() => props.ion.scores.spatialState !== 'done')
@@ -95,11 +98,14 @@ function copy(text: string) {
     <!-- 标题：名称 / 加合物 · 分子式 -->
     <div class="flex items-start gap-2">
       <div class="min-w-0 flex-1">
-        <div
-          class="truncate kawaru-text-95 font-semibold text-base-content"
-          :title="moleculeName(molecule)"
-        >
-          {{ moleculeName(molecule) }}
+        <div class="flex min-w-0 items-center gap-2">
+          <div
+            class="truncate kawaru-text-81 font-semibold text-base-content"
+            :title="moleculeName(molecule)"
+          >
+            {{ moleculeName(molecule) }}
+          </div>
+          <OriginBadge :origin="moleculeOrigin(molecule)" molecule />
         </div>
         <div class="mt-1 flex items-center gap-2 font-mono text-base-content/60">
           <span class="annotation-adduct badge badge-sm shrink-0">{{
@@ -162,7 +168,7 @@ function copy(text: string) {
       </div>
     </div>
 
-    <AnnotationScoreBreakdown :ion="ion" />
+    <AnnotationScoreBreakdown :ion="ion" :weights="scoreWeights" />
 
     <!-- 同分子的其他加合离子 -->
     <div v-if="visibleSiblings.length" class="mt-3 border-t border-base-content/15 pt-3">
@@ -219,6 +225,7 @@ function copy(text: string) {
             {{ moleculeName(molecules.get(other.moleculeId)) }}
             <span class="font-mono text-base-content/60">{{ adductDisplay(other.adduct) }}</span>
           </span>
+          <OriginBadge :origin="moleculeOrigin(molecules.get(other.moleculeId))" molecule />
           <span class="shrink-0 font-mono" :class="qLevelClass(other.q)">
             {{ $t('vizworkbench.annotation.qValue', { value: fmtQ(other.q) }) }}
           </span>
@@ -241,8 +248,11 @@ function copy(text: string) {
       <ul class="space-y-2">
         <li v-for="c in molecule.candidates" :key="c.id || c.name" class="flex items-center gap-3">
           <div class="min-w-0 flex-1">
-            <div class="truncate" :title="c.name">{{ c.name }}</div>
-            <div v-if="c.id" class="font-mono kawaru-text-68 text-base-content/50">
+            <div class="flex min-w-0 items-center gap-2">
+              <span class="truncate" :title="c.name">{{ c.name }}</span>
+              <OriginBadge :origin="c.origin" />
+            </div>
+            <div v-if="c.id" class="font-mono kawaru-text-56 text-base-content/50">
               <a
                 v-if="compoundUrl(c.id)"
                 :href="compoundUrl(c.id)!"

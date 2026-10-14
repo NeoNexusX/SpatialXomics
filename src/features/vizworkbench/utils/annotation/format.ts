@@ -1,7 +1,12 @@
 /** 注释面板的数值格式化与导出 */
 
 import { ADDUCT_BY_ID, type AdductId } from '@/shared/chem/adducts'
-import type { IonAnnotation, Molecule } from '@/features/vizworkbench/types/annotation'
+import type {
+  IonAnnotation,
+  Molecule,
+  ScoreWeights,
+} from '@/features/vizworkbench/types/annotation'
+import { moleculeOrigin, originRank } from './origin'
 import { pairKey } from './pearson'
 
 export function fmtScore(v: number | null | undefined): string {
@@ -33,6 +38,18 @@ export function fmtPpm(v: number | null | undefined): string {
   const s = v.toFixed(1)
   if (s === '0.0' || s === '-0.0') return '0.0'
   return v > 0 ? `+${s}` : s.replace('-', '−')
+}
+
+/** 权重占比：接近整数时不带小数（60%），否则保留一位（33.3%） */
+export function fmtWeightPct(w: number): string {
+  const pct = w * 100
+  const rounded = Math.round(pct)
+  return Math.abs(pct - rounded) < 0.05 ? `${rounded}%` : `${pct.toFixed(1)}%`
+}
+
+/** 权重比例：'6:1:3'、'8:0.5:1.5' */
+export function fmtScoreRatio(r: ScoreWeights): string {
+  return [r.mass, r.adduct, r.spatial].map(String).join(':')
 }
 
 export function fmtIntensity(v: number | null | undefined): string {
@@ -73,12 +90,17 @@ export function siblingIons(
     .flatMap((id) => ionById.get(id) ?? [])
 }
 
-/** 同一个峰上的其他注释（samePeak 本身不含自己） */
+/** 同一个峰上的其他注释（samePeak 本身不含自己）：先按来源等级，同级按排名 */
 export function samePeakIons(
   ion: IonAnnotation,
   ionById: Map<number, IonAnnotation>,
+  molecules: Map<number, Molecule>,
 ): IonAnnotation[] {
-  return ion.samePeak.flatMap((id) => ionById.get(id) ?? [])
+  const originOf = (other: IonAnnotation) =>
+    originRank(moleculeOrigin(molecules.get(other.moleculeId)))
+  return ion.samePeak
+    .flatMap((id) => ionById.get(id) ?? [])
+    .sort((a, b) => originOf(a) - originOf(b) || a.rank - b.rank)
 }
 
 /** 常见数据库编号的条目页面；认不出的编号返回 null */
@@ -101,6 +123,7 @@ function num(v: number | null | undefined, digits: number): string {
 const CSV_HEADER = [
   'Rank',
   'Name',
+  'Origin',
   'Candidates',
   'Candidate IDs',
   'Formula',
@@ -135,12 +158,13 @@ export function buildAnnotationCsv(
       const r = pairR.get(pairKey(ion.axisIndex, s.axisIndex))
       return `${adductLabel(s.adduct)} ${fmtMz(s.obsMz)}${r != null ? ` r=${r.toFixed(2)}` : ''}`
     })
-    const samePeak = samePeakIons(ion, ionById).map(
+    const samePeak = samePeakIons(ion, ionById, molecules).map(
       (s) => `${moleculeName(molecules.get(s.moleculeId))} ${adductLabel(s.adduct)}`,
     )
     const cells = [
       String(ion.rank),
       csvCell(moleculeName(m)),
+      moleculeOrigin(m) ?? '',
       csvCell((m?.candidates ?? []).map((c) => c.name).join('; ')),
       csvCell(
         (m?.candidates ?? [])
