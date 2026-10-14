@@ -4,10 +4,8 @@ import ROIPanel from '@/features/vizworkbench/components/visuals/ROIPanel.vue'
 import MaskExportPanel from '@/features/vizworkbench/components/visuals/MaskExportPanel.vue'
 import IonChannelPanel from '@/features/vizworkbench/components/visuals/IonChannelPanel.vue'
 import CollapsibleSection from '@/shared/components/CollapsibleSection.vue'
-import type {
-  ImportedMaskSummary,
-  MaskExportPayload,
-} from '@/features/vizworkbench/utils/maskExport'
+import type { MaskExportPayload } from '@/features/vizworkbench/utils/maskExport'
+import type { ImportedMask } from '@/features/vizworkbench/composables/useImportedMasks'
 import type { IonChannel } from '@/features/vizworkbench/composables/useIonChannels'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -59,10 +57,8 @@ const props = defineProps<{
   selectedMz: number
   maxIonChannels: number
   batchAddMode: boolean
-  /** 文件导入的掩膜摘要：ROI 模块展示信息卡，导出面板的「已导入」标签取其 name */
-  importedMask?: ImportedMaskSummary | null
-  /** 导入掩膜过滤是否生效（false = 显示原图） */
-  importedMaskActive?: boolean
+  /** 文件导入的掩膜列表：ROI 模块展示信息卡，导出面板展示导入状态 */
+  importedMasks?: ImportedMask[]
 }>()
 
 const emit = defineEmits<{
@@ -106,9 +102,9 @@ const emit = defineEmits<{
   (e: 'toggle-channel-visible', id: number): void
   (e: 'retry-channel', id: number): void
   (e: 'clear-channels'): void
-  (e: 'import-mask', file: File): void
-  (e: 'clear-imported-mask'): void
-  (e: 'toggle-imported-mask'): void
+  (e: 'import-masks', files: File[]): void
+  (e: 'remove-imported-mask', id: string): void
+  (e: 'toggle-imported-mask', id: string): void
 }>()
 
 // UMAP/KMeans overlays are opt-in: buttons stay grayed out until the user
@@ -343,9 +339,7 @@ function cancelEnable() {
       </div>
 
       <div v-if="overlayError" class="text-error mt-1.5 flex items-center gap-2">
-        <span class="flex-1">{{
-          $t('vizworkbench.overlay.unavailable', { error: overlayError })
-        }}</span>
+        <span class="flex-1">{{ $t('vizworkbench.overlay.unavailable') }}</span>
         <button
           class="btn btn-ghost btn-sm text-error kawaru-text-62"
           @click="emit('retry-clustering')"
@@ -469,7 +463,7 @@ function cancelEnable() {
       :rois="confirmedRois"
       :viewing-roi="viewingRoi"
       :selected-roi-ids="selectedRoiIds"
-      :imported-mask="importedMask"
+      :imported-masks="importedMasks"
       @update:selected-tool="emit('update:roiTool', $event)"
       @update:viewing-roi="emit('update:viewingRoi', $event)"
       @confirm="emit('roi-confirm')"
@@ -479,7 +473,8 @@ function cancelEnable() {
       @toggle-selection="emit('toggle-roi-selection', $event)"
       @select-all="emit('roi-select-all')"
       @deselect-all="emit('roi-deselect-all')"
-      @clear-imported-mask="emit('clear-imported-mask')"
+      @remove-imported-mask="emit('remove-imported-mask', $event)"
+      @toggle-imported-mask="emit('toggle-imported-mask', $event)"
     />
   </CollapsibleSection>
 
@@ -496,12 +491,11 @@ function cancelEnable() {
         :kmeans-labels-available="kmeansLabelsAvailable"
         :kmeans-k="kmeansK"
         :selected-kmeans-ids="selectedKmeansIds"
-        :imported-mask-name="importedMask?.name ?? null"
-        :imported-mask-active="importedMaskActive ?? true"
-        @toggle-imported-mask="emit('toggle-imported-mask')"
+        :imported-masks="importedMasks"
+        @toggle-imported-mask="emit('toggle-imported-mask', $event)"
         @export-masks="(payload) => emit('export-masks', payload)"
-        @import-mask="(file) => emit('import-mask', file)"
-        @clear-imported-mask="emit('clear-imported-mask')"
+        @import-masks="(files) => emit('import-masks', files)"
+        @remove-imported-mask="emit('remove-imported-mask', $event)"
         @toggle-roi-selection="emit('toggle-roi-selection', $event)"
         @roi-select-all="emit('roi-select-all')"
         @roi-deselect-all="emit('roi-deselect-all')"

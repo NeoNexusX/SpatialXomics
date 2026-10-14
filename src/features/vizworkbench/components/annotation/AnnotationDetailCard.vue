@@ -90,13 +90,13 @@ function copy(text: string) {
 
 <template>
   <div
-    class="max-h-[70vh] w-max overflow-auto rounded-lg border border-base-300 bg-base-100 p-4 shadow-xl select-text kawaru-text-62"
+    class="max-h-[70vh] w-max overflow-auto rounded-lg border border-base-300 bg-base-100 p-4 shadow-xl select-text kawaru-text-75"
   >
     <!-- 标题：名称 / 加合物 · 分子式 -->
     <div class="flex items-start gap-2">
       <div class="min-w-0 flex-1">
         <div
-          class="truncate kawaru-text-81 font-semibold text-base-content"
+          class="truncate kawaru-text-95 font-semibold text-base-content"
           :title="moleculeName(molecule)"
         >
           {{ moleculeName(molecule) }}
@@ -145,20 +145,20 @@ function copy(text: string) {
     <!-- 关键数：q / 总分 / 质量误差 -->
     <div class="mt-3 grid grid-cols-3 gap-2 rounded-md bg-base-200/60 py-2 text-center">
       <div :title="$t('vizworkbench.annotation.qLevelHint')">
-        <div class="font-mono kawaru-text-81" :class="qLevelClass(ion.q)">{{ fmtQ(ion.q) }}</div>
-        <div class="kawaru-text-56 text-base-content/50">
+        <div class="font-mono kawaru-text-95" :class="qLevelClass(ion.q)">{{ fmtQ(ion.q) }}</div>
+        <div class="kawaru-text-68 text-base-content/50">
           {{ $t('vizworkbench.annotation.qLevelLabel') }}
         </div>
       </div>
       <div>
-        <div class="font-mono kawaru-text-81 font-semibold">{{ fmtScore(ion.scores.total) }}</div>
-        <div class="kawaru-text-56 text-base-content/50">
+        <div class="font-mono kawaru-text-95 font-semibold">{{ fmtScore(ion.scores.total) }}</div>
+        <div class="kawaru-text-68 text-base-content/50">
           {{ $t('vizworkbench.annotation.totalScore') }} #{{ ion.rank }}
         </div>
       </div>
       <div>
-        <div class="font-mono kawaru-text-81">{{ fmtPpm(ion.errPpm) }}</div>
-        <div class="kawaru-text-56 text-base-content/50">ppm</div>
+        <div class="font-mono kawaru-text-95">{{ fmtPpm(ion.errPpm) }}</div>
+        <div class="kawaru-text-68 text-base-content/50">ppm</div>
       </div>
     </div>
 
@@ -169,7 +169,7 @@ function copy(text: string) {
       <div class="mb-2 flex items-center gap-2 text-base-content/50">
         <span class="shrink-0">{{ $t('vizworkbench.annotation.siblings') }}</span>
         <button
-          class="btn btn-primary btn-xs shrink-0 px-2 kawaru-text-56"
+          class="btn btn-primary btn-xs shrink-0 px-2 kawaru-text-68"
           :title="$t('vizworkbench.annotation.onlyThisMolecule')"
           :aria-label="$t('vizworkbench.annotation.onlyThisMolecule')"
           @click="moleculeFilter = ion.moleculeId"
@@ -242,7 +242,7 @@ function copy(text: string) {
         <li v-for="c in molecule.candidates" :key="c.id || c.name" class="flex items-center gap-3">
           <div class="min-w-0 flex-1">
             <div class="truncate" :title="c.name">{{ c.name }}</div>
-            <div v-if="c.id" class="font-mono kawaru-text-56 text-base-content/50">
+            <div v-if="c.id" class="font-mono kawaru-text-68 text-base-content/50">
               <a
                 v-if="compoundUrl(c.id)"
                 :href="compoundUrl(c.id)!"
@@ -279,6 +279,6 @@ function copy(text: string) {
 <style scoped>
 /* badge-sm 与详情卡中的辅助文字保持同一字号。 */
 .annotation-adduct {
-  font-size: 0.5625rem;
+  font-size: 0.6875rem;
 }
 </style>

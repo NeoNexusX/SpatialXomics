@@ -47,6 +47,10 @@ import {
 import { pairKey } from '@/features/vizworkbench/utils/annotation/pearson'
 import { compareIons, targetJobKey } from '@/features/vizworkbench/utils/annotation/pipeline'
 import { DEFAULT_ENGINE_CONFIG } from '@/features/vizworkbench/utils/annotation/score'
+import {
+  sharedAnnotationIons,
+  sharedAnnotationMolecules,
+} from '@/features/vizworkbench/utils/annotation/sharedResults'
 import { resolveTolerance } from '@/features/vizworkbench/utils/annotation/tolerance'
 import type { Acquisition } from '@/features/vizworkbench/types/acquisition'
 import type {
@@ -302,9 +306,7 @@ export function useAnnotation(opts: {
       if (e.code === 'noFormulaColumn') return t('vizworkbench.annotation.dbCsvNoFormula')
       return t('vizworkbench.annotation.dbCsvNoRows')
     }
-    return t('vizworkbench.annotation.readFailed', {
-      error: e instanceof Error ? e.message : String(e),
-    })
+    return t('vizworkbench.annotation.readFailed')
   }
 
   /** 用户通过按钮选择库 CSV；在本地读取并记住它，下次打开直接用 */
@@ -357,6 +359,17 @@ export function useAnnotation(opts: {
   const searchText = shallowRef<Map<number, string>>(new Map())
 
   const ionById = computed(() => new Map(ions.value.map((i) => [i.id, i])))
+
+  // 发布到共享引用，供区域比较富集导出等跨面板消费者读取。
+  // useAnnotation 的所有更新都是引用替换（shallowRef 天然触发）。
+  watch(
+    [ions, molecules],
+    ([i, m]) => {
+      sharedAnnotationIons.value = i
+      sharedAnnotationMolecules.value = m
+    },
+    { immediate: true },
+  )
 
   const spatial = useAnnotationSpatial({
     tolerance: () => tolerance.value,

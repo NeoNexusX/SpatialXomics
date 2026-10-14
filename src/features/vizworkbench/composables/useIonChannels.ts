@@ -1,4 +1,5 @@
 import { computed, ref, shallowRef, watch, type ComputedRef, type Ref } from 'vue'
+import { t } from '@/i18n'
 import type { RGB } from '@/features/vizworkbench/utils/regionPalette'
 import {
   ION_CHANNEL_COLORS,
@@ -113,8 +114,8 @@ export function useIonChannels(deps: IonChannelDeps) {
       .catch((e: unknown) => {
         if (gen !== generation) return
         if (!channels.value.some((c) => c.id === channelId)) return
-        const message = e instanceof Error ? e.message : String(e)
-        patch(channelId, { matrix: null, loading: false, error: message })
+        console.error('[useIonChannels] load failed:', e)
+        patch(channelId, { matrix: null, loading: false, error: t('vizworkbench.channels.loadFailed') })
       })
   }
 

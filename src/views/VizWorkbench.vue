@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, onUnmounted, nextTick, shallowRef } from 'vue'
+import { computed, ref, watch, onUnmounted, nextTick } from 'vue'
 import VizInfoPanel from '@/features/vizworkbench/components/visuals/VizInfoPanel.vue'
 import ResultVisualizationLayout from '@/features/vizworkbench/components/ResultVisualizationLayout.vue'
 import ResultHeader from '@/features/vizworkbench/components/visuals/ResultHeader.vue'
@@ -29,16 +29,14 @@ import { useIonChannels } from '@/features/vizworkbench/composables/useIonChanne
 import { MAX_ION_CHANNELS } from '@/features/vizworkbench/utils/ionChannelBlend'
 import { useResultMeta } from '@/features/vizworkbench/composables/useResultMeta'
 import { useRegionComparison } from '@/features/vizworkbench/composables/useRegionComparison'
+import { useImportedMasks } from '@/features/vizworkbench/composables/useImportedMasks'
 import { ZARR_STORE } from '@/shared/config/defaults'
 import { rgbCss } from '@/features/vizworkbench/utils/regionPalette'
 import {
   createMask,
   exportMask,
-  importMask,
   labelsToUnionMask,
   orMask,
-  summarizeImportedMask,
-  type ImportedMaskSummary,
   type MaskExportPayload,
 } from '@/features/vizworkbench/utils/maskExport'
 import {
@@ -183,9 +181,7 @@ watch(
 )
 
 watch(runId, () => {
-  importedMask.value = null
-  importedMaskSummary.value = null
-  importedMaskActive.value = true
+  clearImportedMasks()
 })
 
 // 离开页面时释放模块级状态，避免大数组（mzAxis、meanChartData、ticMatrix 等）
@@ -242,17 +238,27 @@ const {
   onDraftCleared,
 } = useResultROI(displaySourceMatrix, ionCols, ionRows)
 
-// A file-imported mask is kept separate from drawn ROIs. It is applied as an
-// additional filter, so importing never mutates the user's ROI/KMeans state.
-const importedMask = shallowRef<Uint8Array | null>(null)
-// ROI 模块下展示的摘要（name/format/统计）；导出面板的「已导入」标签也取 name
-const importedMaskSummary = ref<ImportedMaskSummary | null>(null)
-// 导入掩膜过滤是否生效：false = 暂停过滤显示原图（导入保留，可随时重新应用）
-const importedMaskActive = ref(true)
+// File-imported masks are kept separate from drawn ROIs. The active ones act
+// as an additional display filter (their union), and every mask is also a
+// selectable comparison region — importing never mutates the user's
+// ROI/KMeans state.
+const {
+  importedMasks,
+  importMaskFiles,
+  removeImportedMask: removeImportedMaskEntry,
+  clearImportedMasks,
+  toggleImportedMask: toggleImportedMaskActive,
+  activeUnionMask,
+} = useImportedMasks({
+  ionCols,
+  ionRows,
+  datasetName,
+  matrix: displaySourceMatrix,
+})
 
 const visualMatrix = computed(() => {
   const matrix = displayMatrix.value
-  const mask = importedMaskActive.value ? importedMask.value : null
+  const mask = activeUnionMask.value
   const w = ionCols.value
   const h = ionRows.value
   if (!matrix || !mask || !w || !h || mask.length !== w * h) return matrix
@@ -262,9 +268,9 @@ const visualMatrix = computed(() => {
   return filtered
 })
 
-/** Intersection of the active ROI-only filter and imported mask. */
+/** Intersection of the active ROI-only filter and the active imported-mask union. */
 const effectiveRoiMask = computed<Uint8Array | null>(() => {
-  const imported = importedMaskActive.value ? importedMask.value : null
+  const imported = activeUnionMask.value
   const roi = roiUnionMask.value
   if (!imported) return roi
   if (!roi) return imported
@@ -377,10 +383,12 @@ const {
   regionBIds: cmpRegionBIds,
   minDetectionRate: cmpMinDetectionRate,
   noiseFloorPercentile: cmpNoiseFloorPercentile,
+  enrichmentRatio: cmpEnrichmentRatio,
   comparing: cmpComparing,
   progress: cmpProgress,
   error: cmpError,
   results: cmpResults,
+  categorizedResults: cmpCategorizedResults,
   filterStats: cmpFilterStats,
   availableRegions: cmpAvailableRegions,
   canCompare: cmpCanCompare,
@@ -392,11 +400,13 @@ const {
   selectMz: cmpSelectMz,
   reset: cmpReset,
   involvesRoi: cmpInvolvesRoi,
+  involvesImportedMask: cmpInvolvesImportedMask,
 } = useRegionComparison({
   kmeansClusters,
   kmeansLabelsAvailable,
   getKmeansLabels,
   confirmedROIs: confirmedROIs,
+  importedMasks,
   ionCols,
   ionRows,
   dataMode,
@@ -434,6 +444,12 @@ function handleRoiDelete(id: string) {
   // an unrelated ROI (or any ROI when comparing KMeans-vs-KMeans) is harmless.
   if (cmpInvolvesRoi(id)) cmpReset()
   roiDelete(id)
+}
+
+/** 移除参与过比较的导入掩膜时作废比较结果；未参与的移除不影响结果。 */
+function handleRemoveImportedMask(id: string) {
+  if (cmpInvolvesImportedMask(id)) cmpReset()
+  removeImportedMaskEntry(id)
 }
 
 // ---- AI 助手上下文注册（selectedIon + kmeans） ----
@@ -509,7 +525,7 @@ async function handleExportMasks(payload: MaskExportPayload) {
   }
 }
 
-async function handleImportMask(file: File) {
+async function handleImportMasks(files: File[]) {
   const width = ionCols.value
   const height = ionRows.value
   if (!width || !height) {
@@ -517,27 +533,23 @@ async function handleImportMask(file: File) {
     return
   }
   try {
-    const result = await importMask(file, {
-      expectedShape: [height, width],
-      expectedDatasetName: datasetName.value,
-    })
-    importedMask.value = result.mask
-    // 统计以导入时的矩阵定格（与手绘 ROI 同口径），不随 m/z 切换重算
-    importedMaskSummary.value = summarizeImportedMask(result, file.name, displaySourceMatrix.value)
-    // 新导入立即生效（覆盖此前可能暂停的旧掩膜状态）
-    importedMaskActive.value = true
-    showToast(t('vizworkbench.page.maskImported'), 'success')
+    // 每个文件独立导入：个别文件无效时其余仍然生效，失败逐个提示
+    const { imported, failed } = await importMaskFiles(files)
+    for (const f of failed) {
+      console.error('[Mask] import failed:', f.name, f.error)
+      showToast(
+        t('vizworkbench.page.maskImportFailed', { error: `${f.name}: ${f.error}` }),
+        'error',
+      )
+    }
+    if (imported.length) {
+      showToast(t('vizworkbench.page.masksImported', { count: imported.length }), 'success')
+    }
   } catch (err) {
+    // 兜底分支：不预期的异常不外显细节，原因留控制台
     console.error('[Mask] import failed', err)
-    const message = err instanceof Error ? err.message : String(err)
-    showToast(t('vizworkbench.page.maskImportFailed', { error: message }), 'error')
+    showToast(t('vizworkbench.page.maskImportFailedGeneric'), 'error')
   }
-}
-
-function handleClearImportedMask() {
-  importedMask.value = null
-  importedMaskSummary.value = null
-  importedMaskActive.value = true
 }
 
 // ---- Reference ROI import (local mode) ----
@@ -751,6 +763,7 @@ async function onSelectPixel(col: number, row: number) {
             v-model:region-b-ids="cmpRegionBIds"
             v-model:min-detection-rate="cmpMinDetectionRate"
             v-model:noise-floor-percentile="cmpNoiseFloorPercentile"
+            v-model:enrichment-ratio="cmpEnrichmentRatio"
             v-model:expanded="comparisonExpanded"
             :comparing="cmpComparing"
             :progress="cmpProgress"
@@ -781,7 +794,7 @@ async function onSelectPixel(col: number, row: number) {
         <div class="w-full min-w-0 lg:relative lg:w-0 lg:flex-[5_1_0%] lg:min-h-0">
           <ComparisonResultsTable
             class="lg:absolute lg:inset-0"
-            :results="cmpResults"
+            :results="cmpCategorizedResults"
             :selected-mz-index="selectedMzIndex"
             :filter-stats="cmpFilterStats"
             :region-a-color="rgbCss(cmpColorA)"
@@ -842,8 +855,7 @@ async function onSelectPixel(col: number, row: number) {
             :selected-mz="selectedMz"
             :max-ion-channels="MAX_ION_CHANNELS"
             :batch-add-mode="batchAddMode"
-            :imported-mask="importedMaskSummary"
-            :imported-mask-active="importedMaskActive"
+            :imported-masks="importedMasks"
             @toggle-overlay="toggleOverlay"
             @retry-clustering="retryClustering"
             @enable-clustering="createClusteringTask"
@@ -863,9 +875,9 @@ async function onSelectPixel(col: number, row: number) {
             @roi-select-all="selectAllRois"
             @roi-deselect-all="clearRoiSelection"
             @export-masks="handleExportMasks"
-            @import-mask="handleImportMask"
-            @clear-imported-mask="handleClearImportedMask"
-            @toggle-imported-mask="importedMaskActive = !importedMaskActive"
+            @import-masks="handleImportMasks"
+            @remove-imported-mask="handleRemoveImportedMask"
+            @toggle-imported-mask="toggleImportedMaskActive"
             @roi-clear-all="handleRoiClearAll"
             @update:gamma="gamma = $event"
             @update:channels-enabled="onChannelsEnabledChange"

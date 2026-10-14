@@ -55,7 +55,9 @@ async function runQuery() {
       // 服务层抛的是英文报错，未命中是可预期的业务结果，在界面层换成当前语言
       error.value = t('vizworkbench.pubchem.notFound', { query })
     } else {
-      error.value = e instanceof Error ? e.message : String(e)
+      // 第三方请求失败统一一句话，原因留控制台
+      console.error('[PubChem] lookup failed:', e)
+      error.value = t('vizworkbench.pubchem.searchFailed')
     }
   } finally {
     loading.value = false

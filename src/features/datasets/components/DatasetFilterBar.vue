@@ -36,7 +36,6 @@
               overflow-y-auto z-[900]"
           >
             <DatasetFilterPanel
-              :show-username="usernameFilter"
               @apply="(payload) => emit('apply-filters', payload)"
               @close="closeFilterPanel"
             />
@@ -103,15 +102,12 @@ withDefaults(
     showAddFilter?: boolean
     /** 在 Add filter 旁显示进入 /collections 的按钮（数据集列表 ↔ 集合列表互跳） */
     showCollectionsLink?: boolean
-    /** 筛选面板显示 username 字段：仅公开列表（/files/list_files）后端支持 */
-    usernameFilter?: boolean
     searchPlaceholder?: string
   }>(),
   {
     showUpload: false,
     showAddFilter: false,
     showCollectionsLink: false,
-    usernameFilter: false,
     searchPlaceholder: undefined,
   },
 )
