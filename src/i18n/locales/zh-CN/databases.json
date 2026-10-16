@@ -1,0 +1,28 @@
+{
+  "databases": {
+    "title": "数据库",
+    "subtitle": "浏览内置的参考数据库。",
+    "table": {
+      "empty": "未找到记录。"
+    },
+    "hmdb": {
+      "label": "SI_DB 代谢物",
+      "note": "数据来源：SI_DB",
+      "searchPlaceholder": "搜索 ID、名称或分子式...",
+      "field": {
+        "id": "编号",
+        "name": "名称",
+        "formula": "分子式",
+        "mass": "质量",
+        "origin": "来源",
+        "inchi": "InChI"
+      },
+      "origin": {
+        "endogenous": "内源性",
+        "exogenous": "外源性",
+        "expected": "预期",
+        "unknown": "未知"
+      }
+    }
+  }
+}

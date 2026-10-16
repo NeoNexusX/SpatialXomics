@@ -147,6 +147,14 @@ const routes = [
     component: view(() => import('../views/VizWorkbench.vue'), 'vizworkbench', 'datasets'),
     meta: { requiresAuth: true },
   },
+  {
+    // 通用数据库浏览页（HMDB 等参考库）：公开参考数据，无需登录。当前数据由各
+    // source 的过渡期 fetcher 提供（HMDB 为静态样本 CSV），后端就绪后在
+    // features/databases 的 source 里换成走 httpClient 的实现即可。
+    path: '/database',
+    name: 'Database',
+    component: view(() => import('../views/DatabaseView.vue'), 'databases'),
+  },
   // 裸 /docs 转发后由 nginx 的 `location = /docs` 301 补斜杠，这里无需特殊处理。
   {
     path: '/docs/:pathMatch(.*)*',

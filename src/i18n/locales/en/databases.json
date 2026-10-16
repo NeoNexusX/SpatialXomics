@@ -1,0 +1,28 @@
+{
+  "databases": {
+    "title": "Database",
+    "subtitle": "Browse built-in reference databases.",
+    "table": {
+      "empty": "No records found."
+    },
+    "hmdb": {
+      "label": "SI_DB Metabolites",
+      "note": "Data source: SI_DB",
+      "searchPlaceholder": "Search ID, name or formula...",
+      "field": {
+        "id": "ID",
+        "name": "Name",
+        "formula": "Formula",
+        "mass": "Mass (Da)",
+        "origin": "Origin",
+        "inchi": "InChI"
+      },
+      "origin": {
+        "endogenous": "Endogenous",
+        "exogenous": "Exogenous",
+        "expected": "Expected",
+        "unknown": "Unknown"
+      }
+    }
+  }
+}

@@ -128,6 +128,16 @@
         },
         "active": true,
         "external": true
+      },
+      {
+        "kind": "link",
+        "to": "/database",
+        "icon": "circle_stack",
+        "label": {
+          "en": "Database",
+          "zh-CN": "数据库"
+        },
+        "active": true
       }
     ],
     "userMenu": [
