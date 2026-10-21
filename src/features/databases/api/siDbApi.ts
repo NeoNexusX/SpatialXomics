@@ -1,6 +1,6 @@
 /**
- * SI 注释数据库（/annotations/si-db）的 HTTP 封装，契约来自后端对接说明
- * （public/说明 (2).md；Swagger 在 http://<后端地址>/docs 搜 annotation）。
+ * SI 注释数据库（/annotations/si-db）的 HTTP 封装，契约见后端 Swagger
+ * （http://<后端地址>/docs 搜 annotation）。
  *
  * 两个能力：① 分页查询（POST /list，body 必传，筛选字段模糊匹配、字段间取
  * 交集）；② 整库 CSV 两步下载（先换内嵌短时 token 的直链，再交给浏览器）。
@@ -8,7 +8,6 @@
  */
 import { auth_api } from '@/shared/api/httpClient'
 import { ENV } from '@/shared/config'
-import { decodeCsvBytes } from '@/features/vizworkbench/utils/annotation/csv'
 import type { DatabasePageMeta } from '../types/database'
 
 // 约定：本模块所有函数都返回**解包后的响应体**（res.data），调用方不再处理 axios 信封。
@@ -83,17 +82,27 @@ export function toProxiedRelayUrl(url: string): string {
 }
 
 /**
- * 拉取整库 CSV 文本（注释面板「从平台库导入」用）。onProgress 回报累计已下载
- * 字节数与总字节数（来自第一步回传的 size），供按钮显示下载百分比。
+ * 轻量探测整库文件元信息（文件名 / 字节数），不下载文件体。注释面板用它判断
+ * 本地已保存的副本是否过期；也用作「另存为」默认文件名的来源之一。
+ */
+export async function probeSiDbCsv(): Promise<{ fileName: string; size: number }> {
+  const info = await getSiDbDownload()
+  return { fileName: info.filename, size: info.size }
+}
+
+/**
+ * 下载整库 CSV 原始字节（注释面板「平台库」导入用：写盘与解析共用这一份）。
+ * onProgress 回报累计已下载字节数与总字节数（来自第一步回传的 size），供按钮
+ * 显示下载百分比。
  */
 export async function fetchSiDbCsv(
   onProgress?: (loaded: number, total: number) => void,
-): Promise<{ fileName: string; text: string }> {
+): Promise<{ fileName: string; bytes: Uint8Array }> {
   const info = await getSiDbDownload()
   const res = await fetch(toProxiedRelayUrl(info.url))
   if (!res.ok) throw new Error(`HTTP ${res.status} for SI_DB csv`)
 
-  let buf: ArrayBuffer
+  let bytes: Uint8Array
   if (onProgress && res.body) {
     const reader = res.body.getReader()
     const chunks: Uint8Array[] = []
@@ -107,15 +116,14 @@ export async function fetchSiDbCsv(
         onProgress(loaded, info.size)
       }
     }
-    const merged = new Uint8Array(loaded)
+    bytes = new Uint8Array(loaded)
     let offset = 0
     for (const c of chunks) {
-      merged.set(c, offset)
+      bytes.set(c, offset)
       offset += c.byteLength
     }
-    buf = merged.buffer as ArrayBuffer
   } else {
-    buf = await res.arrayBuffer()
+    bytes = new Uint8Array(await res.arrayBuffer())
   }
-  return { fileName: info.filename, text: decodeCsvBytes(buf) }
+  return { fileName: info.filename, bytes }
 }

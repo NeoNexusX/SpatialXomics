@@ -94,7 +94,7 @@ describe('fetchSiDbCsv', () => {
     }
   }
 
-  it('fetches the proxied relay url, reports byte progress and decodes the csv text', async () => {
+  it('fetches the proxied relay url, reports byte progress and returns the raw bytes', async () => {
     const csv = 'ID,Name,Formula\nHMDB1,X,C6H12O6'
     get.mockResolvedValue({
       data: {
@@ -110,7 +110,8 @@ describe('fetchSiDbCsv', () => {
     const res = await fetchSiDbCsv((loaded, total) => progress.push([loaded, total]))
 
     expect(fetchMock).toHaveBeenCalledWith('/api/annotations/si-db/relay/download?token=x')
-    expect(res).toEqual({ fileName: 'SI_DB.csv', text: csv })
+    expect(res.fileName).toBe('SI_DB.csv')
+    expect(new TextDecoder().decode(res.bytes)).toBe(csv)
     expect(progress).toEqual([
       [5, csv.length],
       [csv.length, csv.length],

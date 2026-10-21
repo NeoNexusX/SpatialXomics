@@ -9,7 +9,7 @@
 import { t } from '@/i18n'
 import { compoundUrl } from '@/features/vizworkbench/utils/annotation/format'
 import { downloadSiDbCsv, listSiDbPage } from '../api/siDb'
-import { fetchSiDbCsv } from '../api/siDbApi'
+import { fetchSiDbCsv, probeSiDbCsv } from '../api/siDbApi'
 import type { DatabaseSource } from '../types/database'
 
 /** Origin 词表显示文字；key 是数据里的英文原值，表里没有的原样显示（vocabLabels.ts 同款约定） */
@@ -86,7 +86,8 @@ export const hmdbSource: DatabaseSource = {
     },
   ],
   download: { label: () => t('databases.hmdb.download'), run: downloadSiDbCsv },
-  // 注释面板「从平台库导入」走同一后端的整库 CSV（fetchSiDbCsv 读内容，与 download 的浏览器下载互补）
-  csvImport: { fetch: fetchSiDbCsv },
+  // 注释面板「平台库」导入：整库 CSV 先按文件保存（Chromium，默认下载文件夹）再
+  // 解析，之后可复用已保存的文件；probe 只换元信息、用于判断本地副本是否过期
+  csvImport: { suggestedFileName: 'SI_DB.csv', fetch: fetchSiDbCsv, probe: probeSiDbCsv },
   fetcher: listSiDbPage,
 }

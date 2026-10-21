@@ -35,5 +35,5 @@ The current source is **HMDB 4.0 Metabolites**. Columns: ID, formula, name, InCh
 
 This database plugs into annotation in [Data Visualization](./data-visualization) directly:
 
-- **Direct import**: pick it from the **Import from platform** dropdown in the annotation panel — the full CSV is fetched and imported online, no manual download needed.
+- **Direct import**: pick it from the **Platform** dropdown in the annotation panel — the full CSV is saved as a local file (the Chromium Save dialog defaults to the Downloads folder) and imported; importing again reuses the saved file instead of downloading it again.
 - **Manual import**: the **Download full CSV** button on the right of the toolbar downloads the complete database (about 38.5 MB). Its header row is `ID,Name,Formula,InChI,Mass,Origin`, which matches the annotation-database template and can be imported as an annotation CSV.

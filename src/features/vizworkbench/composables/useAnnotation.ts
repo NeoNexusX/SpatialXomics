@@ -28,9 +28,18 @@ import { AnnotationDbCsvError } from '@/features/vizworkbench/utils/annotation/a
 import { decodeCsvBytes } from '@/features/vizworkbench/utils/annotation/csv'
 import {
   clearStoredDb,
+  loadPlatformFile,
   loadStoredDb,
+  savePlatformFile,
   saveStoredDb,
 } from '@/features/vizworkbench/utils/annotation/dbStore'
+import {
+  hasPermission,
+  pickSaveHandle,
+  readHandleFile,
+  supportsFileHandles,
+  writeHandleBytes,
+} from '@/features/vizworkbench/utils/annotation/platformFile'
 import { createEngineClient } from '@/features/vizworkbench/utils/annotation/engineClient'
 import {
   adductLabel,
@@ -362,16 +371,29 @@ export function useAnnotation(opts: {
   }
 
   /** 解析、换上并记住一个库 CSV（本地文件与平台库导入共用尾段） */
-  async function loadAndRememberDb(fileName: string, text: string): Promise<void> {
+  async function loadAndRememberDb(
+    fileName: string,
+    text: string,
+    reused = false,
+  ): Promise<void> {
     const info = await engine.loadDb(fileName, text)
     if (disposed) return
     dbRequest++
     applyDb(info)
     showToast(
-      t('vizworkbench.annotation.dbImported', { file: fileName, count: info.count }),
+      reused
+        ? t('vizworkbench.annotation.platformReused', { file: fileName, count: info.count })
+        : t('vizworkbench.annotation.dbImported', { file: fileName, count: info.count }),
       'success',
     )
     void saveStoredDb({ fileName, text })
+  }
+
+  /** UTF-8 字节 → CSV 文本（写盘与解析共用同一份字节） */
+  function bytesToText(bytes: Uint8Array): string {
+    // 切片取出精确范围的 ArrayBuffer（decodeCsvBytes 只收 ArrayBuffer）
+    const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+    return decodeCsvBytes(buf as ArrayBuffer)
   }
 
   /** 用户通过按钮选择库 CSV；在本地读取并记住它，下次打开直接用 */
@@ -391,23 +413,94 @@ export function useAnnotation(opts: {
     })
   }
 
+  /** 平台库导入前的本地文件准备结果 */
+  type PlatformFilePrep =
+    /** 已保存的本地副本新鲜：直接复用，不下载 */
+    | { kind: 'reuse'; name: string; text: string }
+    /** 需要下载；handle 非空时下载后写回，null 表示不落盘（不支持/无权限） */
+    | { kind: 'download'; handle: FileSystemFileHandle | null }
+    /** 用户在「另存为」里取消：整个导入中止 */
+    | { kind: 'cancelled' }
+
   /**
-   * 从平台数据库导入（/database 页注册了 csvImport 的库，当前 HMDB）：登录态接口
-   * 换直链 → fetch 整库 CSV 文本（进度进 platformFetch）→ 与文件导入同一套解析
-   * 与记住逻辑。label 为库的显示名（点击时按当前语言取），取代后端回传的文件名
-   * （SI_DB.csv）作为库标签；网络/HTTP 失败换一句话文案，CSV 形状问题沿用文件
-   * 导入的报错。
+   * 句柄相关的准备必须在点击手势内尽早执行（showSaveFilePicker / requestPermission
+   * 都要求 transient activation），因此只有 IndexedDB 读取和本地磁盘判断，网络探测
+   * 放在最后且失败不阻断——后端不可用时仍可复用已保存的文件。
    */
-  function importPlatformDb(db: DatabaseCsvImport, label: string): Promise<void> {
+  async function preparePlatformFile(
+    db: DatabaseCsvImport,
+    sourceId: string,
+  ): Promise<PlatformFilePrep> {
+    if (!supportsFileHandles()) return { kind: 'download', handle: null }
+
+    try {
+      const stored = await loadPlatformFile(sourceId)
+      if (stored) {
+        const readable = await hasPermission(stored.handle, 'read')
+        const file = readable ? await readHandleFile(stored.handle) : null
+        if (file) {
+          // 探测只是新鲜度参考：大小一致即复用；探测失败（如服务不可用）也继续用本地副本
+          let fresh = true
+          try {
+            const info = await db.probe?.()
+            if (info && file.size !== info.size) fresh = false
+          } catch (e) {
+            console.warn('platform database probe failed, reusing the saved file:', e)
+          }
+          if (fresh) {
+            return { kind: 'reuse', name: file.name, text: decodeCsvBytes(await file.arrayBuffer()) }
+          }
+          // 过期：有写权限就下载后覆盖原文件；没有则只导入、不落盘
+          const writable = await hasPermission(stored.handle, 'readwrite')
+          return { kind: 'download', handle: writable ? stored.handle : null }
+        }
+        // 文件被删/改名/移动：让用户重新选保存位置
+      }
+
+      const handle = await pickSaveHandle(db.suggestedFileName)
+      return handle ? { kind: 'download', handle } : { kind: 'cancelled' }
+    } catch (e) {
+      // 文件 API 的意外失败（安全策略等）不阻断导入：退回在线拉取、不落盘
+      console.error('platform database file preparation failed, falling back to download:', e)
+      return { kind: 'download', handle: null }
+    }
+  }
+
+  /**
+   * 从平台数据库导入（/database 页注册了 csvImport 的库，当前 HMDB）。
+   *
+   * Chromium（File System Access API）：整库 CSV 以文件形式保存到用户选定位置
+   * （「另存为」默认下载文件夹），句柄记在 IndexedDB；再次导入（包括删掉当前库
+   * 之后）直接读已保存的文件、不重新下载——文件被删或过期才重新拉取并覆盖。
+   * 其他浏览器（Firefox/Safari）：在线拉取后直接解析导入，不落盘（与之前一致）。
+   *
+   * label 为库的显示名（点击时按当前语言取），作为导入后的库标签。
+   */
+  function importPlatformDb(
+    db: DatabaseCsvImport,
+    label: string,
+    sourceId: string,
+  ): Promise<void> {
     importingDb.value = true
     importingKind.value = 'platform'
     platformFetch.value = null
+    // 先发起准备（手势窗口内），再排进换库队列
+    const prepared = preparePlatformFile(db, sourceId)
     return queueDb(async () => {
       try {
-        const { fileName, text } = await db.fetch((loaded, total) => {
+        const prep = await prepared
+        if (prep.kind === 'cancelled') return
+        if (prep.kind === 'reuse') {
+          await loadAndRememberDb(label.trim() || prep.name, prep.text, true)
+          return
+        }
+        const { fileName, bytes } = await db.fetch((loaded, total) => {
           platformFetch.value = { loaded, total }
         })
-        await loadAndRememberDb(label.trim() || fileName, text)
+        if (prep.handle && (await writeHandleBytes(prep.handle, bytes))) {
+          void savePlatformFile(sourceId, { handle: prep.handle, size: bytes.byteLength })
+        }
+        await loadAndRememberDb(label.trim() || fileName, bytesToText(bytes))
       } catch (e) {
         if (e instanceof AnnotationDbCsvError) {
           showToast(dbErrorText(e), 'error')

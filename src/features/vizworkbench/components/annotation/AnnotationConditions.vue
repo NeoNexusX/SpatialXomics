@@ -122,9 +122,9 @@ const platformPct = computed(() => {
 function pickPlatformDb(id: string): void {
   const source = platformDbs.find((s) => s.id === id)
   // daisyUI 的 focus 下拉不随菜单项点击收起，选完手动失焦关掉。
-  // label 在点击时按当前语言取，作为导入后的库名（取代后端文件名 SI_DB.csv）
+  // label 在点击时按当前语言取，作为导入后的库名；id 用于按库记住已保存的文件句柄
   ;(document.activeElement as HTMLElement | null)?.blur()
-  if (source?.csvImport) void importPlatformDb(source.csvImport, source.label())
+  if (source?.csvImport) void importPlatformDb(source.csvImport, source.label(), source.id)
 }
 
 // 滑动条拖动时只更新预览，松手才更新条件，等待用户点击开始。

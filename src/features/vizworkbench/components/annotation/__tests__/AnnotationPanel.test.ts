@@ -18,6 +18,8 @@ vi.mock('@/features/vizworkbench/utils/annotation/dbStore', () => ({
   loadStoredDb: vi.fn(async () => null),
   saveStoredDb: vi.fn(async () => {}),
   clearStoredDb: vi.fn(async () => {}),
+  loadPlatformFile: vi.fn(async () => null),
+  savePlatformFile: vi.fn(async () => {}),
 }))
 
 // 真实的 useZarrIonImage 会拉起整套 zarr store；这里只要共享 ref 和取图入口

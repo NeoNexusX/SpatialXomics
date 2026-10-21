@@ -100,15 +100,25 @@ export interface DatabaseDownloadAction {
 }
 
 /**
- * 注释面板「从平台库导入」入口：拉整库 CSV 文本。与 download（交给浏览器下载）
- * 不同，这里要读内容，走 fetch + 同源代理（见 api/siDbApi.ts 的 fetchSiDbCsv）。
+ * 注释面板「平台库」导入入口：拉整库 CSV。与 download（交给浏览器下载）不同，
+ * 这里要读内容：Chromium 上先把文件保存到用户选定位置（默认下载文件夹）再解析，
+ * 之后可复用已保存的文件；不支持的浏览器在线拉取后直接解析。
  */
 export interface DatabaseCsvImport {
+  /** 「另存为」对话框的默认文件名 */
+  suggestedFileName: string
   /**
-   * 下载整库 CSV 文本；onProgress 回报累计已下载字节数与总字节数（未知为 0），
-   * 供导入按钮显示下载百分比。失败抛原始错误，由调用方换一句话文案提示。
+   * 下载整库 CSV 原始字节（写盘与解析共用同一份）；onProgress 回报累计已下载
+   * 字节数与总字节数（未知为 0），供导入按钮显示下载百分比。失败抛原始错误。
    */
-  fetch: (onProgress?: (loaded: number, total: number) => void) => Promise<{ fileName: string; text: string }>
+  fetch: (
+    onProgress?: (loaded: number, total: number) => void,
+  ) => Promise<{ fileName: string; bytes: Uint8Array }>
+  /**
+   * 轻量探测整库文件的文件名与字节数（不下载文件体）：已保存的本地副本与它
+   * 大小不一致时视为过期、重新下载。探测失败（如后端不可用）时仍可复用本地副本。
+   */
+  probe?: () => Promise<{ fileName: string; size: number }>
 }
 
 export interface DatabaseListResult {
