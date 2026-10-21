@@ -29,7 +29,7 @@ The current source is **HMDB 4.0 Metabolites**. Columns: ID, formula, name, InCh
 - The **PubChem** column opens a PubChem lookup dialog by compound name; the **HMDB** column opens the HMDB entry page in a new tab.
 - The pagination footer switches pages and page size.
 
-![Database page overview](https://cdn.neonexus.top/docs/20261021104802629.jpg_view)
+![Database page overview](https://cdn.neonexus.top/docs/20261021194635111.jpg_view)
 
 ## Using the Database for Annotation
 
