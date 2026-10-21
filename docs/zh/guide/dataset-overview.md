@@ -14,7 +14,7 @@
 
 点击所需查看的数据集，会在新标签页打开基本信息页面。
 
-![image-20260908164356627](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908164356724.jpg_view)
+![image-20260908164356627](https://cdn.neonexus.top/docs/20260908164356724.jpg_view)
 
 
 
@@ -22,7 +22,7 @@
 
 数据集基本信息如图，后续将对各部分进行说明。
 
-![image-20260908164615804](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908164615849.jpg_view)
+![image-20260908164615804](https://cdn.neonexus.top/docs/20260908164615849.jpg_view)
 
 
 
@@ -30,7 +30,7 @@
 
 该部分罗列了一些生物学及样本信息。
 
-![image-20260914194520246](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914194520307.jpg_view)
+![image-20260914194520246](https://cdn.neonexus.top/docs/20260914194520307.jpg_view)
 
 信息解读如下：
 
@@ -49,7 +49,7 @@
 
 该部分罗列了质谱成像分析设置。
 
-![image-20260914194545811](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914194545854.jpg_view)
+![image-20260914194545811](https://cdn.neonexus.top/docs/20260914194545854.jpg_view)
 
 解读如下：
 
@@ -70,7 +70,7 @@
 
 该部分罗列了文件信息。
 
-![image-20260914194608289](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914194608330.jpg_view)
+![image-20260914194608289](https://cdn.neonexus.top/docs/20260914194608330.jpg_view)
 
 解读如下：
 
@@ -91,11 +91,11 @@
 
 方式一：搜索页面直接点击数据集右侧`Download`进行下载；
 
-![image-20260908170252900](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908170252957.jpg_view)
+![image-20260908170252900](https://cdn.neonexus.top/docs/20260908170252957.jpg_view)
 
 方式二：进入基本信息页面点击`Download`进行下载。
 
-![image-20260914195006521](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914195006583.jpg_view)
+![image-20260914195006521](https://cdn.neonexus.top/docs/20260914195006583.jpg_view)
 
 
 
@@ -109,7 +109,7 @@
 
 链接为 `/s/` 开头的短链，由数据集的 16 位 public id 构成。
 
-![image-20260914195044109](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914195044165.jpg_view)
+![image-20260914195044109](https://cdn.neonexus.top/docs/20260914195044165.jpg_view)
 
 ### 5. 设为公开
 
@@ -117,10 +117,10 @@
 
 1. 在「我的数据集」中进入该数据集的基本信息页面（仅私有数据集显示该按钮）。
 
-   <img src="https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008180527576.jpg_view" alt="b4788d43248812376b8046143e4b6f49" style="zoom:67%;" />
+   <img src="https://cdn.neonexus.top/docs/20261008180527576.jpg_view" alt="b4788d43248812376b8046143e4b6f49" style="zoom:67%;" />
 
 2. 点击`Make Public`，在确认弹窗中确认。
 
-   <img src="https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008180555416.jpg_view" alt="image-20261008180555369" style="zoom: 80%;" />
+   <img src="https://cdn.neonexus.top/docs/20261008180555416.jpg_view" alt="image-20261008180555369" style="zoom: 80%;" />
 
 数据集设为公开后不可撤销。该操作与分享相互独立：`Share`只复制链接，不会把私有数据集变为公开。

@@ -10,27 +10,27 @@ Upload paired imzML/ibd files, fill in metadata, and manage the datasets you con
 
 Click **Upload New Dataset** to open the upload dialog.
 
-![Upload button](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908174622409.jpg_view)
+![Upload button](https://cdn.neonexus.top/docs/20260908174622409.jpg_view)
 
-![Upload dialog](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908174725075.jpg_view)
+![Upload dialog](https://cdn.neonexus.top/docs/20260908174725075.jpg_view)
 
 ### 1. Select Files
 
 Click **Choose Files** and select both the `.imzML` and `.ibd` files. They must share the same base filename.
 
-![File picker](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908175048689.jpg_view)
+![File picker](https://cdn.neonexus.top/docs/20260908175048689.jpg_view)
 
 ### 2. Visibility
 
 Choose whether the dataset is **public** (visible to all users) or **private** (visible only to you). Public is selected by default. The `.ibd` file of a public dataset must be at least **10 MB**.
 
-![Visibility toggle](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908175221284.jpg_view)
+![Visibility toggle](https://cdn.neonexus.top/docs/20260908175221284.jpg_view)
 
 ### 3. Fill in Metadata
 
 Fields marked with \* are required. The spectrum and storage modes are read from the imzML header and pre-filled — changing one asks for confirmation.
 
-![Metadata form](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908193210320.jpg_view)
+![Metadata form](https://cdn.neonexus.top/docs/20260908193210320.jpg_view)
 
 #### Acquisition Parameters
 
@@ -86,4 +86,4 @@ Interrupted uploads can be resumed from the banner at the top of the upload dial
 
 After uploading, your dataset appears under **Datahub > My Datasets**. See [Dataset Overview](./dataset-overview) for how to view details, download, and share.
 
-![My Datasets](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908203828434.jpg_view)
+![My Datasets](https://cdn.neonexus.top/docs/20260908203828434.jpg_view)

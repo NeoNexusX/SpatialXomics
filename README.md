@@ -13,7 +13,8 @@ SpatialXomics 是一个面向质谱成像（MSI）的 Web 数据管理与分析�
 - **分析工作区**：按数据的 spectrum/storage mode 展示兼容的降噪、基线校正、归一化、峰提取和峰对齐方法。
 - **结果可视化**：Continuous 离子图和平均谱、Processed TIC 图和逐像素谱、显示范围/Gamma/配色/TIC 归一化、透明背景 PNG 导出。
 - **聚类与区域分析**：后端生成 UMAP，浏览器本地执行 KMeans；支持聚类筛选、矩形/自由形状 ROI、多区域组合比较。
-- **注释**：Continuous + Centroid 结果使用平均谱峰与用户选择的注释库 CSV 匹配，支持 ppm/Da 容差、评分与 FDR、筛选、导出和 PubChem 查询；网站不提供或分发注释数据库。
+- **注释**：Continuous + Centroid 结果使用平均谱峰与注释库 CSV 匹配，支持 ppm/Da 容差、评分与 FDR、筛选、导出和 PubChem 查询；注释库可自备 CSV 或从平台参考库一键导入。
+- **参考数据库**：登录后浏览 HMDB 4.0 代谢物参考库，支持编号/名称/分子式检索、来源与质量区间筛选、PubChem/HMDB 条目外链和整库 CSV 下载；注释面板可直接导入该库。
 
 ## 技术栈
 

@@ -10,17 +10,17 @@ Inspect dataset metadata, download raw files, share links, and make datasets pub
 
 Click any dataset row to open its detail page in a new tab.
 
-![Click dataset](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908164356724.jpg_view)
+![Click dataset](https://cdn.neonexus.top/docs/20260908164356724.jpg_view)
 
 ## Metadata Sections
 
 The detail page is organized into three sections.
 
-![Detail page overview](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908164615849.jpg_view)
+![Detail page overview](https://cdn.neonexus.top/docs/20260908164615849.jpg_view)
 
 ### Biological & Sample Info
 
-![Biological info](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914194520307.jpg_view)
+![Biological info](https://cdn.neonexus.top/docs/20260914194520307.jpg_view)
 
 | Field | Example | Meaning |
 |---|---|---|
@@ -33,7 +33,7 @@ The detail page is organized into three sections.
 
 ### MSI Analysis Settings
 
-![MSI settings](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914194545854.jpg_view)
+![MSI settings](https://cdn.neonexus.top/docs/20260914194545854.jpg_view)
 
 | Field | Example | Meaning |
 |---|---|---|
@@ -48,7 +48,7 @@ The detail page is organized into three sections.
 
 ### File Information
 
-![File info](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914194608330.jpg_view)
+![File info](https://cdn.neonexus.top/docs/20260914194608330.jpg_view)
 
 | Field | Example | Meaning |
 |---|---|---|
@@ -65,11 +65,11 @@ You can download the raw .imzML/.ibd pair in two places.
 
 **Option 1:** Click **Download** on the dataset row in any list view.
 
-![Download from list](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908170252957.jpg_view)
+![Download from list](https://cdn.neonexus.top/docs/20260908170252957.jpg_view)
 
 **Option 2:** Click **Download** on the detail page.
 
-![Download from detail](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914195006583.jpg_view)
+![Download from detail](https://cdn.neonexus.top/docs/20260914195006583.jpg_view)
 
 ## Share
 
@@ -80,7 +80,7 @@ Both public and private datasets can be shared. Sharing does not change the data
 
 The link uses the short `/s/` form built from the dataset's 16-character public id.
 
-![Share button](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914195044165.jpg_view)
+![Share button](https://cdn.neonexus.top/docs/20260914195044165.jpg_view)
 
 ## Make Public
 
@@ -88,10 +88,10 @@ To list a dataset under Public Datasets so every user can see it, make it public
 
 1. Open the detail page from **My Datasets** (the button only appears for private datasets).
 
-   <img src="https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008180527576.jpg_view" alt="b4788d43248812376b8046143e4b6f49" style="zoom:67%;" />
+   <img src="https://cdn.neonexus.top/docs/20261008180527576.jpg_view" alt="b4788d43248812376b8046143e4b6f49" style="zoom:67%;" />
 
 2. Click **Make Public** and confirm the dialog.
 
-   <img src="https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008180555416.jpg_view" alt="image-20261008180555369" style="zoom: 80%;" />
+   <img src="https://cdn.neonexus.top/docs/20261008180555416.jpg_view" alt="image-20261008180555369" style="zoom: 80%;" />
 
 Making a dataset public cannot be undone. It is independent of sharing: **Share** only copies the link and never turns a private dataset public.

@@ -17,15 +17,15 @@ Dataset cards show one of two actions:
 
 When you click **Explore > Generate**, the platform creates a task and redirects you to the [Workspace](./workspace) to track progress.
 
-![Explore button](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909211924161.jpg_view)
+![Explore button](https://cdn.neonexus.top/docs/20260909211924161.jpg_view)
 
-![Generate dialog](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909212549240.jpg_view)
+![Generate dialog](https://cdn.neonexus.top/docs/20260909212549240.jpg_view)
 
 ## Page Layout
 
 The visualization page has five main areas:
 
-![Page layout](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260911150203309.jpg_view)
+![Page layout](https://cdn.neonexus.top/docs/20260911150203309.jpg_view)
 
 1. **Ion intensity image** (center) — spatial heatmap of the selected m/z
 2. **Pixel spectrum** (bottom) — mean spectrum or per-pixel spectrum
@@ -97,13 +97,13 @@ Export ROI masks and KMeans clusters as a binary mask file, or import one and us
 | **Apply Mask / Show Original** | Re-apply the imported mask, or suspend it and show the full image (appears after importing a mask). |
 | **Clear imported mask** | Remove the imported mask. |
 
-![Mask import & export](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008182213629.jpg_view)
+![Mask import & export](https://cdn.neonexus.top/docs/20261008182213629.jpg_view)
 
 ## Ion Intensity Image
 
 Displays the spatial intensity distribution for the selected m/z value.
 
-![Ion image](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260911153144287.jpg_view)
+![Ion image](https://cdn.neonexus.top/docs/20260911153144287.jpg_view)
 
 ### Interaction
 
@@ -138,7 +138,7 @@ Continuous data can overlay several ions at once as separate colour channels. En
 - Per-channel controls cover visibility, colour, and opacity.
 - Display Range, Colormap, and Gamma do not apply while an overlay is active; their controls are greyed out.
 
-![Multi-ion overlay](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008180949956.jpg_view)
+![Multi-ion overlay](https://cdn.neonexus.top/docs/20261008180949956.jpg_view)
 
 ## Pixel Spectrum
 
@@ -170,43 +170,43 @@ Set a minimum detection rate and an intensity threshold, then click **Compare**.
 
 1. Open the **Visualization** section in the right sidebar and enable KMeans.
 
-   ![KMeans controls](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914160650461.jpg_view)
+   ![KMeans controls](https://cdn.neonexus.top/docs/20260914160650461.jpg_view)
 
 2. Choose the number of clusters.
 
-   ![Cluster result](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914160834781.jpg_view)
+   ![Cluster result](https://cdn.neonexus.top/docs/20260914160834781.jpg_view)
 
-   ![Cluster overlay](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914160853673.jpg_view)
+   ![Cluster overlay](https://cdn.neonexus.top/docs/20260914160853673.jpg_view)
 
 3. Select two clusters to compare.
 
-   ![Comparison result](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914161105137.jpg_view)
+   ![Comparison result](https://cdn.neonexus.top/docs/20260914161105137.jpg_view)
 
 ### Using ROIs
 
 1. Click **Rect** in the ROI section, draw a region, then click **Confirm** to create ROI 1.
 
-   ![ROI 1](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914161347733.jpg_view)
+   ![ROI 1](https://cdn.neonexus.top/docs/20260914161347733.jpg_view)
 
 2. Click **ROI only** to reset the view, then draw another region to create ROI 2.
 
-   ![ROI 2](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914161613765.jpg_view)
+   ![ROI 2](https://cdn.neonexus.top/docs/20260914161613765.jpg_view)
 
 3. Select both ROIs for comparison.
 
-   ![ROI comparison](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914161809308.jpg_view)
+   ![ROI comparison](https://cdn.neonexus.top/docs/20260914161809308.jpg_view)
 
 ## Annotation Panel
 
 Choose an annotation CSV in the collapsible left-side panel, then click **Start annotation**. The panel matches the peaks against theoretical adduct ions from that file, scores the matches, estimates the FDR, and adds spatial scores for the top-ranked annotations in the background. One table row is one adduct ion: different adduct ions of the same molecule are separate rows that link to each other.
 
 ::: warning Prerequisites
-Annotation requires aligned **centroid** data (continuous storage) and a mean spectrum matching the m/z axis. Users must provide their own database. The site does not provide a default database or distribute databases.
+Annotation requires aligned **centroid** data (continuous storage) and a mean spectrum matching the m/z axis. The database is either a user-provided CSV or one of the platform's reference databases (see [Database](./database)), imported directly from the panel.
 :::
 
 ### Choose the Database CSV and Peaks
 
-Click **Choose annotation CSV** to open a local file. The file is read and saved in the current browser without being uploaded to a server. The panel can restore the last user-selected database, clear it, or open a replacement.
+Click **Choose annotation CSV** to open a local file, or open the **Import from platform** dropdown to pick one of the platform's reference databases (see [Database](./database)) — it fetches the full CSV online (the button shows the download progress) and imports it through the same parsing pipeline. Either way the database is read and saved in the current browser without being uploaded to a server. The panel can restore the last user-selected database, clear it, or open a replacement.
 
 - The database template is `ID,Name,Formula,InChI,Mass`, one compound per row. `Formula` is required; `Mass` is the monoisotopic neutral mass in Da and is calculated from the formula when missing. Other columns are optional. Compounds sharing a formula are grouped as candidates.
 - An optional `Origin` column labels where a compound comes from: `endogenous`, `expected` (expected endogenous), `unknown` or `exogenous`. Candidates of a formula are listed in that order, keeping the file order within a level, and the first one is the displayed name. Origin only sets this order and the labels; it is not part of the total score and does not change q-values. Without the column, candidates keep the file order.
@@ -271,7 +271,7 @@ Scores update in place while this runs; when it finishes, rows are re-ranked and
 
 Click **PubChem** to open a lookup dialog that searches PubChem by compound name and shows the structure, CID, IUPAC name, SMILES, and InChIKey, with copy buttons and a link to the PubChem page.
 
-<img src="https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261009151838139.jpg_view" alt="image-20261009151838061" style="zoom: 50%;" />
+<img src="https://cdn.neonexus.top/docs/20261009151838139.jpg_view" alt="image-20261009151838061" style="zoom: 50%;" />
 
 ### Export
 

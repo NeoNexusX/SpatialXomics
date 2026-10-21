@@ -32,6 +32,10 @@ features:
     details: View ion images, TIC plots, and spectra; use UMAP/KMeans, ROIs, region comparison, and annotation matching for spatial analysis.
     link: /guide/data-visualization
     linkText: Read Guide
+  - title: Database
+    details: Browse the HMDB 4.0 metabolite reference database, search and filter entries, download the full CSV, or import it for annotation.
+    link: /guide/database
+    linkText: Read Guide
   - title: Upload Datasets
     details: Upload paired imzML/ibd files with metadata and chunked upload support.
     link: /guide/upload-data
