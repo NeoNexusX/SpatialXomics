@@ -51,7 +51,7 @@
       },
       {
         "kind": "group",
-        "icon": "circle_stack",
+        "icon": "squares_2x2",
         "label": {
           "en": "Datahub",
           "zh-CN": "数据中心"
@@ -79,7 +79,7 @@
           },
           {
             "to": "/collections",
-            "icon": "circle_stack",
+            "icon": "rectangle_stack",
             "label": {
               "en": "Collections",
               "zh-CN": "数据集合"
