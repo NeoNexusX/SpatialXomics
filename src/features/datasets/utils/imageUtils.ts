@@ -10,9 +10,9 @@ const OSS_STYLE = '_preview'
 export type PreviewSlot = 'preview.jpg' | 'preview_2.jpg' | 'preview_3.jpg'
 
 /**
- * 直连 base：bucket/region 因部署环境而异（测试/正式服务器不同），取自
- * config.json 的 `oss.previewImageBase`；loadConfig 已保证缺省时兜底为
- * 测试环境域名，因此运行到这里必定有值。
+ * 直连 base：因部署环境而异（测试服为 OSS 域名，正式服为绑定同一 bucket 的
+ * CDN 域名），取自 config.json 的 `oss.previewImageBase`；loadConfig 已保证
+ * 缺省时兜底为测试环境域名，因此运行到这里必定有值。
  */
 function previewBase(): string {
   return getConfig().oss!.previewImageBase!
