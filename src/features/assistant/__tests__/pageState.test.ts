@@ -36,7 +36,34 @@ describe('buildPageState', () => {
         height: 1,
       }),
       kmeans: () => ({ k: 4, clusterSizes: [10, 20, 30, 40], selectedIds: [1, 2] }),
-      annotations: () => ({ matchedRows: [{ expMz: 741.53, name: 'PC 34:1', matchStatus: 'matched' }] }),
+      annotations: () => ({
+        count: 1,
+        rows: () => [
+          {
+            id: 0,
+            rank: 1,
+            name: 'PC 34:1',
+            origin: null,
+            candidates: [{ id: '', name: 'PC 34:1', origin: null }],
+            formula: 'C42H82NO8P',
+            adduct: '[M+H]+',
+            theoMz: 760.5851,
+            obsMz: 760.5856,
+            errPpm: 0.6,
+            intensity: null,
+            massScore: 0.97,
+            adductFit: 1,
+            chaos: null,
+            coloc: null,
+            spatialScore: null,
+            totalScore: 0.79,
+            q: 0.01,
+            siblings: [],
+            samePeak: [],
+            missingAdducts: [],
+          },
+        ],
+      }),
     })
 
     const s = buildPageState()
@@ -58,14 +85,26 @@ describe('buildPageState', () => {
 
   it('re-evaluates on every call (always live, no snapshot)', () => {
     registerContextProviders({
-      selectedIon: () => ({ mz: 100, tolerance: 0.5, matrix: new Float32Array(1), width: 1, height: 1 }),
+      selectedIon: () => ({
+        mz: 100,
+        tolerance: 0.5,
+        matrix: new Float32Array(1),
+        width: 1,
+        height: 1,
+      }),
     })
     expect(buildPageState().selectedIon).toEqual({ mz: 100, tolerance: 0.5 })
 
     // 模拟用户切换选中离子后再次调用
     unregisterContextProviders(['selectedIon'])
     registerContextProviders({
-      selectedIon: () => ({ mz: 200, tolerance: 0.5, matrix: new Float32Array(1), width: 1, height: 1 }),
+      selectedIon: () => ({
+        mz: 200,
+        tolerance: 0.5,
+        matrix: new Float32Array(1),
+        width: 1,
+        height: 1,
+      }),
     })
     expect(buildPageState().selectedIon).toEqual({ mz: 200, tolerance: 0.5 })
   })

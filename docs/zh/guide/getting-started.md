@@ -41,7 +41,7 @@ SpatialXomics 将常用的 MSI 数据管理与分析功能整合到同一套 Web
 
 点击`Join to start`进入 SpatialXomics 操作页面.
 
-![image-20260907165610757](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260907165610863.jpg_view)
+![image-20260907165610757](https://cdn.neonexus.top/docs/20260907165610863.jpg_view)
 
 
 
@@ -49,7 +49,7 @@ SpatialXomics 将常用的 MSI 数据管理与分析功能整合到同一套 Web
 
 首次使用用户进行账号的注册（详细操作见[账户管理](./account-management)），完成后点击`Sign in`登录。
 
-![登录页面](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260907165825552.jpg_view)
+![登录页面](https://cdn.neonexus.top/docs/20260907165825552.jpg_view)
 
 
 
@@ -59,13 +59,13 @@ SpatialXomics 将常用的 MSI 数据管理与分析功能整合到同一套 Web
 
 此处采用筛选查找出”Mouse Brain”数据。首先点击`Add filter`进行筛选，再将筛选条件设置为”Mouse”、”Brain”，最后点击`Apply`得到筛选查找的结果。
 
-![筛选示例](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260907174909406.jpg_view)
+![筛选示例](https://cdn.neonexus.top/docs/20260907174909406.jpg_view)
 
 ### 4. 查看数据基本信息并下载
 
 点击所需数据的状况栏可查看数据的基本信息；
 
-![image-20260907175815083](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260907175815189.jpg_view)
+![image-20260907175815083](https://cdn.neonexus.top/docs/20260907175815189.jpg_view)
 
 “Mouse_Brain_MALDI_30_Positive_7d5b0c”数据的基本信息如下（详细基本信息解读见[数据集总览](./dataset-overview)）。
 
@@ -73,15 +73,15 @@ SpatialXomics 将常用的 MSI 数据管理与分析功能整合到同一套 Web
 
 特别指出点击该页面`Download`按钮可下载该数据集，点击`Share`可分享该数据集链接。
 
-![image-20260907180028409](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260907180028501.jpg_view)
+![image-20260907180028409](https://cdn.neonexus.top/docs/20260907180028501.jpg_view)
 
 ### 5. 数据可视化
 
 点击`Visualize`即可查看数据集具体信息（具体细节介绍见[数据可视化](./data-visualization)）。
 
-![image-20260908134626345](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908134626454.jpg_view)
+![image-20260908134626345](https://cdn.neonexus.top/docs/20260908134626454.jpg_view)
 
-![image-20260908135003273](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908135003414.jpg_view)
+![image-20260908135003273](https://cdn.neonexus.top/docs/20260908135003414.jpg_view)
 
 上述内容是对公开数据集进行寻找查看下载等操作，下面我们介绍如何上传私人的数据集并进行处理。
 
@@ -89,17 +89,17 @@ SpatialXomics 将常用的 MSI 数据管理与分析功能整合到同一套 Web
 
 点击`Upload New Dataset`即可上传本地数据集；
 
-![image-20260908135743140](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908135743254.jpg_view)
+![image-20260908135743140](https://cdn.neonexus.top/docs/20260908135743254.jpg_view)
 
 点击`Choose Files`即可选择本地数据集，并按要求完成基本信息填写便于后续分析（详细操作见[上传数据集](./upload-data)），其中*为必填项。
 
 （注意：上传数据需是 .imzML 以及其配套 .ibd 文件）
 
-![image-20260908140402607](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908140402663.jpg_view)
+![image-20260908140402607](https://cdn.neonexus.top/docs/20260908140402663.jpg_view)
 
 上传成功后数据可在`Datahub`—`My Datasets`中查看，信息查看功能与上述3-5步操作一致。
 
-![image-20260908140630704](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908140630805.jpg_view)
+![image-20260908140630704](https://cdn.neonexus.top/docs/20260908140630805.jpg_view)
 
 ### 7. 分析数据
 
@@ -107,11 +107,11 @@ SpatialXomics 将常用的 MSI 数据管理与分析功能整合到同一套 Web
 
 此处以公开数据集中”Mouse_Kidney_MALDI_30_Negative_77bf5d”为例，进行了降噪、基线校正、强度归一化、峰提取、峰对齐的分析操作。
 
-![新建分析页面](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908141557982.jpg_view)
+![新建分析页面](https://cdn.neonexus.top/docs/20260908141557982.jpg_view)
 
 点击`Start Analysis`后会自动进入`Workspace`—`Workspace`页面，也可自行手动操作进入该页面，查看数据处理情况(具体细节见[工作区](./workspace))。
 
-![工作区页面](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908142155682.jpg_view)
+![工作区页面](https://cdn.neonexus.top/docs/20260908142155682.jpg_view)
 
 
 

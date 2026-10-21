@@ -40,7 +40,7 @@ interface SpectralWorkerResponse {
 
 let searchWorker: Worker | null = null
 /** worker 起不来（构造抛 / 脚本加载失败 / 运行时崩）后闩锁置位，后续调用
- *  全部走主线程兜底——不重试必死的构造（同 useAnnotationSpatialScoring） */
+ *  全部走主线程兜底——不重试必死的构造（同注释模块的 engineClient） */
 let workerBroken = false
 let nextReqId = 0
 const inflight = new Map<

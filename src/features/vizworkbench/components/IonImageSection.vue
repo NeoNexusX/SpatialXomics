@@ -134,7 +134,9 @@ onBeforeUnmount(() => {
         v-else-if="ionError && !ionMatrix"
         class="flex-1 flex flex-col items-center justify-center gap-2 px-6 text-center"
       >
-        <p class="kawaru-text-112 font-semibold text-error">{{ $t('vizworkbench.ionImage.loadFailed') }}</p>
+        <p class="kawaru-text-112 font-semibold text-error">
+          {{ $t('vizworkbench.ionImage.loadFailed') }}
+        </p>
         <p class="kawaru-text-68 text-base-content/60 break-words">{{ ionError }}</p>
       </div>
       <div
@@ -185,7 +187,9 @@ onBeforeUnmount(() => {
         >
           <div class="flex flex-col items-center gap-3">
             <span class="loading loading-spinner loading-lg text-primary"></span>
-            <span class="text-base-content/70 kawaru-text-95">{{ $t('vizworkbench.ionImage.updating') }}</span>
+            <span class="text-base-content/70 kawaru-text-95">{{
+              $t('vizworkbench.ionImage.updating')
+            }}</span>
           </div>
         </div>
         <ROIOverlay
@@ -201,7 +205,7 @@ onBeforeUnmount(() => {
           v-if="ionError"
           class="absolute left-3 right-3 top-3 z-30 rounded-lg border border-error/30 bg-error/10 px-3 py-2 kawaru-text-68 text-error shadow-sm backdrop-blur-sm"
         >
-          {{ $t('vizworkbench.ionImage.updateFailed', { error: ionError }) }}
+          {{ $t('vizworkbench.ionImage.updateFailed') }}
         </div>
       </div>
     </div>

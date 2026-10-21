@@ -111,10 +111,10 @@ scope.onmessage = (e: MessageEvent<KmeansRequest>) => {
     }
 
     // Transfer the output buffers back (zero-copy); the input was a copy.
-    scope.postMessage(
-      { id, labels, rgb, pointCount: count, iterations: result.iterations },
-      [labels.buffer, rgb.buffer],
-    )
+    scope.postMessage({ id, labels, rgb, pointCount: count, iterations: result.iterations }, [
+      labels.buffer,
+      rgb.buffer,
+    ])
   } catch (err) {
     scope.postMessage({ id, error: err instanceof Error ? err.message : String(err) })
   }

@@ -32,6 +32,10 @@ features:
     details: 查看离子图、TIC 图与质谱，使用 UMAP/KMeans、ROI、区域比较与注释匹配进行空间分析。
     link: /zh/guide/data-visualization
     linkText: 查看指南
+  - title: 数据库
+    details: 浏览 HMDB 4.0 代谢物参考库，检索与筛选条目，下载整库 CSV 或导入注释。
+    link: /zh/guide/database
+    linkText: 查看指南
   - title: 上传数据集
     details: 上传配对的 imzML/ibd 文件，填写元数据并完成查重、压缩与分片上传。
     link: /zh/guide/upload-data

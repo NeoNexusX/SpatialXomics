@@ -1,0 +1,42 @@
+{
+  "databases": {
+    "title": "数据库",
+    "table": {
+      "empty": "未找到记录。",
+      "downloadFailed": "下载发起失败。"
+    },
+    "hmdb": {
+      "label": "HMDB 4.0 代谢物",
+      "searchPlaceholder": "搜索 ID、名称或分子式...",
+      "pubchemHint": "在 PubChem 中检索该化合物",
+      "openEntry": "打开 HMDB 条目页",
+      "filter": {
+        "origin": "来源",
+        "originAll": "全部来源",
+        "mass": "质量",
+        "massMin": "最小质量",
+        "massMax": "最大质量"
+      },
+      "download": "下载整库 CSV",
+      "serviceUnavailable": "注释服务暂不可用，请稍后重试。",
+      "downloadStarted": "开始下载 {filename}（约 {size}）",
+      "downloadFailed": "整库 CSV 下载发起失败，请稍后重试。",
+      "field": {
+        "id": "编号",
+        "name": "名称",
+        "formula": "分子式",
+        "mass": "质量",
+        "origin": "来源",
+        "inchi": "InChI",
+        "pubchem": "PubChem",
+        "hmdb": "HMDB"
+      },
+      "origin": {
+        "endogenous": "内源性",
+        "exogenous": "外源性",
+        "expected": "预期",
+        "unknown": "未知"
+      }
+    }
+  }
+}

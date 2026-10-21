@@ -26,14 +26,6 @@ import { t } from '@/i18n'
  * 多值 payload 走数组（同一字段多值 = OR）；useDatasetList.normalizeFilters
  * 会把空数组归一成 ''（= 该字段不筛选），后端兼容两种写法。
  */
-const props = withDefaults(
-  defineProps<{
-    /** 显示 username 筛选：仅 /files/list_files（公开列表）支持，我的数据集页后端会忽略 */
-    showUsername?: boolean
-  }>(),
-  { showUsername: false },
-)
-
 const emit = defineEmits<{
   (e: 'apply', payload: Record<string, string | string[]>): void
   (e: 'close'): void
@@ -67,10 +59,6 @@ const fields = computed<FilterField[]>(() => {
     { key: 'analyzer', label: t('common.meta.analyzer'), type: 'multi', options: ANALYZERS },
     { key: 'first_uploaded_by', label: t('datasets.field.submittedBy'), type: 'text', placeholder: t('datasets.filter.submitterPlaceholder') },
   ]
-  // username 仅公开列表（/files/list_files）支持；list_user_files 会忽略它。
-  // 语义是「数据集拥有者」，label/placeholder 与「提交者」区分开
-  if (props.showUsername)
-    list.push({ key: 'username', label: t('datasets.field.owner'), type: 'text', placeholder: t('datasets.filter.ownerPlaceholder') })
   return list
 })
 

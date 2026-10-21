@@ -23,8 +23,9 @@ i {
      PingFang SC = 苹方（macOS / iOS），Microsoft YaHei = 微软雅黑（Windows），
      Noto Sans CJK SC / Source Han Sans SC = 思源黑体（Linux / Android）。
      Poppins 必须排第一，否则英文会被 CJK 字体自带的拉丁字形接管。 */
-  font-family: 'Poppins', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC',
-    'Source Han Sans SC', system-ui, sans-serif;
+  font-family:
+    'Poppins', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC',
+    system-ui, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
@@ -67,7 +68,7 @@ i:lang(zh-CN) {
    同一个 text-[1em] 在不同深度解析出不同大小。
 
    档位像素（@390 / @1320 及以上，基准 16 → 20px，1320px 后封顶）：
-     50=8.1/10.0   62=10.2/12.5   68=11.2/13.8   75=12.2/15.0   81=13.2/16.3
+     50=8.1/10.0   56=9.2/11.3    62=10.2/12.5   68=11.2/13.8   75=12.2/15.0   81=13.2/16.3
      87=14.2/17.5  95=15.5/19.0  100=16.3/20.0  112=18.3/22.5  125=20.4/25.0
     150=24.4/30.0 187=30.5/37.5  240=39.1/48.0
 
@@ -88,6 +89,10 @@ i:lang(zh-CN) {
 
 @utility kawaru-text-50 {
   font-size: calc(var(--kawaru-fs) * 0.5);
+  line-height: 1.4;
+}
+@utility kawaru-text-56 {
+  font-size: calc(var(--kawaru-fs) * 0.5625);
   line-height: 1.4;
 }
 @utility kawaru-text-62 {
@@ -253,4 +258,3 @@ i:lang(zh-CN) {
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: color-mix(in oklch, var(--color-base-content) 35%, transparent);
 }
-

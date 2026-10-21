@@ -260,7 +260,8 @@ export interface ZarrConfig {
  */
 export interface OssConfig {
   /**
-   * 预览图直连 base（形如 https://{bucket}.oss-{region}.aliyuncs.com，末尾不带斜杠）。
+   * 预览图直连 base（末尾不带斜杠）。测试环境形如 https://{bucket}.oss-{region}.aliyuncs.com，
+   * 正式环境为绑定该 bucket 的 CDN 域名（https://cdn.neonexus.top）。
    * 完整 URL = {previewImageBase}/{image_path}/preview.jpg（目录取自后端 image_path）；
    * 缺省时在 loadConfig 里回退测试环境域名。
    */

@@ -55,7 +55,14 @@ function getWorker(): Worker {
     type: 'module',
   })
   worker.onmessage = (e: MessageEvent) => {
-    const msg = e.data as { id: number; labels?: Int32Array; rgb?: Uint8Array; pointCount?: number; iterations?: number; error?: string }
+    const msg = e.data as {
+      id: number
+      labels?: Int32Array
+      rgb?: Uint8Array
+      pointCount?: number
+      iterations?: number
+      error?: string
+    }
     if (!pending || pending.id !== msg.id) return // stale / orphaned
     const { resolve, reject } = pending
     pending = null

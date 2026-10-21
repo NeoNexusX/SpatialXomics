@@ -90,10 +90,9 @@ export function useDatasetList(
       page.value = p
       size.value = s
     } catch (err: any) {
-      error.value =
-        err?.message ||
-        String(err) ||
-        t('common.feedback.loadFailed', { target: t('datasets.list.target') })
+      // 不向外显底层错误内容（状态码/堆栈），统一一句话；原因留控制台
+      console.error('[useDatasetList] load failed:', err)
+      error.value = t('common.feedback.loadFailed', { target: t('datasets.list.target') })
       datasets.value = []
     } finally {
       loading.value = false

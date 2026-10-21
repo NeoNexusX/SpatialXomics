@@ -1,18 +1,20 @@
 <template>
-  <div class="flex flex-col gap-3 kawaru-text-81">
+  <div class="flex flex-col gap-3 kawaru-text-68">
     <!-- ROI Tools -->
     <div>
-      <div class="font-semibold text-base-content mb-2 tracking-wide">{{ $t('vizworkbench.roi.tools') }}</div>
+      <div class="font-semibold text-base-content mb-2 tracking-wide">
+        {{ $t('vizworkbench.roi.tools') }}
+      </div>
       <div class="flex gap-1.5">
         <button
-          class="btn btn-sm flex-1 kawaru-text-81"
+          class="btn btn-sm flex-1 kawaru-text-68"
           :class="selectedTool === 'rectangle' ? 'btn-primary' : 'btn-ghost'"
           @click="$emit('update:selectedTool', selectedTool === 'rectangle' ? null : 'rectangle')"
         >
           <SvgIcon type="square" /> {{ $t('vizworkbench.roi.rect') }}
         </button>
         <button
-          class="btn btn-sm flex-1 kawaru-text-81"
+          class="btn btn-sm flex-1 kawaru-text-68"
           :class="selectedTool === 'freehand' ? 'btn-primary' : 'btn-ghost'"
           @click="$emit('update:selectedTool', selectedTool === 'freehand' ? null : 'freehand')"
         >
@@ -20,11 +22,11 @@
         </button>
       </div>
       <div v-if="draftReady" class="flex gap-1.5 mt-1.5">
-        <button class="btn btn-sm btn-success flex-1 kawaru-text-81" @click="$emit('confirm')">
+        <button class="btn btn-sm btn-success flex-1 kawaru-text-68" @click="$emit('confirm')">
           <SvgIcon type="check" /> {{ $t('common.action.confirm') }}
         </button>
         <button
-          class="btn btn-sm btn-ghost flex-1 text-error kawaru-text-81"
+          class="btn btn-sm btn-ghost flex-1 text-error kawaru-text-68"
           @click="$emit('cancel')"
         >
           <SvgIcon type="close" /> {{ $t('common.action.cancel') }}
@@ -32,9 +34,11 @@
       </div>
       <button
         v-if="rois.length"
-        class="btn btn-sm w-full mt-1.5 kawaru-text-81"
+        class="btn btn-sm w-full mt-1.5 kawaru-text-68"
         :class="viewingRoi ? 'btn-primary' : 'btn-ghost'"
-        :title="viewingRoi ? $t('vizworkbench.roi.viewingRoiHint') : $t('vizworkbench.roi.viewingAllHint')"
+        :title="
+          viewingRoi ? $t('vizworkbench.roi.viewingRoiHint') : $t('vizworkbench.roi.viewingAllHint')
+        "
         @click="$emit('update:viewingRoi', !viewingRoi)"
       >
         {{ viewingRoi ? $t('vizworkbench.roi.roiOnly') : $t('vizworkbench.roi.showAll') }}
@@ -72,7 +76,10 @@
           v-for="roi in rois"
           :key="roi.id"
           class="rounded-lg border p-2"
-          :style="{ borderColor: cssWithAlpha(roi.color, 0.25), background: cssWithAlpha(roi.color, 0.03) }"
+          :style="{
+            borderColor: cssWithAlpha(roi.color, 0.25),
+            background: cssWithAlpha(roi.color, 0.03),
+          }"
         >
           <div class="flex items-center justify-between mb-1">
             <label class="flex items-center gap-1.5 min-w-0 cursor-pointer select-none">
@@ -96,84 +103,124 @@
             </div>
           </div>
           <span class="text-base-content">{{
-            roi.type === 'freehand' ? $t('vizworkbench.roi.lasso') : $t('vizworkbench.roi.rectangle')
+            roi.type === 'freehand'
+              ? $t('vizworkbench.roi.lasso')
+              : $t('vizworkbench.roi.rectangle')
           }}</span>
           <div v-if="roi.stats" class="mt-1 space-y-0.5 font-mono text-base-content">
             <div class="flex justify-between">
-              <span>{{ $t('vizworkbench.roi.pixels') }}</span><span>{{ roi.stats.pixelCount }}</span>
+              <span>{{ $t('vizworkbench.roi.pixels') }}</span
+              ><span>{{ roi.stats.pixelCount }}</span>
             </div>
             <div class="flex justify-between">
-              <span>{{ $t('vizworkbench.roi.mean') }}</span><span>{{ fmt(roi.stats.mean) }}</span>
+              <span>{{ $t('vizworkbench.roi.mean') }}</span
+              ><span>{{ fmt(roi.stats.mean) }}</span>
             </div>
             <div class="flex justify-between">
-              <span>{{ $t('vizworkbench.roi.std') }}</span><span>{{ fmt(roi.stats.std) }}</span>
+              <span>{{ $t('vizworkbench.roi.std') }}</span
+              ><span>{{ fmt(roi.stats.std) }}</span>
             </div>
             <div class="flex justify-between">
-              <span>{{ $t('vizworkbench.roi.min') }}</span><span>{{ fmt(roi.stats.min) }}</span>
+              <span>{{ $t('vizworkbench.roi.min') }}</span
+              ><span>{{ fmt(roi.stats.min) }}</span>
             </div>
             <div class="flex justify-between">
-              <span>{{ $t('vizworkbench.roi.max') }}</span><span>{{ fmt(roi.stats.max) }}</span>
+              <span>{{ $t('vizworkbench.roi.max') }}</span
+              ><span>{{ fmt(roi.stats.max) }}</span>
             </div>
           </div>
         </div>
       </div>
       <!-- 勾选 = 主图高亮 + 纳入导出掩膜（不过滤图像） -->
       <div class="flex gap-1 mt-2">
-        <button class="btn btn-ghost btn-sm kawaru-text-75" @click="$emit('select-all')">
+        <button class="btn btn-ghost btn-sm kawaru-text-62" @click="$emit('select-all')">
           {{ $t('vizworkbench.mask.all') }}
         </button>
-        <button class="btn btn-ghost btn-sm kawaru-text-75" @click="$emit('deselect-all')">
+        <button class="btn btn-ghost btn-sm kawaru-text-62" @click="$emit('deselect-all')">
           {{ $t('vizworkbench.roi.deselectAll') }}
         </button>
       </div>
       <div class="text-base-content/60 mt-1">{{ $t('vizworkbench.roi.selectionHint') }}</div>
     </div>
 
-    <!-- Imported mask（文件导入：独立于手绘 ROI，虚线边框区分；trash = 清除导入） -->
-    <div v-if="importedMask">
+    <!-- Imported masks（文件导入：独立于手绘 ROI，虚线边框区分；勾选 = 应用过滤，
+         trash = 移除该导入；每个掩膜同时也是比较面板里的可选区域） -->
+    <div v-if="importedMasks?.length">
       <div class="font-semibold text-base-content mb-2 tracking-wide">
         {{ $t('vizworkbench.roi.importedMask') }}
+        <span class="font-mono font-normal text-base-content/60"
+          >{{ activeCount }}/{{ importedMasks.length }}</span
+        >
       </div>
-      <div class="rounded-lg border border-dashed border-base-content/30 bg-base-content/[0.03] p-2">
-        <div class="flex items-center justify-between mb-1 gap-2">
-          <span
-            class="font-semibold text-base-content truncate"
-            :title="importedMask.name"
-          >
-            {{ importedMask.name }}
-          </span>
-          <button
-            class="text-base-content hover:text-error shrink-0"
-            :title="$t('vizworkbench.mask.clearImport')"
-            @click="$emit('clearImportedMask')"
-          >
-            <SvgIcon type="trash" />
-          </button>
-        </div>
-        <span class="text-base-content/70 uppercase">{{ importedMask.format }}</span>
-        <div class="mt-1 space-y-0.5 font-mono text-base-content">
-          <div class="flex justify-between">
-            <span>{{ $t('vizworkbench.roi.pixels') }}</span><span>{{ importedMask.pixelCount }}</span>
+      <div class="space-y-2 max-h-64 overflow-y-auto">
+        <div
+          v-for="m in importedMasks"
+          :key="m.id"
+          class="rounded-lg border border-dashed p-2"
+          :style="{
+            borderColor: cssWithAlpha(m.color, 0.4),
+            background: cssWithAlpha(m.color, 0.03),
+          }"
+        >
+          <div class="flex items-center justify-between mb-1 gap-2">
+            <label
+              class="flex items-center gap-1.5 min-w-0 cursor-pointer select-none"
+              :title="
+                m.active
+                  ? $t('vizworkbench.mask.showOriginalHint')
+                  : $t('vizworkbench.mask.applyMaskHint')
+              "
+            >
+              <input
+                type="checkbox"
+                class="checkbox checkbox-xs checkbox-primary shrink-0"
+                :checked="m.active"
+                @change="$emit('toggle-imported-mask', m.id)"
+              />
+              <span class="font-semibold truncate" :style="{ color: m.color }" :title="m.name">
+                {{ m.name }}
+              </span>
+            </label>
+            <button
+              class="text-base-content hover:text-error shrink-0"
+              :title="$t('vizworkbench.mask.removeImport')"
+              @click="$emit('remove-imported-mask', m.id)"
+            >
+              <SvgIcon type="trash" />
+            </button>
           </div>
-          <template v-if="importedMask.stats">
+          <span class="text-base-content/70 uppercase" :class="{ 'opacity-50': !m.active }">{{
+            m.format
+          }}</span>
+          <div class="mt-1 space-y-0.5 font-mono text-base-content">
             <div class="flex justify-between">
-              <span>{{ $t('vizworkbench.roi.mean') }}</span><span>{{ fmt(importedMask.stats.mean) }}</span>
+              <span>{{ $t('vizworkbench.roi.pixels') }}</span
+              ><span>{{ m.summary.pixelCount }}</span>
             </div>
-            <div class="flex justify-between">
-              <span>{{ $t('vizworkbench.roi.std') }}</span><span>{{ fmt(importedMask.stats.std) }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span>{{ $t('vizworkbench.roi.min') }}</span><span>{{ fmt(importedMask.stats.min) }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span>{{ $t('vizworkbench.roi.max') }}</span><span>{{ fmt(importedMask.stats.max) }}</span>
-            </div>
-          </template>
+            <template v-if="m.summary.stats">
+              <div class="flex justify-between">
+                <span>{{ $t('vizworkbench.roi.mean') }}</span
+                ><span>{{ fmt(m.summary.stats.mean) }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>{{ $t('vizworkbench.roi.std') }}</span
+                ><span>{{ fmt(m.summary.stats.std) }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>{{ $t('vizworkbench.roi.min') }}</span
+                ><span>{{ fmt(m.summary.stats.min) }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>{{ $t('vizworkbench.roi.max') }}</span
+                ><span>{{ fmt(m.summary.stats.max) }}</span>
+              </div>
+            </template>
+          </div>
         </div>
       </div>
     </div>
 
-    <div v-if="!rois.length && !importedMask && !selectedTool" class="text-base-content">
+    <div v-if="!rois.length && !importedMasks?.length && !selectedTool" class="text-base-content">
       {{ $t('vizworkbench.roi.empty') }}
     </div>
   </div>
@@ -184,7 +231,7 @@ import { computed } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 import { cssWithAlpha } from '@/features/vizworkbench/utils/regionPalette'
 import type { ConfirmedROI } from '@/features/vizworkbench/composables/useROI'
-import type { ImportedMaskSummary } from '@/features/vizworkbench/utils/maskExport'
+import type { ImportedMask } from '@/features/vizworkbench/composables/useImportedMasks'
 
 const props = defineProps<{
   selectedTool: string | null
@@ -194,8 +241,8 @@ const props = defineProps<{
   viewingRoi: boolean
   /** 共享选中集（null = 全选）：勾选驱动主图高亮 + 导出掩膜 */
   selectedRoiIds: Set<string> | null
-  /** 文件导入的掩膜摘要（独立于 rois，只读展示；trash 清除导入） */
-  importedMask?: ImportedMaskSummary | null
+  /** 文件导入的掩膜列表（独立于 rois；勾选 = 应用过滤，trash = 移除导入） */
+  importedMasks?: ImportedMask[]
 }>()
 
 defineEmits<{
@@ -204,7 +251,8 @@ defineEmits<{
   (e: 'cancel'): void
   (e: 'delete', id: string): void
   (e: 'clearAll'): void
-  (e: 'clearImportedMask'): void
+  (e: 'remove-imported-mask', id: string): void
+  (e: 'toggle-imported-mask', id: string): void
   (e: 'update:viewingRoi', v: boolean): void
   (e: 'toggle-selection', id: string): void
   (e: 'select-all'): void
@@ -218,6 +266,9 @@ function isSelected(id: string): boolean {
 // Count by filtering rois (never Set.size) — the set can hold ids of deleted
 // ROIs, which must not inflate the count.
 const selectedCount = computed(() => props.rois.filter((r) => isSelected(r.id)).length)
+
+// 正在应用过滤（active）的导入掩膜数，用于「x/y」计数展示。
+const activeCount = computed(() => props.importedMasks?.filter((m) => m.active).length ?? 0)
 
 function fmt(v: number): string {
   if (v === 0) return '0'

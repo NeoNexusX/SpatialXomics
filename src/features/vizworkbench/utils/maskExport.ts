@@ -21,6 +21,7 @@
  */
 
 import { createSHA256 } from 'hash-wasm'
+import { downloadBlob } from '@/shared/utils/download'
 import {
   Uint8ArrayReader,
   Uint8ArrayWriter,
@@ -75,17 +76,6 @@ export interface MaskImportOptions {
 }
 
 // ── helpers ──────────────────────────────────────────────────────
-
-function triggerDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  // Defer revocation: revoking synchronously can cancel the download in some
-  // browsers before it has read the blob.
-  setTimeout(() => URL.revokeObjectURL(url), 0)
-}
 
 /** Sanitise a label for use as a filename component. */
 function safeFilename(label: string): string {
@@ -657,5 +647,5 @@ export async function exportMask(
   meta: MaskExportMeta,
 ): Promise<void> {
   const { bytes, filename, mime } = await buildMaskExport(mask, format, meta)
-  triggerDownload(new Blob([bytes], { type: mime }), filename)
+  downloadBlob(new Blob([bytes], { type: mime }), filename)
 }

@@ -28,7 +28,7 @@ npm run dev
 | Zarr | In-repository Zarr v3/OSS Range reader with `zstddec`; supports MassFlow layouts 1.0 and 1.1 |
 | PubChem | Compound lookup for annotation rows |
 | Clustering | Backend-generated UMAP; browser-side KMeans using `ml-kmeans` over the UMAP embedding |
-| Annotation scoring | `isotopic-distribution` for isotope patterns, `mf-utilities` + `chemical-elements` for formula parsing — browser-side mass × isotope composite evidence score with target-decoy FDR |
+| Annotation | No third-party dependencies: element and adduct mass tables live in `src/shared/chem`; feature matching, scoring (mass / adduct fit / spatial: METASPACE chaos plus same-molecule co-localization) and target-decoy FDR run in the browser (worker) |
 | Other | `i18n-iso-countries` for country/region data |
 | Docs and tests | VitePress, Vitest, Playwright |
 | Quality | ESLint 9 flat config, Prettier |

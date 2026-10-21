@@ -17,15 +17,15 @@ Dataset cards show one of two actions:
 
 When you click **Explore > Generate**, the platform creates a task and redirects you to the [Workspace](./workspace) to track progress.
 
-![Explore button](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909211924161.jpg_view)
+![Explore button](https://cdn.neonexus.top/docs/20260909211924161.jpg_view)
 
-![Generate dialog](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909212549240.jpg_view)
+![Generate dialog](https://cdn.neonexus.top/docs/20260909212549240.jpg_view)
 
 ## Page Layout
 
 The visualization page has five main areas:
 
-![Page layout](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260911150203309.jpg_view)
+![Page layout](https://cdn.neonexus.top/docs/20260911150203309.jpg_view)
 
 1. **Ion intensity image** (center) — spatial heatmap of the selected m/z
 2. **Pixel spectrum** (bottom) — mean spectrum or per-pixel spectrum
@@ -37,7 +37,11 @@ The visualization page has five main areas:
 
 ### Info
 
-Shows dataset metadata: Polarity, Analyzer, Ionisation Source, Pixel Size, Spectrum Mode, Storage Mode.
+Shows dataset metadata: Polarity, Analyzer, Ionisation Source, Pixel Size, Resolving Power, Matrix, Matrix Application, Solvent, Spectrum Mode, Storage Mode.
+
+Below it, **Biological & Sample Info** shows the sample details entered at upload: organism, organism part, condition, growth conditions, stabilization, and tissue modification.
+
+These come from the source dataset, so they also appear for preprocessed results. Fields left empty at upload are not shown.
 
 ### Display Range
 
@@ -93,13 +97,13 @@ Export ROI masks and KMeans clusters as a binary mask file, or import one and us
 | **Apply Mask / Show Original** | Re-apply the imported mask, or suspend it and show the full image (appears after importing a mask). |
 | **Clear imported mask** | Remove the imported mask. |
 
-![Mask import & export](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008182213629.jpg_view)
+![Mask import & export](https://cdn.neonexus.top/docs/20261008182213629.jpg_view)
 
 ## Ion Intensity Image
 
 Displays the spatial intensity distribution for the selected m/z value.
 
-![Ion image](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260911153144287.jpg_view)
+![Ion image](https://cdn.neonexus.top/docs/20260911153144287.jpg_view)
 
 ### Interaction
 
@@ -117,7 +121,7 @@ Displays the spatial intensity distribution for the selected m/z value.
 | **m/z search** | Continuous mode only. Enter a target m/z and press Enter or click Search to jump to the nearest peak. |
 | **Tolerance ±** | m/z matching tolerance. Default 0.0001, range 1e-8–1. |
 | **Colormap** | Viridis, Inferno (default), Magma, Hot, Gray. |
-| **Intensity Scale** | Linear / Log / TIC norm. TIC norm divides each pixel by its total ion current and needs pre-computed stats on Continuous data. |
+| **Intensity Scale** | Linear / Log / TIC. TIC normalization divides each pixel by its total ion current and needs pre-computed stats on Continuous data. |
 | **Reset** | Restore all controls to defaults. |
 | **PNG** | Export the current image with a transparent background. |
 
@@ -134,7 +138,7 @@ Continuous data can overlay several ions at once as separate colour channels. En
 - Per-channel controls cover visibility, colour, and opacity.
 - Display Range, Colormap, and Gamma do not apply while an overlay is active; their controls are greyed out.
 
-![Multi-ion overlay](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008180949956.jpg_view)
+![Multi-ion overlay](https://cdn.neonexus.top/docs/20261008180949956.jpg_view)
 
 ## Pixel Spectrum
 
@@ -166,110 +170,109 @@ Set a minimum detection rate and an intensity threshold, then click **Compare**.
 
 1. Open the **Visualization** section in the right sidebar and enable KMeans.
 
-   ![KMeans controls](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914160650461.jpg_view)
+   ![KMeans controls](https://cdn.neonexus.top/docs/20260914160650461.jpg_view)
 
 2. Choose the number of clusters.
 
-   ![Cluster result](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914160834781.jpg_view)
+   ![Cluster result](https://cdn.neonexus.top/docs/20260914160834781.jpg_view)
 
-   ![Cluster overlay](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914160853673.jpg_view)
+   ![Cluster overlay](https://cdn.neonexus.top/docs/20260914160853673.jpg_view)
 
 3. Select two clusters to compare.
 
-   ![Comparison result](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914161105137.jpg_view)
+   ![Comparison result](https://cdn.neonexus.top/docs/20260914161105137.jpg_view)
 
 ### Using ROIs
 
 1. Click **Rect** in the ROI section, draw a region, then click **Confirm** to create ROI 1.
 
-   ![ROI 1](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914161347733.jpg_view)
+   ![ROI 1](https://cdn.neonexus.top/docs/20260914161347733.jpg_view)
 
 2. Click **ROI only** to reset the view, then draw another region to create ROI 2.
 
-   ![ROI 2](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914161613765.jpg_view)
+   ![ROI 2](https://cdn.neonexus.top/docs/20260914161613765.jpg_view)
 
 3. Select both ROIs for comparison.
 
-   ![ROI comparison](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914161809308.jpg_view)
+   ![ROI comparison](https://cdn.neonexus.top/docs/20260914161809308.jpg_view)
 
 ## Annotation Panel
 
-The collapsible left-side panel imports an external metabolite/lipid annotation CSV, matches each row's experimental m/z against the current average spectrum, and lets you jump to matched peaks.
-
-![5f382f614daf4e39f36753a53bae4a89](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261009150600954.jpg_view)
+Choose an annotation CSV in the collapsible left-side panel, then click **Start annotation**. The panel matches the peaks against theoretical adduct ions from that file, scores the matches, estimates the FDR, and adds spatial scores for the top-ranked annotations in the background. One table row is one adduct ion: different adduct ions of the same molecule are separate rows that link to each other.
 
 ::: warning Prerequisites
-Annotation matching requires **Continuous + Centroid** data. A warning appears if the spectrum mode is not supported.
+Annotation requires aligned **centroid** data (continuous storage) and a mean spectrum matching the m/z axis. The database is either a user-provided CSV or one of the platform's reference databases (see [Database](./database)), imported directly from the panel.
 :::
 
-### Import
+### Choose the Database CSV and Peaks
 
-Click **Import CSV** to select a file, or drag and drop a CSV onto the panel. Large tables remain responsive.
+Click **Choose annotation CSV** to open a local file, or open the **Platform** dropdown to pick one of the platform's reference databases (see [Database](./database)). On Chromium browsers a Save dialog opens **defaulting to the system Downloads folder** (one click on Save; the button shows the download progress), the full CSV is saved as a local file, and then imported; importing again — even after clearing the current database — reuses the saved file without downloading it again, and only re-fetches when the file is deleted or the server copy changes. Firefox and Safari do not support file handles, so they still download and import in one step. Either way the database is read and saved in the current browser without being uploaded to a server. The panel can restore the last user-selected database, clear it, or open a replacement.
 
-CSV format requirements:
+- The database template is `ID,Name,Formula,InChI,Mass`, one compound per row. `Formula` is required; `Mass` is the monoisotopic neutral mass in Da and is calculated from the formula when missing. Other columns are optional. Compounds sharing a formula are grouped as candidates.
+- An optional `Origin` column labels where a compound comes from: `endogenous`, `expected` (expected endogenous), `unknown` or `exogenous`. Candidates of a formula are listed in that order, keeping the file order within a level, and the first one is the displayed name. Origin only sets this order and the labels; it is not part of the total score and does not change q-values. Without the column, candidates keep the file order.
+- **Encoding**: UTF-8 (with or without BOM) and GBK/GB18030; the delimiter is detected automatically.
+- Peaks come directly from the dataset's mean spectrum. Zero-intensity points are excluded; the slider drops the weakest 0–99% by intensity rank (default 0%). The percentage counts peaks and takes effect when the slider is released. Every retained peak has its original m/z-axis index for ion images and navigation.
+- Click **Start** beside **Spatial scoring** to run annotation. Opening the panel, returning to a result, or changing the database, peak filter, tolerance, spatial percentage, score weights or adducts never starts matching automatically. Changed conditions clear the previous results and require another click. Each result remembers only its settings.
 
-- **Encoding**: UTF-8 (with or without BOM); GBK/GB18030 files are detected automatically. Delimiter auto-detected (comma, semicolon, tab, or `|`).
-- **m/z column** (required): recognized names include `Target m/z`, `Exp. m/z`, `Tar. m/z`, `mz`, `m/z`, `experimental_mz`, `mass`, etc. Matching tolerates case and spacing variants.
-- **Candidate names**: merged from `Candidate_1` through `Candidate_N` (or a single `Candidate` column). Empty values are dropped.
-- **Optional columns**: `formula_ion` / `formula` (molecular formula), `Ion type` / `adduct` (adduct type).
+### Conditions
 
-### Tolerance
+The conditions card summarizes the settings used and collapses to a one-line summary after the first result.
 
-- Switch between **ppm** and **Da** units using the dropdown.
-- Matching re-runs automatically when the value changes.
+- **Dataset**: polarity, ion source, matrix, analyzer and solvent from the dataset metadata. If the polarity is missing, choose it here.
+- **Tolerance**: when left empty, the default comes from the analyzer (Orbitrap 5 ppm, FTICR 3 ppm, timsTOF/Q-TOF 10 ppm, TOF 20 ppm, 10 ppm if unknown). You can enter your own value in ppm or Da.
+- **Score weights**: three inputs for mass : adduct fit : spatial, each at least 0.1 with decimals allowed; the three must add up to 10, defaulting to 6 : 1 : 3. Each total-score weight is its value divided by 10 (0.6 / 0.1 / 0.3 by default). Entries outside 0.1–9.8 are ignored; clearing an input restores its default, and the button beside the inputs restores 6 : 1 : 3. While the sum is not 10, the inputs are outlined in red and annotation cannot start. Click **Start** to rerun after changes; q-values are re-estimated from the new total scores.
+- **Adducts**: filtered by polarity, then each adduct gets a fit (0–1) from the ion source, matrix and solvent additives; adducts with fit 0 are not enabled. Expand the multi-select list to check or uncheck individual adducts. Automatic and manual selections retain their colors; each row shows its fit, with mass shift and conditions available on hover.
 
-### Filtering & Search
+| Adduct | Default fit | Conditions |
+| --- | --- | --- |
+| [M+H]⁺ | 1.0 | Any ion source |
+| [M+Na]⁺ | 0.8 | 0.9 for MALDI/LDI; 1.0 with a sodium salt in the solvent |
+| [M+K]⁺ | 0.6 | 0.9 for MALDI/LDI |
+| [M+NH₄]⁺ | — | 0.8 with ammonium in the solvent |
+| [M+Li]⁺ | — | 0.9 with lithium in the solvent |
+| [M+Ag]⁺ | — | 1.0 with a silver-nanoparticle matrix or silver salt in the solvent |
+| [M−H]⁻ | 1.0 | Any ion source |
+| [M+Cl]⁻ | 0.7 | 0.8 for ESI-type sources; 0.9 with chloride in the solvent; 1.0 with NEDC matrix |
+| [M+HCOO]⁻ | — | 0.8 with formate in the solvent |
+| [M+CH₃COO]⁻ | — | 0.8 with acetate in the solvent |
 
-- **Status badges** (top) filter by All, Matched, or Unmatched rows.
-- **Adduct** and **Formula** dropdowns narrow results by metadata; the **L4** chip restricts the table to Level-4 rows.
-- **Search box** filters by name, formula, or m/z keywords.
+[M+H−H₂O]⁺, [M−H−H₂O]⁻ and similar adducts are never enabled automatically; turn them on manually.
 
-Rows whose adduct or formula implies the opposite polarity, or whose m/z falls outside the spectrum range, are dropped before matching.
+### Scoring & FDR
 
-### Sorting
+The total score of a row is a weighted sum of three parts. The weights can be changed under **Score weights** in Conditions (above); the table lists the defaults, and the detail card's score breakdown shows the weights used by the current run:
 
-Use the **Sort by** dropdown, then click the arrow to toggle ascending/descending:
+| Part | Default weight | Meaning |
+| --- | --- | --- |
+| Mass | 0.6 | Higher for smaller mass errors (1 at zero error, about 0.14 at the tolerance edge) |
+| Adduct fit | 0.1 | How well the adduct suits the acquisition conditions |
+| Spatial | 0.3 | 0.2 × spatial chaos + 0.8 × same-molecule co-localization (below) |
 
-| Sort Key | What It Sorts By |
-|---|---|
-| Name | Compound name |
-| Exp. m/z | Target m/z value |
-| Mass Difference | Mass error (Δ) |
-| Intensity | Average intensity at the matched peak |
-| Composite score | Evidence score (see below), best first |
-| Adduct score | Multi-adduct bonus (see below), best first |
-| FDR | Target-decoy q-value, most reliable first |
+The FDR is estimated with a target-decoy approach: each formula is also paired with chemically implausible adducts (such as [M+Pt]⁺) as decoys, which go through the same matching and scoring. Each row gets a q-value; smaller is more credible.
 
-### Evidence Scoring & Confidence Levels
+### Spatial Scoring
 
-Exact-mass matching alone corresponds to **Level 5** of the MSI confidence hierarchy (mass only). When the CSV provides `formula_ion`, every matched row additionally receives browser-computed evidence scores used for sorting and filtering:
+By default, the panel loads ion images for every matched molecule group. In **Conditions**, **Spatial scoring** is a percentage, defaulting to 100%. For example, 20% selects the initial top 20% of matches (rounded up) and scores every ion in their molecule groups; 0% skips spatial scoring. After changes, click **Start** on the right to run annotation; settings are remembered per result page. It computes two parts:
 
-| Metric | Meaning | How to Use |
-|---|---|---|
-| **Composite score** | Combined assessment of mass error and theoretical isotope-pattern fit | Primary sort key; higher is more credible |
-| **Confidence level** | **L4** = exact mass + isotope support; **L5** = exact mass only | Badge in each row; the L4 chip shows only Level-4 rows |
-| **FDR** | Target-decoy estimated false-discovery rate (q-value) | Smaller is better; sort by FDR |
-| **Adduct score** | Bonus when one molecule is detected as a group of ≥2 adduct ions (e.g. [M+H]⁺ together with [M+Na]⁺) | **M×n** badge in the row; hover card links to group members |
+- **Spatial chaos** (METASPACE's level-set method): coherent, blob-like distributions score high; scattered noise scores low. Every row in the selected scope gets it, with or without other adducts.
+- **Same-molecule co-localization**: the panel computes Pearson correlation r between the molecule's adduct ion images, using pixels where either image is non-zero, and takes the largest correlation strictly greater than 0.1. Correlations at or below 0.1 contribute 0. The hover card hides sibling-ion rows with r < 0.1 and hides the section if no rows remain. Spatial = 0.2 × chaos + 0.8 × coloc. Missing or unavailable co-localization counts as 0, so a molecule with a single detected adduct has a maximum spatial score of 0.2.
 
-### Spatial Evidence (MSM)
+Scores update in place while this runs; when it finishes, rows are re-ranked and q-values are updated. Click **re-rank now** to re-rank earlier. By default all target and decoy groups are scored; with a limit, decoys use the same initial score threshold. Unscheduled, pending or failed spatial scores count as 0 and add nothing to the total.
 
-For the top 200 rows by composite score, the panel automatically loads ion images of the theoretical isotope peaks and computes the pySM (Palmer et al., *Nat Methods* 2017) **MSM score = chaos × spatial × spectral**, assessing annotation quality from image structure, isotope co-localization, and pattern consistency. The score appears in the hover card and the exported CSV as a review aid; it does not affect the main ranking.
+### Table & Detail Card
 
-Multi-adduct groups additionally undergo spatial confirmation via co-localization correlation of their member images: passing groups keep the bonus and are marked confirmed; failing groups have the bonus revoked (composite divided back, `adductScore` zeroed, the panel re-sorts, the badge turns warning-colored, and the export flags it with the `adductUnconfirmed` column).
+- Each row has two lines: the name (+N means N more candidate names for the same formula) and the q-value, colored by level (green ≤10%, yellow ≤20%, gray otherwise); then the adduct, observed m/z and mass error. Hover the q-value to see the total score.
+- When the database has an `Origin` column, the small label after the name shows the origin of the displayed name: Endo, Expected or Exo (unknown is not shown). Exo means every candidate of that formula is exogenous.
+- The small chips at the end of the second line are other adduct ions of the same molecule; click one to jump to its row. Hovering a row lightly highlights the other rows of the same molecule. The stacked layers icon indicates multiple annotation results for the same peak.
+- **Click a row** to switch the ion image to its m/z and highlight the spectrum peak.
+- **Hover a row** for about 1 s to open the detail card (it can be pinned). From top to bottom: q-value, total score with rank, and mass error; a score table listing raw scores, total-score weights and contributions for mass, adduct fit, spatial, and its chaos and co-localization components; observed and theoretical m/z to 6 decimal places and intensity sit immediately below the total; the other adduct ions of the molecule with their spatial r against this ion, each with a circular-arrow jump button, with a primary-color "Only this" button beside the section heading; other annotations on the same peak, ordered by origin and then rank, also with circular-arrow jump buttons; candidate compounds with their origin labels and database IDs (well-known IDs such as HMDB open the database page), InChI copy and PubChem lookup. Uncomputed spatial scores and their total-score contributions both read 0; uncomputed chaos and co-localization read "–".
+- **q-value levels** (≤5% / ≤10% / ≤20% / All) sit above the table, each with its row count.
+- **Filter**: the button next to the search box opens an adduct multi-select list, rows with sibling ions, and sorting (total score by default, q-value, spatial score, mass error, m/z, intensity, or origin with endogenous first and rank within a level, with a reverse button). Select multiple adducts to keep any of those ions, or clear the selection to show all. The button shows how many of these differ from the defaults. Search covers name, formula and m/z; the detail card also offers "Show only this molecule".
 
-### Table Interaction
+Click **PubChem** to open a lookup dialog that searches PubChem by compound name and shows the structure, CID, IUPAC name, SMILES, and InChIKey, with copy buttons and a link to the PubChem page.
 
-- Two compact columns: **Annotation** (compound name + confidence badge) and **Exp. m/z**.
-- **Hover card**: matched m/z, mass error, and average intensity, with the key scores (composite, confidence level, FDR, MSM with its readiness progress) up front and detailed sub-scores folded away; plus **isotope-peak jump** buttons (M+1, M+2, … jump to the nearest spectrum peak of the theoretical envelope), an **adduct-group** badge (M×n — click a member chip to select that row), and a **PubChem** lookup button.
+<img src="https://cdn.neonexus.top/docs/20261009151838139.jpg_view" alt="image-20261009151838061" style="zoom: 50%;" />
 
-<img src="https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261009151817281.jpg_view" alt="image-20261009151817209" style="zoom:80%;" />
+### Export
 
-- **Click a matched row** to jump to that m/z, refreshing the ion image and highlighting the spectrum peak.
-- Click **PubChem** to open a lookup dialog that searches PubChem by compound name and shows the structure, CID, IUPAC name, SMILES, and InChIKey, with copy buttons and a link to the PubChem page.
-
-<img src="https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261009151838139.jpg_view" alt="image-20261009151838061" style="zoom: 50%;" />
-
-### Export & Clear
-
-- **Download** button exports matched rows as CSV, including the evidence-score columns; Chaos/Coloc when spatial scoring has run, and Adduct Score / Adduct Peers / Adduct Corr when multi-adduct groups formed.
-- **Trash** button clears the imported data.
+The **Download** button exports the current table (filters and sort applied) as `<runId>_annotations.csv`: one row per ion with the origin of the displayed name (Origin), the candidate compounds and IDs, all scores, the q-value, the other adduct ions of the same molecule (with r), and other annotations on the same peak.

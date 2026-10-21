@@ -59,7 +59,10 @@ it('keeps statistics aligned with the displayed spectrum', async () => {
   expect(wrapper.text()).toMatch(/Peaks:\s*0/)
   expect(wrapper.text()).toMatch(/Intensity:\s*--/)
 
-  await wrapper.findAll('button').find((button) => button.text() === 'Mean')!.trigger('click')
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === 'Mean')!
+    .trigger('click')
   expect(wrapper.text()).toMatch(/Peaks:\s*4/)
   expect(wrapper.text()).toContain('0 – 999')
   wrapper.unmount()

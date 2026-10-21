@@ -24,6 +24,7 @@ import type enCollections from './locales/en/collections.json'
 import type enWorkspace from './locales/en/workspace.json'
 import type enVizworkbench from './locales/en/vizworkbench.json'
 import type enHome from './locales/en/home.json'
+import type enDatabases from './locales/en/databases.json'
 
 /**
  * 支持的界面语言。
@@ -51,7 +52,8 @@ export type MessageSchema = typeof enCommon &
   typeof enCollections &
   typeof enWorkspace &
   typeof enVizworkbench &
-  typeof enHome
+  typeof enHome &
+  typeof enDatabases
 
 declare module 'vue-i18n' {
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- 模块增强的固定写法，接口体必须为空

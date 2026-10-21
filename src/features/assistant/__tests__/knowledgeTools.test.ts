@@ -244,10 +244,9 @@ describe('massSearchLipidIndex', () => {
     expect(Math.abs(hits[0]![9])).toBeLessThan(0.01)
   })
 
-  it('ADDUCTS covers every adduct the panel scoring table rewards', () => {
-    // 检索表缺项时，模型会对着面板刚给了多加合物加分（M×n）的 m/z 报
-    // 「无候选」；[M+Li]+ 显式请求还会直接抛 Unknown adduct。
-    // 对齐集 = annotationScoring.ADDUCT_RULES ∪ python PRIMARY_ADDUCT_RULES_*
+  it('ADDUCTS covers the common adducts the annotation panel uses', () => {
+    // 检索表缺项时，模型会对着面板里检出的加合离子报「无候选」；[M+Li]+ 显式请求还会
+    // 直接抛 Unknown adduct。数值来自共享加合物表（shared/chem/adducts.ts）
     expect(ADDUCTS.positive['[M+Li]+']).toBeCloseTo(7.015455, 5)
     expect(ADDUCTS.negative['[M-2H+Na]-']).toBeCloseTo(20.974666, 5)
     expect(ADDUCTS.negative['[M-2H+K]-']).toBeCloseTo(36.948606, 5)

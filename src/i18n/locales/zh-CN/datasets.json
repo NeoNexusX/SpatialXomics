@@ -9,7 +9,6 @@
       "size": "大小",
       "fileSize": "文件大小",
       "submittedBy": "提交者",
-      "owner": "拥有者",
       "filename": "文件名"
     },
     "vocab": {
@@ -92,7 +91,6 @@
       "sortLargest": "文件大小（从大到小）",
       "sortSmallest": "文件大小（从小到大）",
       "submitterPlaceholder": "提交者用户名",
-      "ownerPlaceholder": "拥有者用户名",
       "any": "不限"
     },
     "list": {

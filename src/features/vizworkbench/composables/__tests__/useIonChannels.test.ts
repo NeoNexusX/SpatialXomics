@@ -108,7 +108,9 @@ describe('useIonChannels', () => {
     await flush()
 
     expect(c.channels.value).toHaveLength(1)
-    expect(c.channels.value[0]!.error).toBe('boom')
+    // 错误只保留面向用户的一句话（本地化），不泄漏底层 err.message
+    expect(c.channels.value[0]!.error).toBeTruthy()
+    expect(c.channels.value[0]!.error).not.toBe('boom')
     expect(c.channels.value[0]!.loading).toBe(false)
   })
 

@@ -106,8 +106,8 @@ function getOverlayEl(): HTMLElement | null {
 }
 
 function getScale() {
-  const canvasEl = getCoordEl()       // canvas container (actual image draw area)
-  const overlayEl = getOverlayEl()    // outer div (ROIOverlay covers this)
+  const canvasEl = getCoordEl() // canvas container (actual image draw area)
+  const overlayEl = getOverlayEl() // outer div (ROIOverlay covers this)
   if (!canvasEl || !overlayEl || !props.imageWidth || !props.imageHeight)
     return { ox: 0, oy: 0, scale: 1, W: 0, H: 0 }
 
@@ -146,10 +146,7 @@ function pointInPolygon(p: ROIPoint, path: ROIPoint[]): boolean {
   for (let i = 0, j = path.length - 1; i < path.length; j = i++) {
     const a = path[i]!,
       b = path[j]!
-    if (
-      a.y > p.y !== b.y > p.y &&
-      p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x
-    ) {
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) {
       inside = !inside
     }
   }
@@ -315,7 +312,10 @@ function onDown(e: MouseEvent) {
     const startP = p
     const startPath = freePath.value.map((pt) => ({ ...pt }))
     // Keep the whole bounding box inside the image while translating
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity
     for (const pt of startPath) {
       if (pt.x < minX) minX = pt.x
       if (pt.y < minY) minY = pt.y

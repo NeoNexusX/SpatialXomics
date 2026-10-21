@@ -171,7 +171,11 @@ export const MALDI_MATRIX_APPLICATIONS = [
   'Other',
 ] as const
 
-/** 溶剂 */
+/**
+ * 溶剂（含常见添加剂与掺杂盐）。注释的加合物规则按这里的每一项判断溶剂提供了哪些离子，
+ * 新增一项要同步 vizworkbench/utils/annotation/acquisitionContext.ts 的 SOLVENT_ADDITIVES
+ * （那张表按本词表声明类型，漏了会编译报错）。
+ */
 export const SOLVENTS = [
   'Water',
   'Acetonitrile (ACN)',
@@ -179,9 +183,18 @@ export const SOLVENTS = [
   'Ethanol',
   'Isopropanol (IPA)',
   'Acetone',
+  'Dimethylformamide (DMF)',
+  'Chloroform',
   'Formic acid',
+  'Acetic acid',
   'Trifluoroacetic acid (TFA)',
   'Ammonium hydroxide',
+  'Ammonium acetate',
+  'Ammonium formate',
+  'Ammonium fluoride',
+  'Lithium chloride (LiCl)',
+  'Sodium acetate',
+  'Silver nitrate (AgNO3)',
   'Other',
 ] as const
 
@@ -189,7 +202,6 @@ export function createDefaultDatasetFilters() {
   return {
     filename: '',
     experiment_type: '',
-    username: '',
     organism: '',
     organism_part: '',
     condition: '',
