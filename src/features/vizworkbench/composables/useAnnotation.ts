@@ -60,6 +60,7 @@ import {
 } from '@/features/vizworkbench/utils/annotation/sharedResults'
 import { resolveTolerance } from '@/features/vizworkbench/utils/annotation/tolerance'
 import type { Acquisition } from '@/features/vizworkbench/types/acquisition'
+import type { DatabaseCsvImport } from '@/features/databases/types/database'
 import type {
   AdductOverride,
   AnnotationDbInfo,
@@ -299,6 +300,10 @@ export function useAnnotation(opts: {
   /** 库每换一次加一，用来判断要不要重跑 */
   const dbRevision = ref(0)
   const importingDb = ref(false)
+  /** 本次导入来自哪里：文件 / 平台库；null = 没有进行中的导入（按钮各显各的 spinner） */
+  const importingKind = ref<'file' | 'platform' | null>(null)
+  /** 平台库整库 CSV 的下载进度（字节）；仅在平台导入的下载阶段非 null */
+  const platformFetch = shallowRef<{ loaded: number; total: number } | null>(null)
   /** 最近一次换库的请求编号：晚到的旧请求结果直接丢弃 */
   let dbRequest = 0
   /** 恢复与导入排队依次进行：worker 按收到的顺序换库，界面按同一顺序更新，两边的当前库一致 */
@@ -356,25 +361,64 @@ export function useAnnotation(opts: {
     return t('vizworkbench.annotation.readFailed')
   }
 
+  /** 解析、换上并记住一个库 CSV（本地文件与平台库导入共用尾段） */
+  async function loadAndRememberDb(fileName: string, text: string): Promise<void> {
+    const info = await engine.loadDb(fileName, text)
+    if (disposed) return
+    dbRequest++
+    applyDb(info)
+    showToast(
+      t('vizworkbench.annotation.dbImported', { file: fileName, count: info.count }),
+      'success',
+    )
+    void saveStoredDb({ fileName, text })
+  }
+
   /** 用户通过按钮选择库 CSV；在本地读取并记住它，下次打开直接用 */
   function importDbFile(file: File): Promise<void> {
     importingDb.value = true
+    importingKind.value = 'file'
     return queueDb(async () => {
       try {
         const text = decodeCsvBytes(await file.arrayBuffer())
-        const info = await engine.loadDb(file.name, text)
-        if (disposed) return
-        dbRequest++
-        applyDb(info)
-        showToast(
-          t('vizworkbench.annotation.dbImported', { file: file.name, count: info.count }),
-          'success',
-        )
-        void saveStoredDb({ fileName: file.name, text })
+        await loadAndRememberDb(file.name, text)
       } catch (e) {
         showToast(dbErrorText(e), 'error')
       } finally {
         importingDb.value = false
+        importingKind.value = null
+      }
+    })
+  }
+
+  /**
+   * 从平台数据库导入（/database 页注册了 csvImport 的库，当前 HMDB）：登录态接口
+   * 换直链 → fetch 整库 CSV 文本（进度进 platformFetch）→ 与文件导入同一套解析
+   * 与记住逻辑。label 为库的显示名（点击时按当前语言取），取代后端回传的文件名
+   * （SI_DB.csv）作为库标签；网络/HTTP 失败换一句话文案，CSV 形状问题沿用文件
+   * 导入的报错。
+   */
+  function importPlatformDb(db: DatabaseCsvImport, label: string): Promise<void> {
+    importingDb.value = true
+    importingKind.value = 'platform'
+    platformFetch.value = null
+    return queueDb(async () => {
+      try {
+        const { fileName, text } = await db.fetch((loaded, total) => {
+          platformFetch.value = { loaded, total }
+        })
+        await loadAndRememberDb(label.trim() || fileName, text)
+      } catch (e) {
+        if (e instanceof AnnotationDbCsvError) {
+          showToast(dbErrorText(e), 'error')
+        } else {
+          console.error('platform database import failed:', e)
+          showToast(t('vizworkbench.annotation.platformImportFailed'), 'error')
+        }
+      } finally {
+        importingDb.value = false
+        importingKind.value = null
+        platformFetch.value = null
       }
     })
   }
@@ -838,8 +882,11 @@ export function useAnnotation(opts: {
     dbState,
     db,
     importingDb,
+    importingKind,
+    platformFetch,
     ensureDb,
     importDbFile,
+    importPlatformDb,
     clearDb,
     // 运行与结果
     started,

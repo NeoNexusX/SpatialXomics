@@ -41,6 +41,8 @@ vi.mock('@/features/assistant/providers/analysisContext', () => ({
   unregisterContextProviders: vi.fn(),
 }))
 
+import { saveStoredDb } from '../../utils/annotation/dbStore'
+
 const acquisition: Acquisition = {
   polarity: 'negative',
   ionSource: 'MALDI',
@@ -123,6 +125,88 @@ describe('annotation database loading (worker)', () => {
     expect(fake.harness!.dbFiles).toEqual(['stored.csv'])
     expect(ann.db.value).toBeNull()
     expect(ann.dbState.value).toBe('idle')
+    app.unmount()
+  })
+
+  it('imports a platform database csv end-to-end, reports progress and remembers it', async () => {
+    const { ann, app } = setupAnnotation()
+    await flushPromises()
+    stored.resolve(null)
+    await drain()
+    vi.mocked(saveStoredDb).mockClear()
+
+    let seenTotal = 0
+    const importing = ann.importPlatformDb(
+      {
+        fetch: async (onProgress) => {
+          onProgress?.(11, 22)
+          onProgress?.(22, 22)
+          seenTotal = 22
+          return { fileName: 'SI_DB.csv', text: IMPORTED_CSV }
+        },
+      },
+      'HMDB 4.0 代谢物',
+    )
+    // 下载阶段的进度进了状态；解析换库在 worker 里排队执行
+    await drain()
+    await importing
+
+    // 库标签用传入的库名，取代后端文件名 SI_DB.csv
+    expect(ann.db.value).toEqual({ label: 'HMDB 4.0 代谢物', count: 1 })
+    expect(ann.dbState.value).toBe('ready')
+    expect(fake.harness!.dbFiles).toEqual(['HMDB 4.0 代谢物'])
+    expect(vi.mocked(saveStoredDb)).toHaveBeenCalledWith({
+      fileName: 'HMDB 4.0 代谢物',
+      text: IMPORTED_CSV,
+    })
+    expect(seenTotal).toBe(22)
+    // 导入结束后进度清空、导入态复位
+    expect(ann.platformFetch.value).toBeNull()
+    expect(ann.importingDb.value).toBe(false)
+    expect(ann.importingKind.value).toBeNull()
+    app.unmount()
+  })
+
+  it('falls back to the fetched filename as the db label when the label is blank', async () => {
+    const { ann, app } = setupAnnotation()
+    await flushPromises()
+    stored.resolve(null)
+    await drain()
+
+    const importing = ann.importPlatformDb(
+      { fetch: async () => ({ fileName: 'SI_DB.csv', text: IMPORTED_CSV }) },
+      '  ',
+    )
+    await drain()
+    await importing
+
+    expect(ann.db.value).toEqual({ label: 'SI_DB.csv', count: 1 })
+    app.unmount()
+  })
+
+  it('shows the localized failure toast and keeps the previous db when the platform fetch fails', async () => {
+    const { ann, app } = setupAnnotation()
+    await flushPromises()
+    stored.resolve({ fileName: 'stored.csv', text: STORED_CSV })
+    await drain()
+    vi.mocked(saveStoredDb).mockClear()
+
+    const importing = ann.importPlatformDb(
+      {
+        fetch: async () => {
+          throw new Error('HTTP 502')
+        },
+      },
+      'HMDB 4.0 代谢物',
+    )
+    await drain()
+    await importing
+
+    // 失败不动已有库：恢复的 stored.csv 仍在
+    expect(ann.db.value).toEqual({ label: 'stored.csv', count: 2 })
+    expect(ann.dbState.value).toBe('ready')
+    expect(vi.mocked(saveStoredDb)).not.toHaveBeenCalled()
+    expect(ann.importingDb.value).toBe(false)
     app.unmount()
   })
 })

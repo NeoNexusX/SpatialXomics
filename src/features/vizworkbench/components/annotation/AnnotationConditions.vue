@@ -8,6 +8,7 @@ import { computed, inject, ref, watch } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 import AdductMultiSelect, { type AdductOption } from './AdductMultiSelect.vue'
 import { ANNOTATION_KEY } from '@/features/vizworkbench/composables/useAnnotation'
+import { DATABASE_SOURCES } from '@/features/databases/sources'
 import { adductDisplay, fmtScoreRatio } from '@/features/vizworkbench/utils/annotation/format'
 import { keptCount, MAX_CUT_PCT } from '@/features/vizworkbench/utils/annotation/peaks'
 import {
@@ -52,6 +53,9 @@ const {
   dbState,
   db,
   importingDb,
+  importingKind,
+  platformFetch,
+  importPlatformDb,
   clearDb,
   cutPct,
   peakStats,
@@ -103,6 +107,25 @@ const datasetLine = computed(() =>
 )
 
 const dbLabel = computed(() => db.value?.label ?? '')
+
+// ---- 平台库导入（/database 页注册了 csvImport 的库，当前只有 HMDB） ----
+
+/** 可导入的平台库：来源即数据库页的 tab 注册表，新库注册后这里自动出现 */
+const platformDbs = DATABASE_SOURCES.filter((s) => s.csvImport)
+
+/** 下载百分比；拉取未开始 / 结束后为 null，按钮文字随它切换（封顶 99，解析阶段还没结束） */
+const platformPct = computed(() => {
+  const p = platformFetch.value
+  return p && p.total > 0 ? Math.min(99, Math.round((p.loaded / p.total) * 100)) : null
+})
+
+function pickPlatformDb(id: string): void {
+  const source = platformDbs.find((s) => s.id === id)
+  // daisyUI 的 focus 下拉不随菜单项点击收起，选完手动失焦关掉。
+  // label 在点击时按当前语言取，作为导入后的库名（取代后端文件名 SI_DB.csv）
+  ;(document.activeElement as HTMLElement | null)?.blur()
+  if (source?.csvImport) void importPlatformDb(source.csvImport, source.label())
+}
 
 // 滑动条拖动时只更新预览，松手才更新条件，等待用户点击开始。
 const cutDraft = ref(cutPct.value)
@@ -291,20 +314,58 @@ function onScoreRatioInput(key: keyof ScoreWeights, e: Event): void {
               <SvgIcon type="close" class="h-4 w-4" />
             </button>
           </div>
-          <button
-            class="btn btn-outline btn-sm min-w-0 max-w-full shrink-0 self-start gap-1 px-2 kawaru-text-62"
-            :disabled="importingDb"
-            :title="`${$t('vizworkbench.annotation.importDb')}\n${$t('vizworkbench.annotation.dbFormat')}`"
-            @click="emit('import')"
-          >
-            <span
-              v-if="importingDb"
-              class="loading loading-spinner loading-xs"
-              aria-hidden="true"
-            ></span>
-            <SvgIcon v-else type="upload" class="shrink-0" />
-            <span class="min-w-0 truncate">{{ $t('vizworkbench.annotation.importDb') }}</span>
-          </button>
+          <div class="flex min-w-0 flex-wrap items-center gap-2 self-start">
+            <button
+              class="btn btn-outline btn-sm min-w-0 max-w-full shrink-0 gap-1 px-2 kawaru-text-62"
+              :disabled="importingDb"
+              :title="`${$t('vizworkbench.annotation.importDb')}\n${$t('vizworkbench.annotation.dbFormat')}`"
+              @click="emit('import')"
+            >
+              <span
+                v-if="importingKind === 'file'"
+                class="loading loading-spinner loading-xs"
+                aria-hidden="true"
+              ></span>
+              <SvgIcon v-else type="upload" class="shrink-0" />
+              <span class="min-w-0 truncate">{{ $t('vizworkbench.annotation.importDb') }}</span>
+            </button>
+            <!-- 平台库导入：点开列出本站的数据库（当前 HMDB），选中即拉整库 CSV 注入。
+                 触发器必须是原生 <button>：div 上的 :disabled="false" 会被 Vue 渲染成
+                 disabled="false" 属性字符串，daisyUI 的 .btn[disabled] 只看属性存在与否，
+                 会把按钮永久置灰且 pointer-events:none（点不了）。 -->
+            <div v-if="platformDbs.length" class="dropdown shrink-0">
+              <button
+                type="button"
+                class="btn btn-outline btn-sm min-w-0 gap-1 px-2 kawaru-text-62"
+                :disabled="importingDb"
+                :title="$t('vizworkbench.annotation.importFromPlatform')"
+                :aria-label="$t('vizworkbench.annotation.importFromPlatform')"
+              >
+                <span
+                  v-if="importingKind === 'platform'"
+                  class="loading loading-spinner loading-xs"
+                  aria-hidden="true"
+                ></span>
+                <SvgIcon v-else type="circle_stack" class="shrink-0" />
+                <span class="min-w-0 truncate">{{
+                  platformPct != null
+                    ? $t('vizworkbench.annotation.platformFetching', { pct: platformPct })
+                    : $t('vizworkbench.annotation.importFromPlatform')
+                }}</span>
+              </button>
+              <ul
+                tabindex="0"
+                class="menu dropdown-content z-[1] mt-1 w-52 rounded-box bg-base-100 p-1 shadow-lg kawaru-text-62"
+              >
+                <li v-for="s in platformDbs" :key="s.id">
+                  <button type="button" @click="pickPlatformDb(s.id)">
+                    <SvgIcon type="circle_stack" class="h-4 w-4 shrink-0" />
+                    <span class="min-w-0 truncate" :title="s.label()">{{ s.label() }}</span>
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
 
