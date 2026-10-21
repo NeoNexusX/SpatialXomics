@@ -57,7 +57,7 @@
         <button
           v-else-if="c.error"
           class="text-error shrink-0"
-          :title="$t('vizworkbench.channels.loadFailed', { error: c.error })"
+          :title="$t('vizworkbench.channels.loadFailed')"
           @click="emit('retry', c.id)"
         >
           <SvgIcon type="warning" class="w-[1.1em] h-[1.1em]" />

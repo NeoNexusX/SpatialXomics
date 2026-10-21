@@ -9,7 +9,6 @@
       "size": "Size",
       "fileSize": "File Size",
       "submittedBy": "Submitted By",
-      "owner": "Owner",
       "filename": "Filename"
     },
     "vocab": {
@@ -92,7 +91,6 @@
       "sortLargest": "File size (largest first)",
       "sortSmallest": "File size (smallest first)",
       "submitterPlaceholder": "Submitter username",
-      "ownerPlaceholder": "Owner username",
       "any": "Any"
     },
     "list": {

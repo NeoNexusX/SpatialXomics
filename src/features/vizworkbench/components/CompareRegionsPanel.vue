@@ -19,6 +19,9 @@ const props = defineProps<{
   regionBIds: string[]
   minDetectionRate: number
   noiseFloorPercentile: number
+  /** Detection-rate ratio that counts as "enriched". Display-time only —
+   *  adjusting it re-labels existing results without re-scanning. */
+  enrichmentRatio: number
   comparing: boolean
   progress: number
   error: string | null
@@ -35,6 +38,7 @@ const emit = defineEmits<{
   (e: 'update:regionBIds', v: string[]): void
   (e: 'update:minDetectionRate', v: number): void
   (e: 'update:noiseFloorPercentile', v: number): void
+  (e: 'update:enrichmentRatio', v: number): void
   (e: 'update:expanded', v: boolean): void
   (e: 'compare'): void
   (e: 'cancel'): void
@@ -71,6 +75,9 @@ function onDetectionRate(e: Event) {
 }
 function onNoiseFloor(e: Event) {
   emit('update:noiseFloorPercentile', Number((e.target as HTMLInputElement).value))
+}
+function onEnrichmentRatio(e: Event) {
+  emit('update:enrichmentRatio', Number((e.target as HTMLInputElement).value))
 }
 </script>
 
@@ -183,6 +190,24 @@ function onNoiseFloor(e: Event) {
             class="range range-xs range-primary"
             :disabled="comparing"
             @input="onNoiseFloor"
+          />
+        </div>
+
+        <!-- Enrichment ratio (detection-rate ratio). Display-time only:
+             re-labels existing results, never re-scans. -->
+        <div class="space-y-0.5">
+          <div class="flex items-center justify-between text-base-content/60">
+            <span>{{ $t('vizworkbench.compare.enrichmentRatio') }}</span>
+            <span class="font-mono text-base-content">{{ enrichmentRatio }}×</span>
+          </div>
+          <input
+            type="range"
+            min="1.1"
+            max="4"
+            step="0.1"
+            :value="enrichmentRatio"
+            class="range range-xs range-primary"
+            @input="onEnrichmentRatio"
           />
         </div>
 

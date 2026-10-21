@@ -389,7 +389,8 @@ export function useZarrIonImage() {
       ionMatrix.value = matrix
     } catch (e) {
       if (requestId !== ionImageRequestId || store !== requestStore) return
-      error.value = e instanceof Error ? e.message : String(e)
+      // UI 只说「什么问题」，底层原因留在控制台
+      error.value = t('vizworkbench.ionImage.updateFailed')
       console.error('[useZarrIonImage] loadForMzIndex failed:', e)
     } finally {
       if (requestId === ionImageRequestId) loading.value = false
@@ -441,7 +442,11 @@ export function useZarrIonImage() {
       normalizationFactors.value = factors
     } catch (e) {
       if (store !== requestStore) return
-      normalizationError.value = e instanceof Error ? e.message : String(e)
+      // 「旧数据没有预计算 TIC」是用户可懂的原因，单独说明；其余统一一句话
+      normalizationError.value =
+        e instanceof Error && e.message.includes('no pre-computed TIC')
+          ? t('vizworkbench.ionImage.noTic')
+          : t('vizworkbench.ionImage.loadFailed')
       if (requestId !== normalizationRequestId) return
       normalizationFactors.value = null
     } finally {
@@ -576,13 +581,12 @@ export function useZarrIonImage() {
     } catch (e) {
       if (!isCurrent()) return // 本次会话已被 dispose/替换，错误不必再呈现
       console.error('[useZarrIonImage] init failed:', e)
-      // v1.0 等不再支持的布局：给出本地化的「格式不兼容」提示，而不是底层读取错误
+      // v1.0 等不再支持的布局：给出本地化的「格式不兼容」提示，而不是底层读取错误；
+      // 其余失败只报一句话，原因进控制台
       error.value =
         e instanceof ZarrIncompatibleError
           ? t('vizworkbench.ionImage.incompatibleFormat')
-          : e instanceof Error
-            ? e.message
-            : String(e)
+          : t('vizworkbench.ionImage.loadFailed')
     } finally {
       if (isCurrent()) loading.value = false
     }

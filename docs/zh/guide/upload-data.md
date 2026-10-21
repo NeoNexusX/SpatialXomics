@@ -14,23 +14,23 @@
 
 点击`Upload New Dataset`即可打开上传弹窗。
 
-![image-20260908174622341](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908174622409.jpg_view)
+![image-20260908174622341](https://cdn.neonexus.top/docs/20260908174622409.jpg_view)
 
 上传弹窗如图，详细操作流程如下。
 
-![image-20260908174725003](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908174725075.jpg_view)
+![image-20260908174725003](https://cdn.neonexus.top/docs/20260908174725075.jpg_view)
 
 #### 1.1 选择本地文件
 
 点击 `Choose Files` 后选择本地的 .imzML 和 .ibd 文件进行上传，要求两文件必须同名。
 
-![image-20260908175048625](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908175048689.jpg_view)
+![image-20260908175048625](https://cdn.neonexus.top/docs/20260908175048689.jpg_view)
 
 #### 1.2 勾选数据集是否公开
 
 可选择上传数据集是否公开，默认勾选。公开数据集的 IBD 文件须不小于 **10 MB**。
 
-![公开设置](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908175221284.jpg_view)
+![公开设置](https://cdn.neonexus.top/docs/20260908175221284.jpg_view)
 
 
 
@@ -38,7 +38,7 @@
 
 其中*为必填项。Spectrum Mode 与 Storage Mode 会从 imzML 文件头自动读取并预填，修改时需确认。
 
-![元数据表单](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908193210320.jpg_view)
+![元数据表单](https://cdn.neonexus.top/docs/20260908193210320.jpg_view)
 
 下面对各信息填写做一简单介绍：
 
@@ -98,7 +98,7 @@
 
 数据集上传成功后，可在`Datahub`—`My Datasets`中查看，数据集基本信息查看功能详细见[数据集总览](./dataset-overview)。
 
-![image-20260908203828331](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908203828434.jpg_view)
+![image-20260908203828331](https://cdn.neonexus.top/docs/20260908203828434.jpg_view)
 
 
 

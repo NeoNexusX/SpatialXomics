@@ -31,6 +31,7 @@ const en = {
           { text: 'Collections', link: '/guide/collections' },
           { text: 'Dataset Overview', link: '/guide/dataset-overview' },
           { text: 'Data Visualization', link: '/guide/data-visualization' },
+          { text: 'Database', link: '/guide/database' },
           { text: 'Upload Data', link: '/guide/upload-data' },
           { text: 'Dataset Analysis', link: '/guide/dataset-analysis' },
           { text: 'Workspace', link: '/guide/workspace' },
@@ -62,7 +63,7 @@ const en = {
 const zh = {
   nav: [
     { text: '指南', link: '/zh/guide/getting-started' },
-    { text: '开发', link: '/zh/dev/技术栈' },
+    { text: '开发', link: '/zh/dev/tech-stack' },
   ],
   sidebar: {
     '/zh/guide/': [
@@ -75,6 +76,7 @@ const zh = {
           { text: '数据集合', link: '/zh/guide/collections' },
           { text: '数据集总览', link: '/zh/guide/dataset-overview' },
           { text: '数据可视化', link: '/zh/guide/data-visualization' },
+          { text: '数据库', link: '/zh/guide/database' },
           { text: '上传数据集', link: '/zh/guide/upload-data' },
           { text: '数据集分析', link: '/zh/guide/dataset-analysis' },
           { text: '工作区', link: '/zh/guide/workspace' },
@@ -86,10 +88,10 @@ const zh = {
       {
         text: '开发',
         items: [
-          { text: '技术栈', link: '/zh/dev/技术栈' },
-          { text: '前端架构边界', link: '/zh/dev/前端架构边界' },
-          { text: '图标使用规范', link: '/zh/dev/图标使用规范' },
-          { text: '文档维护', link: '/zh/dev/文档维护' },
+          { text: '技术栈', link: '/zh/dev/tech-stack' },
+          { text: '前端架构边界', link: '/zh/dev/frontend-architecture' },
+          { text: '图标使用规范', link: '/zh/dev/icon-guidelines' },
+          { text: '文档维护', link: '/zh/dev/doc-maintenance' },
         ],
       },
     ],

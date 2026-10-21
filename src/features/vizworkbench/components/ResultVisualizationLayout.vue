@@ -15,11 +15,14 @@ withDefaults(
     <div
       class="flex min-h-0 flex-1 flex-col gap-1 px-1 pb-2 pt-2 lg:flex-row lg:gap-6 lg:overflow-hidden lg:px-6"
     >
-      <!-- 展开的左列至少 16rem，保证容差和空间计算的整组控件能放在同一行。 -->
+      <!-- 展开的左列至少 24rem：注释库的两个导入按钮（Choose CSV / 平台库）需要约
+           210px 的控件宽度才能同排（实测 EN 210px、ZH 197px），低于此宽度标签列
+           占位后控件区不够、按钮会换行。16rem 时控件会掉到标签下方（207px）仍差
+           几像素，22rem 反而因改为左右排而更窄（182px）——24rem 是实测的可靠阈值。 -->
       <div
         :class="[
           'kawaru-text-75 w-full scrollbar-thin lg:h-full lg:min-h-0 lg:min-w-0 lg:self-stretch lg:overflow-y-auto',
-          leftPanelCollapsed ? 'lg:flex-none lg:w-auto' : 'lg:min-w-64 lg:flex-[1_1_0%]',
+          leftPanelCollapsed ? 'lg:flex-none lg:w-auto' : 'lg:min-w-96 lg:flex-[1_1_0%]',
         ]"
       >
         <slot name="left-panel"></slot>

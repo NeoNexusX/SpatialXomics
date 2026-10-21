@@ -14,11 +14,11 @@
 
 数据集封面主要会呈现两种形式：“Explore” 和 “Visualize”。
 
-![image-20260909211924082](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909211924161.jpg_view)
+![image-20260909211924082](https://cdn.neonexus.top/docs/20260909211924161.jpg_view)
 
 当数据集处在”Explore“时，此时数据集还在待处理阶段，还无法查看可视化结果，需点击`Explore`后再选择`Generate`创建数据预处理任务，创建成功后，将自动跳转至Workspace页面，页面具体信息见[工作区](./workspace)。
 
-![image-20260909212549202](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909212549240.jpg_view)
+![image-20260909212549202](https://cdn.neonexus.top/docs/20260909212549240.jpg_view)
 
 当数据集处在“Visualize”时，此时数据集已经过预处理，点击`Visualize`即可跳转至数据可视化页面，直接查看可视化结果。
 
@@ -28,7 +28,7 @@
 
 可视化页面可主要分为离子强度图、像素谱图、区域比较栏、基本信息栏、注释面板五个功能模块。后文将对以上五个模块功能详细介绍。
 
-![image-20260911150203224](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260911150203309.jpg_view)
+![image-20260911150203224](https://cdn.neonexus.top/docs/20260911150203309.jpg_view)
 
 #### 2.1 基本信息栏
 
@@ -96,13 +96,13 @@
 | **Apply Mask / Show Original**  | 重新应用已导入的掩膜，或暂停掩膜显示完整图像（导入掩膜后出现） |
 | **Clear imported mask**         | 清除已导入的掩膜                                             |
 
-![image-20261008182213554](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008182213629.jpg_view)
+![image-20261008182213554](https://cdn.neonexus.top/docs/20261008182213629.jpg_view)
 
 #### 2.2 离子强度图
 
 显示选中 m/z 的离子在空间上的强度分布热图。
 
-![image-20260911153144224](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260911153144287.jpg_view)
+![image-20260911153144224](https://cdn.neonexus.top/docs/20260911153144287.jpg_view)
 
 **1.图像交互**
 
@@ -137,7 +137,7 @@ Continuous 数据可将多个离子同时叠加为多个颜色通道显示。开
 - 每个通道可单独控制可见性、颜色与透明度；
 - 叠加激活时，Display Range、Colormap 与 Gamma 控件均会置灰（叠加渲染不使用这些设置）。
 
-![ec58781ec5cf85b8de67931dec1da39e](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008180949956.jpg_view)
+![ec58781ec5cf85b8de67931dec1da39e](https://cdn.neonexus.top/docs/20261008180949956.jpg_view)
 
 #### 2.3 像素谱图
 
@@ -165,31 +165,31 @@ Continuous 数据可将多个离子同时叠加为多个颜色通道显示。开
 
 1.在基本信息栏“Visualization”模块处，进入KMeans聚类操作
 
-![image-20260914160650389](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914160650461.jpg_view)
+![image-20260914160650389](https://cdn.neonexus.top/docs/20260914160650461.jpg_view)
 
 2.选择聚类层数得到聚类结果
 
-![image-20260914160834734](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914160834781.jpg_view)
+![image-20260914160834734](https://cdn.neonexus.top/docs/20260914160834781.jpg_view)
 
-![image-20260914160853610](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914160853673.jpg_view)
+![image-20260914160853610](https://cdn.neonexus.top/docs/20260914160853673.jpg_view)
 
 3.选择需要比较的类别进行比较，得到最终结果
 
-![image-20260914161105052](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914161105137.jpg_view)
+![image-20260914161105052](https://cdn.neonexus.top/docs/20260914161105137.jpg_view)
 
 ##### 2.4.2 用户绘制的 ROIs
 
 1.点击基本信息栏“Region of interest”模块处`Rect`按键，在图中框选感兴趣区域后，再点击`Confirm`得到ROI1
 
-![image-20260914161347627](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914161347733.jpg_view)
+![image-20260914161347627](https://cdn.neonexus.top/docs/20260914161347733.jpg_view)
 
 2.点击`ROI only`后回到初始状态，再进行一遍第一步操作，得到感兴趣的ROI2
 
-![image-20260914161613717](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914161613765.jpg_view)
+![image-20260914161613717](https://cdn.neonexus.top/docs/20260914161613765.jpg_view)
 
 3.选择两个ROI进行比较得到比较结果
 
-![image-20260914161809226](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914161809308.jpg_view)
+![image-20260914161809226](https://cdn.neonexus.top/docs/20260914161809308.jpg_view)
 
 
 
@@ -198,12 +198,12 @@ Continuous 数据可将多个离子同时叠加为多个颜色通道显示。开
 注释面板位于可视化页面左侧，可折叠/展开。选择注释 CSV，点击 **开始注释** 后，面板用峰与库中分子的理论加合离子匹配、打分并估计 FDR，再在后台为排名靠前的注释补算空间分。表格里一行是一个加合离子：同一分子的不同加合离子各占一行，相互关联、可以跳转。
 
 ::: warning 前提条件
-注释支持对齐后的 **centroid** 数据（continuous 存储），并需要与 m/z 轴对应的平均谱。数据库需要用户自己提供，网站不提供默认数据库，也不分发数据库。
+注释支持对齐后的 **centroid** 数据（continuous 存储），并需要与 m/z 轴对应的平均谱。注释库可以自己提供 CSV，也可以在注释面板直接导入平台的参考数据库（见[数据库](./database)）。
 :::
 
 **1. 选择注释库 CSV 与待匹配峰**
 
-点击 **选择注释 CSV** 打开本地文件。库文件在当前浏览器读取并保存，不上传到服务器；下次打开可以恢复用户此前选择的库，也可以清除或重新选择。
+点击 **选择注释 CSV** 打开本地文件；**平台库** 下拉则列出平台的参考数据库（见[数据库](./database)）。选中后 Chrome/Edge 会弹出「另存为」对话框并**默认定位到系统下载文件夹**（点一次「保存」即可，按钮显示下载进度），整库 CSV 保存为本地文件后再导入；再次导入（包括清除当前库之后）会直接复用已保存的文件、不再重新下载，文件被删除或服务端更新后才重新拉取。Firefox/Safari 不支持保存文件句柄，仍为在线拉取后直接导入。两种方式导入的库都只在当前浏览器读取并保存，不上传到服务器；下次打开可以恢复用户此前选择的库，也可以清除或重新选择。
 
 - 库模板为 `ID,Name,Formula,InChI,Mass`，一行一个化合物。`Formula` 必需；`Mass` 为单同位素中性质量（Da），缺失时根据分子式计算，其余列可选。同分子式的异构体合并为多个候选。
 - 可选的 `Origin` 列标注化合物来源：`endogenous`（内源）、`expected`（预期内源）、`unknown`（未定）、`exogenous`（外源）。同分子式的候选按这个顺序排列，同级保持文件里的先后，排第一的就是显示名。来源只决定先后和标签，不计入总分，也不影响 q 值；没有这一列时候选按文件顺序排列。
@@ -268,7 +268,7 @@ FDR 用 target-decoy 方法估计：给每个分子式配上化学上不可能�
 
 点击 **PubChem** 按钮弹出查询窗口，按化合物名检索 PubChem，展示结构式、CID、IUPAC 名称、SMILES 与 InChIKey，可一键复制或跳转 PubChem 页面。
 
-<img src="https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261009151838139.jpg_view" alt="image-20261009151838061" style="zoom: 50%;" />
+<img src="https://cdn.neonexus.top/docs/20261009151838139.jpg_view" alt="image-20261009151838061" style="zoom: 50%;" />
 
 **6. 导出**
 

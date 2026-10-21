@@ -48,6 +48,8 @@ export const ICON_SETS = {
     'scale',
     'circle-stack',
     'queue-list',
+    'rectangle-stack',
+    'squares-2x2',
     'folder',
     'users',
     'user-plus',

@@ -13,7 +13,8 @@ SpatialXomics is a web platform for mass spectrometry imaging (MSI) data managem
 - **Analysis workspace**: compatible noise reduction, baseline correction, normalization, peak picking, and peak alignment choices based on spectrum/storage mode.
 - **Result visualization**: Continuous ion images and mean spectra; Processed TIC images and per-pixel spectra; display range, gamma, colormap, TIC normalization, and transparent PNG export.
 - **Clustering and regions**: backend-generated UMAP plus browser-local KMeans, cluster filtering, rectangular/freehand ROIs, and multi-region comparison.
-- **Annotations**: Match Continuous + Centroid mean-spectrum peaks against a user-selected database CSV, with ppm/Da tolerance, scores and FDR, filtering, export, and PubChem lookup. The site does not provide or distribute annotation databases.
+- **Annotations**: Match Continuous + Centroid mean-spectrum peaks against an annotation database CSV, with ppm/Da tolerance, scores and FDR, filtering, export, and PubChem lookup. The database is a user-provided CSV or a one-click import from the platform's reference database.
+- **Reference database**: Browse the HMDB 4.0 metabolite reference database after signing in — search by ID, name, or formula, filter by origin and mass range, open PubChem/HMDB entries, and download the full CSV; the annotation panel imports it in one click.
 
 ## Technology
 

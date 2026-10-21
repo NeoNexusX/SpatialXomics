@@ -53,6 +53,8 @@ export const ICON_MAP = {
   close: 'heroicons:x-mark',
   circle_stack: 'heroicons:circle-stack',
   queue_list: 'heroicons:queue-list',
+  rectangle_stack: 'heroicons:rectangle-stack',
+  squares_2x2: 'heroicons:squares-2x2',
   folder: 'heroicons:folder',
   users: 'heroicons:users',
   user_plus: 'heroicons:user-plus',

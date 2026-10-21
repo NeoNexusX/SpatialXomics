@@ -1,0 +1,42 @@
+{
+  "databases": {
+    "title": "Database",
+    "table": {
+      "empty": "No records found.",
+      "downloadFailed": "Failed to start the download."
+    },
+    "hmdb": {
+      "label": "HMDB 4.0 Metabolites",
+      "searchPlaceholder": "Search ID, name or formula...",
+      "pubchemHint": "Look up this compound on PubChem",
+      "openEntry": "Open the HMDB entry page",
+      "filter": {
+        "origin": "Origin",
+        "originAll": "All origins",
+        "mass": "Mass",
+        "massMin": "Min mass",
+        "massMax": "Max mass"
+      },
+      "download": "Download full CSV",
+      "serviceUnavailable": "The annotation service is unavailable. Please try again later.",
+      "downloadStarted": "Downloading {filename} (~{size})",
+      "downloadFailed": "Failed to start the full CSV download, please try again later.",
+      "field": {
+        "id": "ID",
+        "name": "Name",
+        "formula": "Formula",
+        "mass": "Mass (Da)",
+        "origin": "Origin",
+        "inchi": "InChI",
+        "pubchem": "PubChem",
+        "hmdb": "HMDB"
+      },
+      "origin": {
+        "endogenous": "Endogenous",
+        "exogenous": "Exogenous",
+        "expected": "Expected",
+        "unknown": "Unknown"
+      }
+    }
+  }
+}

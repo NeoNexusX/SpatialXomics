@@ -78,7 +78,7 @@ const rows = computed(() => {
       class="w-full border-collapse"
       :aria-label="$t('vizworkbench.annotation.scoreBreakdown')"
     >
-      <thead class="kawaru-text-56 text-base-content/50">
+      <thead class="kawaru-text-68 text-base-content/50">
         <tr class="border-b border-base-content/15">
           <th class="pb-2 text-left font-normal">{{ $t('vizworkbench.annotation.scoreItem') }}</th>
           <th class="pb-2 pl-2 text-right font-normal">
@@ -96,7 +96,7 @@ const rows = computed(() => {
         <tr
           v-for="row in rows"
           :key="row.key"
-          :class="row.sub ? 'kawaru-text-56 text-base-content/60' : ''"
+          :class="row.sub ? 'kawaru-text-68 text-base-content/60' : ''"
         >
           <td class="py-1.5" :class="row.sub ? 'pl-3' : ''">{{ row.label }}</td>
           <td class="py-1.5 pl-2 text-right font-mono">
@@ -116,7 +116,7 @@ const rows = computed(() => {
         <tr>
           <td colspan="4" class="pt-2">
             <div
-              class="flex flex-wrap gap-x-4 gap-y-1 font-mono kawaru-text-56 text-base-content/50"
+              class="flex flex-wrap gap-x-4 gap-y-1 font-mono kawaru-text-68 text-base-content/50"
             >
               <span>{{ $t('vizworkbench.annotation.measured', { mz: fmtMz(ion.obsMz) }) }}</span>
               <span>{{

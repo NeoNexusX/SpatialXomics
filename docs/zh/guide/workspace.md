@@ -14,7 +14,7 @@
 
 点击导航栏`Workspace`—`Workspace`进入工作区页面。
 
-![image-20260909173325329](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909173325409.jpg_view)
+![image-20260909173325329](https://cdn.neonexus.top/docs/20260909173325409.jpg_view)
 
 
 
@@ -22,13 +22,13 @@
 
 页面可简单分为导航栏、跳转按钮、新建工作按钮、工作进度区。后文将对各模块进行详细介绍。
 
-![image-20260909173705142](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909173705219.jpg_view)
+![image-20260909173705142](https://cdn.neonexus.top/docs/20260909173705219.jpg_view)
 
 #### 2.1 跳转按钮
 
 点击`Go to MyDatasets`即可跳转至My Datasets页面，页面详细介绍见[上传数据集](./upload-data)。
 
-![image-20260909174025428](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909174025496.jpg_view)
+![image-20260909174025428](https://cdn.neonexus.top/docs/20260909174025496.jpg_view)
 
 
 
@@ -36,7 +36,7 @@
 
 点击`New Task`即可跳转至New Analysis创建新的数据分析工作，详细创建流程见[数据集分析](./dataset-analysis)。
 
-![image-20260909174235405](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909174235481.jpg_view)
+![image-20260909174235405](https://cdn.neonexus.top/docs/20260909174235481.jpg_view)
 
 
 
@@ -46,7 +46,7 @@
 
 以下图为例，可知目前0个数据集正在分析，4个数据集已成功分析，0个数据集分析失败。
 
-![image-20260909174322541](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909174322612.jpg_view)
+![image-20260909174322541](https://cdn.neonexus.top/docs/20260909174322612.jpg_view)
 
 任务表每行包含以下列：
 

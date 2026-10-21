@@ -202,7 +202,6 @@ export function createDefaultDatasetFilters() {
   return {
     filename: '',
     experiment_type: '',
-    username: '',
     organism: '',
     organism_part: '',
     condition: '',

@@ -28,9 +28,18 @@ import { AnnotationDbCsvError } from '@/features/vizworkbench/utils/annotation/a
 import { decodeCsvBytes } from '@/features/vizworkbench/utils/annotation/csv'
 import {
   clearStoredDb,
+  loadPlatformFile,
   loadStoredDb,
+  savePlatformFile,
   saveStoredDb,
 } from '@/features/vizworkbench/utils/annotation/dbStore'
+import {
+  hasPermission,
+  pickSaveHandle,
+  readHandleFile,
+  supportsFileHandles,
+  writeHandleBytes,
+} from '@/features/vizworkbench/utils/annotation/platformFile'
 import { createEngineClient } from '@/features/vizworkbench/utils/annotation/engineClient'
 import {
   adductLabel,
@@ -54,8 +63,13 @@ import {
   isValidScoreRatioPart,
   normalizeScoreRatio,
 } from '@/features/vizworkbench/utils/annotation/score'
+import {
+  sharedAnnotationIons,
+  sharedAnnotationMolecules,
+} from '@/features/vizworkbench/utils/annotation/sharedResults'
 import { resolveTolerance } from '@/features/vizworkbench/utils/annotation/tolerance'
 import type { Acquisition } from '@/features/vizworkbench/types/acquisition'
+import type { DatabaseCsvImport } from '@/features/databases/types/database'
 import type {
   AdductOverride,
   AnnotationDbInfo,
@@ -295,6 +309,10 @@ export function useAnnotation(opts: {
   /** 库每换一次加一，用来判断要不要重跑 */
   const dbRevision = ref(0)
   const importingDb = ref(false)
+  /** 本次导入来自哪里：文件 / 平台库；null = 没有进行中的导入（按钮各显各的 spinner） */
+  const importingKind = ref<'file' | 'platform' | null>(null)
+  /** 平台库整库 CSV 的下载进度（字节）；仅在平台导入的下载阶段非 null */
+  const platformFetch = shallowRef<{ loaded: number; total: number } | null>(null)
   /** 最近一次换库的请求编号：晚到的旧请求结果直接丢弃 */
   let dbRequest = 0
   /** 恢复与导入排队依次进行：worker 按收到的顺序换库，界面按同一顺序更新，两边的当前库一致 */
@@ -349,30 +367,151 @@ export function useAnnotation(opts: {
       if (e.code === 'noFormulaColumn') return t('vizworkbench.annotation.dbCsvNoFormula')
       return t('vizworkbench.annotation.dbCsvNoRows')
     }
-    return t('vizworkbench.annotation.readFailed', {
-      error: e instanceof Error ? e.message : String(e),
-    })
+    return t('vizworkbench.annotation.readFailed')
+  }
+
+  /** 解析、换上并记住一个库 CSV（本地文件与平台库导入共用尾段） */
+  async function loadAndRememberDb(
+    fileName: string,
+    text: string,
+    reused = false,
+  ): Promise<void> {
+    const info = await engine.loadDb(fileName, text)
+    if (disposed) return
+    dbRequest++
+    applyDb(info)
+    showToast(
+      reused
+        ? t('vizworkbench.annotation.platformReused', { file: fileName, count: info.count })
+        : t('vizworkbench.annotation.dbImported', { file: fileName, count: info.count }),
+      'success',
+    )
+    void saveStoredDb({ fileName, text })
+  }
+
+  /** UTF-8 字节 → CSV 文本（写盘与解析共用同一份字节） */
+  function bytesToText(bytes: Uint8Array): string {
+    // 切片取出精确范围的 ArrayBuffer（decodeCsvBytes 只收 ArrayBuffer）
+    const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+    return decodeCsvBytes(buf as ArrayBuffer)
   }
 
   /** 用户通过按钮选择库 CSV；在本地读取并记住它，下次打开直接用 */
   function importDbFile(file: File): Promise<void> {
     importingDb.value = true
+    importingKind.value = 'file'
     return queueDb(async () => {
       try {
         const text = decodeCsvBytes(await file.arrayBuffer())
-        const info = await engine.loadDb(file.name, text)
-        if (disposed) return
-        dbRequest++
-        applyDb(info)
-        showToast(
-          t('vizworkbench.annotation.dbImported', { file: file.name, count: info.count }),
-          'success',
-        )
-        void saveStoredDb({ fileName: file.name, text })
+        await loadAndRememberDb(file.name, text)
       } catch (e) {
         showToast(dbErrorText(e), 'error')
       } finally {
         importingDb.value = false
+        importingKind.value = null
+      }
+    })
+  }
+
+  /** 平台库导入前的本地文件准备结果 */
+  type PlatformFilePrep =
+    /** 已保存的本地副本新鲜：直接复用，不下载 */
+    | { kind: 'reuse'; name: string; text: string }
+    /** 需要下载；handle 非空时下载后写回，null 表示不落盘（不支持/无权限） */
+    | { kind: 'download'; handle: FileSystemFileHandle | null }
+    /** 用户在「另存为」里取消：整个导入中止 */
+    | { kind: 'cancelled' }
+
+  /**
+   * 句柄相关的准备必须在点击手势内尽早执行（showSaveFilePicker / requestPermission
+   * 都要求 transient activation），因此只有 IndexedDB 读取和本地磁盘判断，网络探测
+   * 放在最后且失败不阻断——后端不可用时仍可复用已保存的文件。
+   */
+  async function preparePlatformFile(
+    db: DatabaseCsvImport,
+    sourceId: string,
+  ): Promise<PlatformFilePrep> {
+    if (!supportsFileHandles()) return { kind: 'download', handle: null }
+
+    try {
+      const stored = await loadPlatformFile(sourceId)
+      if (stored) {
+        const readable = await hasPermission(stored.handle, 'read')
+        const file = readable ? await readHandleFile(stored.handle) : null
+        if (file) {
+          // 探测只是新鲜度参考：大小一致即复用；探测失败（如服务不可用）也继续用本地副本
+          let fresh = true
+          try {
+            const info = await db.probe?.()
+            if (info && file.size !== info.size) fresh = false
+          } catch (e) {
+            console.warn('platform database probe failed, reusing the saved file:', e)
+          }
+          if (fresh) {
+            return { kind: 'reuse', name: file.name, text: decodeCsvBytes(await file.arrayBuffer()) }
+          }
+          // 过期：有写权限就下载后覆盖原文件；没有则只导入、不落盘
+          const writable = await hasPermission(stored.handle, 'readwrite')
+          return { kind: 'download', handle: writable ? stored.handle : null }
+        }
+        // 文件被删/改名/移动：让用户重新选保存位置
+      }
+
+      const handle = await pickSaveHandle(db.suggestedFileName)
+      return handle ? { kind: 'download', handle } : { kind: 'cancelled' }
+    } catch (e) {
+      // 文件 API 的意外失败（安全策略等）不阻断导入：退回在线拉取、不落盘
+      console.error('platform database file preparation failed, falling back to download:', e)
+      return { kind: 'download', handle: null }
+    }
+  }
+
+  /**
+   * 从平台数据库导入（/database 页注册了 csvImport 的库，当前 HMDB）。
+   *
+   * Chromium（File System Access API）：整库 CSV 以文件形式保存到用户选定位置
+   * （「另存为」默认下载文件夹），句柄记在 IndexedDB；再次导入（包括删掉当前库
+   * 之后）直接读已保存的文件、不重新下载——文件被删或过期才重新拉取并覆盖。
+   * 其他浏览器（Firefox/Safari）：在线拉取后直接解析导入，不落盘（与之前一致）。
+   *
+   * label 为库的显示名（点击时按当前语言取），作为导入后的库标签。
+   */
+  function importPlatformDb(
+    db: DatabaseCsvImport,
+    label: string,
+    sourceId: string,
+  ): Promise<void> {
+    importingDb.value = true
+    importingKind.value = 'platform'
+    platformFetch.value = null
+    // 先发起准备（手势窗口内），再排进换库队列
+    const prepared = preparePlatformFile(db, sourceId)
+    return queueDb(async () => {
+      try {
+        const prep = await prepared
+        if (prep.kind === 'cancelled') return
+        if (prep.kind === 'reuse') {
+          await loadAndRememberDb(label.trim() || prep.name, prep.text, true)
+          return
+        }
+        const { fileName, bytes } = await db.fetch((loaded, total) => {
+          platformFetch.value = { loaded, total }
+        })
+        if (prep.handle && (await writeHandleBytes(prep.handle, bytes))) {
+          void savePlatformFile(sourceId, { handle: prep.handle, size: bytes.byteLength })
+        }
+        await loadAndRememberDb(label.trim() || fileName, bytesToText(bytes))
+      } catch (e) {
+        if (e instanceof AnnotationDbCsvError) {
+          showToast(dbErrorText(e), 'error')
+        } else {
+          console.error('platform database import failed:', e)
+          showToast(t('vizworkbench.annotation.platformImportFailed'), 'error')
+        }
+      } finally {
+        importingDb.value = false
+        importingKind.value = null
+        platformFetch.value = null
       }
     })
   }
@@ -404,6 +543,17 @@ export function useAnnotation(opts: {
   const searchText = shallowRef<Map<number, string>>(new Map())
 
   const ionById = computed(() => new Map(ions.value.map((i) => [i.id, i])))
+
+  // 发布到共享引用，供区域比较富集导出等跨面板消费者读取。
+  // useAnnotation 的所有更新都是引用替换（shallowRef 天然触发）。
+  watch(
+    [ions, molecules],
+    ([i, m]) => {
+      sharedAnnotationIons.value = i
+      sharedAnnotationMolecules.value = m
+    },
+    { immediate: true },
+  )
 
   const spatial = useAnnotationSpatial({
     tolerance: () => tolerance.value,
@@ -825,8 +975,11 @@ export function useAnnotation(opts: {
     dbState,
     db,
     importingDb,
+    importingKind,
+    platformFetch,
     ensureDb,
     importDbFile,
+    importPlatformDb,
     clearDb,
     // 运行与结果
     started,

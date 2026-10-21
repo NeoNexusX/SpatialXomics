@@ -205,7 +205,7 @@ onBeforeUnmount(() => {
           v-if="ionError"
           class="absolute left-3 right-3 top-3 z-30 rounded-lg border border-error/30 bg-error/10 px-3 py-2 kawaru-text-68 text-error shadow-sm backdrop-blur-sm"
         >
-          {{ $t('vizworkbench.ionImage.updateFailed', { error: ionError }) }}
+          {{ $t('vizworkbench.ionImage.updateFailed') }}
         </div>
       </div>
     </div>

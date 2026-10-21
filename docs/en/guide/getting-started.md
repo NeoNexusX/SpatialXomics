@@ -37,13 +37,13 @@ SpatialXomics brings the most common MSI data management and analysis tasks into
 
 Click **Join to start** on the landing page.
 
-![Landing page](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260907165610863.jpg_view)
+![Landing page](https://cdn.neonexus.top/docs/20260907165610863.jpg_view)
 
 ### 2. Register & Sign In
 
 First-time users: create an account (see [Account Management](./account-management) for details). Then click **Sign in**.
 
-![Sign in](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260907165825552.jpg_view)
+![Sign in](https://cdn.neonexus.top/docs/20260907165825552.jpg_view)
 
 ### 3. Find a Dataset
 
@@ -51,39 +51,39 @@ Search by name or use filters to narrow down results (see [Finding Datasets](./f
 
 **Example:** Filter for "Mouse Brain" data — click **Add filter**, set Organism to "Mouse" and Organism Part to "Brain", then click **Apply**.
 
-![Filter example](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260907174909406.jpg_view)
+![Filter example](https://cdn.neonexus.top/docs/20260907174909406.jpg_view)
 
 ### 4. Inspect & Download
 
 Click any dataset row to view its metadata.
 
-![Dataset info](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260907175815189.jpg_view)
+![Dataset info](https://cdn.neonexus.top/docs/20260907175815189.jpg_view)
 
 The detail page shows biological info, acquisition parameters, and file details (see [Dataset Overview](./dataset-overview)). Use **Download** to get the raw files, or **Share** to copy the dataset's link.
 
-![Download & Share](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260907180028501.jpg_view)
+![Download & Share](https://cdn.neonexus.top/docs/20260907180028501.jpg_view)
 
 ### 5. Visualize
 
 Click **Visualize** on a dataset card to explore its data interactively (see [Data Visualization](./data-visualization)).
 
-![Visualize button](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908134626454.jpg_view)
+![Visualize button](https://cdn.neonexus.top/docs/20260908134626454.jpg_view)
 
-![Visualization page](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908135003414.jpg_view)
+![Visualization page](https://cdn.neonexus.top/docs/20260908135003414.jpg_view)
 
 ### 6. Upload Your Own Data
 
 Click **Upload New Dataset** to add a dataset of your own.
 
-![Upload button](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908135743254.jpg_view)
+![Upload button](https://cdn.neonexus.top/docs/20260908135743254.jpg_view)
 
 Select your .imzML and .ibd files (they must share the same base filename), then fill in the required metadata (see [Upload Data](./upload-data)). Fields marked with \* are mandatory.
 
-![Upload form](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908140402663.jpg_view)
+![Upload form](https://cdn.neonexus.top/docs/20260908140402663.jpg_view)
 
 Once uploaded, your dataset appears under **Datahub > My Datasets**.
 
-![My Datasets](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908140630805.jpg_view)
+![My Datasets](https://cdn.neonexus.top/docs/20260908140630805.jpg_view)
 
 ### 7. Run an Analysis
 
@@ -91,11 +91,11 @@ Go to **Workspace > New Analysis**, pick a dataset, and choose preprocessing ste
 
 **Example:** Select "Mouse_Kidney_MALDI_30_Negative_77bf5d" and enable denoising, baseline correction, normalization, peak picking, and peak alignment.
 
-![New Analysis](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908141557982.jpg_view)
+![New Analysis](https://cdn.neonexus.top/docs/20260908141557982.jpg_view)
 
 Click **Start Analysis** to submit. You'll be redirected to the Workspace where you can track progress (see [Workspace](./workspace)).
 
-![Workspace](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908142155682.jpg_view)
+![Workspace](https://cdn.neonexus.top/docs/20260908142155682.jpg_view)
 
 ## What's Next?
 

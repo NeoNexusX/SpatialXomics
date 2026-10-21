@@ -14,7 +14,7 @@
 
 点击导航栏`Workspace`—`New Analysis`进入数据分析页面
 
-![image-20260909164518611](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909164518653.jpg_view)
+![image-20260909164518611](https://cdn.neonexus.top/docs/20260909164518653.jpg_view)
 
 
 
@@ -29,7 +29,7 @@
 - **简易目录区**：简易介绍数据集信息和所选择的功能。
 - **开始分析按钮**：点击后开始分析。
 
-![image-20260909152646941](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909152647040.jpg_view)
+![image-20260909152646941](https://cdn.neonexus.top/docs/20260909152647040.jpg_view)
 
 
 
@@ -37,11 +37,11 @@
 
 在数据选择区中找到所需分析的数据集所在位置并勾选。
 
-![image-20260909151822702](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909151822747.jpg_view)
+![image-20260909151822702](https://cdn.neonexus.top/docs/20260909151822747.jpg_view)
 
 若所需分析数据仍未上传，可点击右上角`Upload New Dataset`按钮上传所需分析数据，上传数据详细操作见[上传数据集](./upload-data)。
 
-![image-20260909153324437](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909153324475.jpg_view)
+![image-20260909153324437](https://cdn.neonexus.top/docs/20260909153324475.jpg_view)
 
 
 
@@ -58,7 +58,7 @@
     - `Delta`：采样间隔，计算导数时的数据点间隔，默认 1.0。
 
 
-![image-20260909160244933](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909160244980.jpg_view)
+![image-20260909160244933](https://cdn.neonexus.top/docs/20260909160244980.jpg_view)
 
 
 
@@ -69,7 +69,7 @@
     - `Sigma`：高斯核的标准差（σ），默认2，控制权重衰减速度。σ 越大平滑越强，峰形展宽越明显。
 
 
-![image-20260909160302159](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909160302194.jpg_view)
+![image-20260909160302159](https://cdn.neonexus.top/docs/20260909160302194.jpg_view)
 
 
 
@@ -78,7 +78,7 @@
     - `Window`：窗口长度（正整数），默认 5。窗口越大越平滑，但也可能模糊窄峰，可根据峰宽和噪声强度调节。
 
 
-![image-20260909160416871](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909160416905.jpg_view)
+![image-20260909160416871](https://cdn.neonexus.top/docs/20260909160416905.jpg_view)
 
 
 
@@ -87,7 +87,7 @@
 - **SNIP**：通过多次迭代逐步估计背景，通常更适合峰较密集、背景变化较明显的数据，并能较好地保留峰形。
 - **Local Minimum**：根据谱图中局部较低的信号位置估计背景变化趋势，适合常规基线校正。
 
-![image-20260909163548525](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909163548562.jpg_view)
+![image-20260909163548525](https://cdn.neonexus.top/docs/20260909163548562.jpg_view)
 
 
 
@@ -98,7 +98,7 @@
     - `Scale`：归一化后的幅度缩放因子，输入值必须为有限非负数。若提供，强度会被乘以此值。常用场景：TIC 归一化后设为 1000 或 10000 便于数值展示。
 
 
-![image-20260909163744423](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909163744460.jpg_view)
+![image-20260909163744423](https://cdn.neonexus.top/docs/20260909163744460.jpg_view)
 
 
 
@@ -107,7 +107,7 @@
     - `Scale`：归一化后的幅度缩放因子，输入值必须为有限非负数。若提供，强度会被乘以此值。
 
 
-![image-20260909163810482](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909163810520.jpg_view)
+![image-20260909163810482](https://cdn.neonexus.top/docs/20260909163810520.jpg_view)
 
 
 
@@ -118,7 +118,7 @@
     - `Ref Tolerance`：参考峰匹配容差，默认 0.1Da。例如 `Ref m/z=500`、`Ref Tolerance=0.1` 可理解为在 `500 ± 0.1 Da` 的邻域内寻找参考信号。输入值必须为有限的非负数。
 
 
-![image-20260909163851668](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909163851707.jpg_view)
+![image-20260909163851668](https://cdn.neonexus.top/docs/20260909163851707.jpg_view)
 
 
 
@@ -137,7 +137,7 @@
   - `"area"`：使用峰边界范围内的积分面积表示峰强度。
 - **Width**：局部极大值检测窗口半宽，默认 5。决定局部极大值检测的邻域范围。较大的 width 合并邻近小峰，较小的 width 保留更多峰。可根据仪器分辨率和期望峰密度调节。
 
-![image-20260909164354430](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909164354471.jpg_view)
+![image-20260909164354430](https://cdn.neonexus.top/docs/20260909164354471.jpg_view)
 
 
 
@@ -152,7 +152,7 @@
   - 频率 =` min(count, n_spectra)` / `n_spectra`。
   - 频率 = 0.01 表示要求每个参考峰至少在 1% 的谱图中出现过。
 
-![image-20260909165322371](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909165322419.jpg_view)
+![image-20260909165322371](https://cdn.neonexus.top/docs/20260909165322419.jpg_view)
 
 #### 4.6 注意事项
 
@@ -173,8 +173,8 @@
 
 点击`Start Analysis`进行数据分析。
 
-![image-20260909170806803](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909170806890.jpg_view)
+![image-20260909170806803](https://cdn.neonexus.top/docs/20260909170806890.jpg_view)
 
 创建成功后，自动跳转至`Workspace`,可在Workspace中查看处理进度，详细介绍见[工作区](./workspace)。
 
-![image-20260909170958405](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909170958484.jpg_view)
+![image-20260909170958405](https://cdn.neonexus.top/docs/20260909170958484.jpg_view)

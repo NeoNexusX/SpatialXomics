@@ -322,8 +322,9 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     if (s.includes('fail') || task.error_message) {
       stopPolling()
       clusteringComputing.value = false
-      overlayError.value =
-        task.error_message || t('vizworkbench.overlay.taskStatus', { status: s || 'failed' })
+      // 后端 error_message 不外显（内容/长度不可控），统一一句话；原始任务记录留控制台
+      if (task.error_message) console.error('[useOverlayData] clustering task failed:', task.error_message)
+      overlayError.value = t('vizworkbench.overlay.taskFailed')
       return
     }
     clusteringComputing.value = true

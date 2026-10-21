@@ -83,7 +83,7 @@
             channelsMode
               ? $t('vizworkbench.ionImage.rangeDisabled')
               : normalizationError
-                ? $t('vizworkbench.toolbar.normalizationFailed', { error: normalizationError })
+                ? normalizationError
                 : undefined
           "
           :value="intensityScale"
