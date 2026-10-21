@@ -24,23 +24,91 @@ export interface DatabaseColumn {
   mono?: boolean
   /** 单元格格式化，如质量 → toFixed(4)、无效值 '—'；缺省 String(value) */
   format?: (value: string | number) => string
-  /** 长文本列：单元格截断显示，行尾按钮展开全文 + 复制（InChI 用） */
-  expandable?: boolean
+  /** 列宽（colgroup 的 width，如 '20%'）；缺省各列均分 */
+  width?: string
+  /** 单元格文字过长时截断，旁边给一个复制按钮（名称 / InChI 用） */
+  copyable?: boolean
+  /** 外链列：由行数据算出条目页 URL，新窗口打开；返回 null 显示 '—'（HMDB 条目页用） */
+  link?: (row: DatabaseRow) => string | null
+  /** PubChem 检索列：点击按钮用该行这个字段的值（如 'name'）打开 PubChemDialog */
+  pubchemField?: string
 }
 
 export interface DatabaseListParams {
-  /** 关键词；语义由各 fetcher 自定（HMDB 为 ID/名称/分子式上的不区分大小写子串） */
+  /** 关键词；语义由各 fetcher 自定（SI_DB 会把它映射到编号/名称/分子式之一，见 api/siDb.ts） */
   keyword?: string
+  /** 额外筛选控件的当前值；键与 filterControls 的 key 对应，语义由 fetcher 解释 */
+  filters?: DatabaseFilterValues
   /** 1 基页码 */
   page: number
   size: number
 }
+
+/** 数值区间值（如质量范围）；min/max 可只填一边 */
+export interface DatabaseRangeValue {
+  min?: number
+  max?: number
+}
+
+/** 额外筛选控件的当前值：select 为单值，number-range 为区间 */
+export type DatabaseFilterValue = string | DatabaseRangeValue
+export type DatabaseFilterValues = Record<string, DatabaseFilterValue>
+
+/** select 控件选项（origin 这类词表：值固定写死、文案走 i18n） */
+export interface DatabaseSelectOption {
+  value: string
+  label: () => string
+}
+
+/** select 控件：离散词表（如 origin），即选即搜 */
+export interface DatabaseSelectControl {
+  kind: 'select'
+  /** 筛选值在 DatabaseFilterValues 里的键 */
+  key: string
+  /** 无障碍标签 */
+  label: () => string
+  /** 重置项（不筛选）的占位文字 */
+  allLabel: () => string
+  options: DatabaseSelectOption[]
+}
+
+/** number-range 控件：数值区间（如质量），可只填一边，随「搜索」提交 */
+export interface DatabaseRangeControl {
+  kind: 'number-range'
+  key: string
+  label: () => string
+  minPlaceholder: () => string
+  maxPlaceholder: () => string
+}
+
+/** 工具栏上关键词之外的筛选控件 */
+export type DatabaseFilterControl = DatabaseSelectControl | DatabaseRangeControl
 
 /** 分页信封的 meta，与 datasetApi / userAdminApi 的服务端分页响应一致 */
 export interface DatabasePageMeta {
   current_page: number
   total_pages: number
   total_records: number
+  /** SI_DB 等新接口额外回传的本页行数（旧接口没有，可缺省） */
+  current_records?: number
+}
+
+/** 整库下载入口（如 SI_DB 的全量 CSV）。成功提示由 run 自理；失败抛本地化 Error，由调用方 toast */
+export interface DatabaseDownloadAction {
+  label: () => string
+  run: () => Promise<void>
+}
+
+/**
+ * 注释面板「从平台库导入」入口：拉整库 CSV 文本。与 download（交给浏览器下载）
+ * 不同，这里要读内容，走 fetch + 同源代理（见 api/siDbApi.ts 的 fetchSiDbCsv）。
+ */
+export interface DatabaseCsvImport {
+  /**
+   * 下载整库 CSV 文本；onProgress 回报累计已下载字节数与总字节数（未知为 0），
+   * 供导入按钮显示下载百分比。失败抛原始错误，由调用方换一句话文案提示。
+   */
+  fetch: (onProgress?: (loaded: number, total: number) => void) => Promise<{ fileName: string; text: string }>
 }
 
 export interface DatabaseListResult {
@@ -61,21 +129,21 @@ export interface DatabaseSource {
   /** 用哪一列的值当行 key（须唯一）；缺省用第一列 */
   rowKey?: string
   columns: DatabaseColumn[]
+  /** 工具栏的额外筛选控件；缺省则只有关键词搜索 */
+  filterControls?: DatabaseFilterControl[]
+  /** 整库下载按钮；缺省不渲染 */
+  download?: DatabaseDownloadAction
+  /** 注释面板「从平台库导入」可用的库；缺省不出现在注释导入菜单 */
+  csvImport?: DatabaseCsvImport
   fetcher: DatabaseFetcher
 }
 
 /**
  * 分页数据获取契约。
  *
- * HMDB 的当前实现是过渡期的本地 CSV 适配器（api/hmdbCsv.ts 的 listHmdbFromCsv：
- * fetch 静态样本 CSV → 内存分页 / 关键词搜索）。后端就绪后按下面契约提供端点，
- * 新增一个 fetcher 实现并在 source 里替换即可，页面层零改动：
- *
- *   GET /api/databases/hmdb?page={page}&size={size}&keyword={keyword}（公开免登录）
- *   200 → { data: [ ...rows ],
- *           meta: { current_page, total_pages, total_records } }
- *
- * FastAPI / snake_case 字段、错误体 { detail }（httpClient 的 error_catch 已统一
- * 解析），与 datasetApi / userAdminApi 的分页信封一致。
+ * SI_DB 已有完整实现：api/siDb.ts 的 listSiDbPage——走后端 POST /annotations/
+ * si-db/list（契约见后端 Swagger /docs 搜 annotation），服务不可用时上抛一句话
+ * 本地化错误、由页面的错误态 + 重试承接。新数据库只需实现本契约并注册进
+ * sources/index.ts。
  */
 export type DatabaseFetcher = (params: DatabaseListParams) => Promise<DatabaseListResult>

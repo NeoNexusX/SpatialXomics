@@ -141,19 +141,22 @@ const routes = [
   },
   {
     // 可视化工作台：分析结果的离子图/光谱/标注可视化页。
-    // 信息面板复用 datasets 的字段名与词表（极性等）文案，所以一并加载 datasets。
+    // 信息面板复用 datasets 的字段名与词表（极性等）文案，所以一并加载 datasets；
+    // 注释面板「从平台库导入」的菜单渲染 databases 的库文案（HMDB 等），也一并加载。
     path: '/vizworkbench',
     name: 'VizWorkbench',
-    component: view(() => import('../views/VizWorkbench.vue'), 'vizworkbench', 'datasets'),
+    component: view(() => import('../views/VizWorkbench.vue'), 'vizworkbench', 'datasets', 'databases'),
     meta: { requiresAuth: true },
   },
   {
-    // 通用数据库浏览页（HMDB 等参考库）：公开参考数据，无需登录。当前数据由各
-    // source 的过渡期 fetcher 提供（HMDB 为静态样本 CSV），后端就绪后在
-    // features/databases 的 source 里换成走 httpClient 的实现即可。
+    // 通用数据库浏览页（HMDB 等参考库）：需登录（与其它受保护页一致，未登录由
+    // 守卫跳 /login?redirect=/database）。数据走后端 /annotations/si-db 真实接口，
+    // 服务不可用时页面报错可重试（features/databases/api/siDb.ts）。
+    // PubChem 列复用 vizworkbench 的弹窗组件，故一并加载它的文案。
     path: '/database',
     name: 'Database',
-    component: view(() => import('../views/DatabaseView.vue'), 'databases'),
+    component: view(() => import('../views/DatabaseView.vue'), 'databases', 'vizworkbench'),
+    meta: { requiresAuth: true },
   },
   // 裸 /docs 转发后由 nginx 的 `location = /docs` 301 补斜杠，这里无需特殊处理。
   {

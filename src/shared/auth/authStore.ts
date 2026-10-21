@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { authStorage } from './authStorage'
 import { getCurrentUser, logoutApi } from './authApi'
 import { STORAGE_KEYS } from '@/shared/config'
+import { registerUnauthorizedHandler } from '@/shared/api/httpClient'
 import type { UsrProfile } from './types'
 
 // Session user shape is the backend profile; extra keys are tolerated.
@@ -14,6 +15,14 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => !!token.value)
   const isAdmin = computed(() => user.value?.identity === 'admin')
+
+  // 401 拦截器清 localStorage 时同步清内存态：否则 store 仍认为已登录，路由守卫
+  // 会把过期用户从 /login 弹回业务页（过期 token 访问 /database 落到数据集列表的
+  // 根因）。同标签页的 storage 事件不会触发，必须走这个钩子。
+  registerUnauthorizedHandler(() => {
+    token.value = null
+    user.value = null
+  })
 
   // In-flight dedup: every concurrent fetchUser() shares one GET /user.
   // A settled promise is cleared in .finally so the next call re-fetches.

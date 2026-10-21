@@ -114,6 +114,9 @@ test.describe('zh-CN · signed-in routes', () => {
     ['/profile', 'users.profile.title'],
     // 无 history.state 直接进入：显示「未选择结果」空态，不依赖任何分析结果
     ['/vizworkbench', 'vizworkbench.ionImage.noResult'],
+    // SI_DB 浏览页：tab 与列文案在 databases 包，此前从未进过本扫描（历史上
+    // 漏加载命名空间会把裸 key 显示给用户，这条扫描正是防它的）
+    ['/database', 'databases.title'],
   ]
   for (const [path, key] of routes) {
     test(`${path} renders in Chinese without bare keys`, async ({ page }) => {

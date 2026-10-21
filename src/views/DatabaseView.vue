@@ -3,6 +3,9 @@
  * 通用数据库浏览页（/database）：顶部 tab 切换已注册的数据源（sources/index.ts），
  * 首个数据源是 HMDB 代谢物库。页面本身对具体数据库一无所知——列、文案、取数
  * 全部来自 DatabaseSource 描述符，见 features/databases/types/database.ts。
+ *
+ * 浏览参考库要求登录：与其它受保护页一致，由路由守卫（meta.requiresAuth）
+ * 未登录时跳 /login?redirect=/database。
  */
 import DatabaseTable from '@/features/databases/components/DatabaseTable.vue'
 import { useDatabaseList } from '@/features/databases/composables/useDatabaseList'
@@ -15,14 +18,18 @@ const {
   loading,
   error,
   keyword,
+  filterValues,
+  filtersActive,
+  setFilter,
   currentPage,
   pageSize,
+  pageSizeOptions,
   meta,
   pageRange,
   fetchPage,
   switchSource,
   handleSearch,
-  resetKeyword,
+  resetSearch,
   goToPage,
   changeSize,
 } = useDatabaseList()
@@ -30,38 +37,27 @@ const {
 
 <template>
   <div class="min-h-screen bg-base-200 font-sans kawaru-text-100">
-    <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
-      <!-- 1. Top Banner -->
-      <div class="flex flex-col sm:flex-row items-start justify-between gap-4">
-        <div>
-          <h1 class="kawaru-text-page-title leading-[1.15] font-semibold text-base-content">
-            {{ $t('databases.title') }}
-          </h1>
-          <p class="kawaru-text-100 text-base-content/60 mt-1">{{ $t('databases.subtitle') }}</p>
-        </div>
-        <button
-          class="btn btn-primary rounded-lg shadow-sm border-none kawaru-text-87"
-          @click="fetchPage"
-          :disabled="loading"
-        >
-          <span v-if="loading" class="loading loading-spinner loading-sm"></span>
-          <SvgIcon v-else type="refresh" class="h-4 w-4" />
-          {{ $t('common.action.refresh') }}
-        </button>
-      </div>
+    <!-- 数据密集页：不套全站 container（1280 封顶），放宽到 1600 让 8 列不互相挤压 -->
+    <div class="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
+      <!-- 1. Top Banner：标题与数据源 tab 同一行 -->
+      <div class="flex flex-wrap items-center gap-4">
+        <h1 class="kawaru-text-page-title leading-[1.15] font-semibold text-base-content">
+          {{ $t('databases.title') }}
+        </h1>
 
-      <!-- 数据源 tab：顺序即 sources/index.ts 的注册顺序，新库注册即出现 -->
-      <div role="tablist" class="tabs tabs-box w-fit">
-        <button
-          v-for="s in sources"
-          :key="s.id"
-          role="tab"
-          class="tab kawaru-text-112"
-          :class="{ 'tab-active': s.id === activeId }"
-          @click="switchSource(s.id)"
-        >
-          {{ s.label() }}
-        </button>
+        <!-- 数据源 tab：顺序即 sources/index.ts 的注册顺序，新库注册即出现 -->
+        <div role="tablist" class="tabs tabs-box w-fit">
+          <button
+            v-for="s in sources"
+            :key="s.id"
+            role="tab"
+            class="tab kawaru-text-112"
+            :class="{ 'tab-active': s.id === activeId }"
+            @click="switchSource(s.id)"
+          >
+            {{ s.label() }}
+          </button>
+        </div>
       </div>
 
       <!-- Error State -->
@@ -86,13 +82,17 @@ const {
         :rows="rows"
         :loading="loading"
         v-model:keyword="keyword"
+        :filter-values="filterValues"
+        :filters-active="filtersActive"
         :current-page="currentPage"
         :total-pages="meta.total_pages"
         :total-items="meta.total_records"
         :page-size="pageSize"
+        :page-size-options="pageSizeOptions"
         :page-range="pageRange"
+        @update:filter="setFilter"
         @search="handleSearch"
-        @reset="resetKeyword"
+        @reset="resetSearch"
         @go-to-page="goToPage"
         @change-size="changeSize"
       />

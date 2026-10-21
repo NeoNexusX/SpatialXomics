@@ -9,8 +9,32 @@ describe('hmdbSource', () => {
     expect(DATABASE_SOURCES[0]).toBe(hmdbSource)
   })
 
-  it('declares exactly one expandable column', () => {
-    expect(hmdbSource.columns.filter((c) => c.expandable)).toHaveLength(1)
+  it('declares columns in the agreed order', () => {
+    expect(hmdbSource.columns.map((c) => c.key)).toEqual([
+      'id',
+      'formula',
+      'name',
+      'inchi',
+      'mass',
+      'origin',
+      'pubchem',
+      'hmdb',
+    ])
+    // PubChem 检索用名称（与注释面板一致）
+    expect(hmdbSource.columns.find((c) => c.key === 'pubchem')!.pubchemField).toBe('name')
+  })
+
+  it('offers copy buttons on name and InChI only', () => {
+    expect(hmdbSource.columns.filter((c) => c.copyable).map((c) => c.key)).toEqual([
+      'name',
+      'inchi',
+    ])
+  })
+
+  it('links HMDB entries via the shared compoundUrl logic', () => {
+    const col = hmdbSource.columns.find((c) => c.key === 'hmdb')!
+    expect(col.link!({ id: 'HMDB0000001' })).toBe('https://hmdb.ca/metabolites/HMDB0000001')
+    expect(col.link!({ id: 'not-an-id' })).toBeNull()
   })
 
   it('has a label for every column in both locales', () => {

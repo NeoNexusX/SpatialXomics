@@ -58,18 +58,39 @@ export function formatErrorMessage(detail: unknown): string {
 }
 
 /**
+ * session 失效（401）时的内存态清理钩子。
+ *
+ * 本模块清 localStorage 后，Pinia 里的 token/user 仍是旧值（storage 事件只在
+ * **其他**标签页触发，写入方自己收不到）。若不清，路由守卫会把「已失效但 store
+ * 仍认为已登录」的用户从 /login 弹回业务页——历史上表现为过期 token 访问
+ * /database 却落到数据集列表。authStore 在创建时注册本钩子同步清理。
+ */
+let onUnauthorized: (() => void) | null = null
+
+export function registerUnauthorizedHandler(handler: () => void): void {
+  onUnauthorized = handler
+}
+
+/**
  * Global 401 handler: any authenticated endpoint that rejects the token means
  * the session is dead. Clear the stored credentials so the request
- * interceptor stops attaching the stale token, and bounce to /login once
- * (guarded by a module flag to avoid a redirect storm when several requests
- * fail together). Skipped when a skipAuthRedirect marker is set on the config
- * (e.g. logout itself, or a page that handles 401s on its own).
+ * interceptor stops attaching the stale token, reset the in-memory auth store,
+ * and bounce to /login once (guarded by a module flag to avoid a redirect storm
+ * when several requests fail together). Skipped when a skipAuthRedirect marker
+ * is set on the config (e.g. logout itself, or a page that handles 401s on its
+ * own).
+ *
+ * 公开路由上不跳登录：该页匿名本就可浏览（如 /datasets、分享页），过期 token
+ * 只清会话，不该把访客踢走。需要登录态的页面仍按原逻辑跳转。
  */
 function handleUnauthorized(error: AxiosError<ErrorResponse>): void {
   if ((error.config as any)?.skipAuthRedirect) return
   if (error.response?.status !== 401) return
   authStorage.clearAuthData()
+  onUnauthorized?.()
   if (typeof window === 'undefined') return
+  // 当前路由只要不是全链路需要登录，就不触发登录跳转
+  if (!router.currentRoute.value.matched.some((record) => record.meta.requiresAuth)) return
   const path = window.location.pathname
   if (path === '/login' || path === '/register' || path === '/forgotpassword') return
   // 必须 SPA 内导航：httpClient 由懒加载 chunk 引入，401 时 router 已就绪。
