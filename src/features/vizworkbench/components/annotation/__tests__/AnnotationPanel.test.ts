@@ -73,6 +73,11 @@ const acquisition: Acquisition = {
   storageMode: 'continuous',
 }
 
+// 本文件是重集成测试（真实 worker harness + settle() 的固定 220ms 等待）：
+// 最重用例单独跑约 3.8s，在 coverage / 全量并行的负载下会超过默认 5s 上限。
+// 统一放宽到 15s——超时只是失败上限，不影响正常用例的耗时。
+vi.setConfig({ testTimeout: 15_000 })
+
 /** 测试数据当作对齐数据集：平均轴 + 平均谱 */
 const spectrum = parseTestSpectrum(positiveCsv)
 
