@@ -229,7 +229,7 @@ const handleDownload = async () => {
 
     <!-- 手机端允许横向滚动：min-w 让表格保持可读列宽，而不是被压成几条竖线 -->
     <div class="overflow-x-auto w-full">
-      <table class="table table-fixed w-full min-w-[1100px]">
+      <table class="table table-fixed w-full min-w-[1300px]">
         <colgroup>
           <!-- 列宽由描述符指定；缺省各列均分 -->
           <col
@@ -240,7 +240,7 @@ const handleDownload = async () => {
         </colgroup>
         <thead>
           <tr class="bg-base-200 text-base-content/60 border-b border-base-200 kawaru-text-112">
-            <th v-for="col in source.columns" :key="col.key" class="font-medium py-3 px-2 text-center">
+            <th v-for="col in source.columns" :key="col.key" class="font-medium py-3 px-4 text-center">
               {{ col.label() }}
             </th>
           </tr>
@@ -272,7 +272,7 @@ const handleDownload = async () => {
               <td
                 v-for="col in source.columns"
                 :key="col.key"
-                class="py-3 px-2 text-center"
+                class="py-3 px-4 text-center"
                 :class="{ 'font-mono': col.mono }"
               >
                 <!-- PubChem 列：按名称检索，复用注释面板的对话框。图标按钮：

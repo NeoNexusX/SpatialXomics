@@ -37,8 +37,8 @@ const {
 
 <template>
   <div class="min-h-screen bg-base-200 font-sans kawaru-text-100">
-    <!-- 数据密集页：不套全站 container（1280 封顶），放宽到 1600 让 8 列不互相挤压 -->
-    <div class="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
+    <!-- 数据密集页：不套全站 container（1280 封顶），放宽到 1800 让 8 列有足够横向空间 -->
+    <div class="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
       <!-- 1. Top Banner：标题与数据源 tab 同一行 -->
       <div class="flex flex-wrap items-center gap-4">
         <h1 class="kawaru-text-page-title leading-[1.15] font-semibold text-base-content">
