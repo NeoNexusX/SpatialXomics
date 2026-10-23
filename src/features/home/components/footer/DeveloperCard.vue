@@ -15,8 +15,11 @@ const props = defineProps<{ member: TeamMember }>()
 const imgFailed = ref(false)
 const showImage = computed(() => !!props.member.avatar && !imgFailed.value)
 
+/** 姓名按当前语言解析（content.json 里可写成 { "en": ..., "zh-CN": ... }） */
+const memberName = computed(() => localized(props.member.name))
+
 const initials = computed(() =>
-  props.member.name
+  memberName.value
     .split(/\s+/)
     .map((w) => w[0] ?? '')
     .filter(Boolean)
@@ -48,7 +51,7 @@ const initials = computed(() =>
               <img
                 v-if="showImage"
                 :src="member.avatar"
-                :alt="member.name"
+                :alt="memberName"
                 loading="lazy"
                 decoding="async"
                 @error="imgFailed = true"
@@ -59,7 +62,7 @@ const initials = computed(() =>
         </div>
         <!-- 姓名 -->
         <div class="member-name flex w-full items-center justify-center gap-1.5 font-bold text-base-content">
-          <span class="truncate">{{ member.name }}</span>
+          <span class="truncate">{{ memberName }}</span>
           <SvgIcon
             v-if="member.homepage"
             type="share"
@@ -75,7 +78,7 @@ const initials = computed(() =>
           class="member-sub flex items-center justify-center gap-[0.4em] text-base-content/60 "
         >
           <SvgIcon type="institution" class="w-[1.5em] shrink-0" />
-          <div class="truncate leading-none">{{ localized(member.school) }}</div>
+          <div class="truncate leading-tight">{{ localized(member.school) }}</div>
         </div>
         <!-- 学位 -->
         <div
@@ -83,7 +86,7 @@ const initials = computed(() =>
           class="member-meta flex items-center justify-center gap-[0.4em] text-base-content/80"
         >
           <SvgIcon type="research" class="w-[1.5em] shrink-0 text-primary" />
-          <div class="truncate leading-none">{{ localized(member.degree) }}</div>
+          <div class="truncate leading-tight">{{ localized(member.degree) }}</div>
         </div>
       </div>
     </div>
