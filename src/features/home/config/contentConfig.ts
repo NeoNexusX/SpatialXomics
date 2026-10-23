@@ -56,7 +56,7 @@ export interface TimelineItem {
 /**
  * 开发团队成员（非技术同学可直接编辑 content.json 的 `team`，刷新即生效）。
  *
- * - name:     姓名
+ * - name:     姓名（可本地化，如 { "en": "Zongwei Cai", "zh-CN": "蔡宗苇" }）
  * - role:     职位 / 角色
  * - degree:   学位，如 'Ph.D.' / 'M.Sc.' / 'B.Sc.'（可选，不需要时填 "" 或删除该键）
  * - school:   学校 / 机构（可选）
@@ -66,8 +66,8 @@ export interface TimelineItem {
  *             留空则卡片不可点击
  */
 export interface TeamMember {
-  /** 姓名 */
-  name: string
+  /** 姓名（可本地化；中文页面显示中文名） */
+  name: LocalizedText
   /** 职位 / 角色 */
   role: LocalizedText
   /** 学位，如 'Ph.D.' / 'M.Sc.' / 'B.Sc.' */

@@ -15,8 +15,11 @@ const props = defineProps<{ member: TeamMember }>()
 const imgFailed = ref(false)
 const showImage = computed(() => !!props.member.avatar && !imgFailed.value)
 
+/** 姓名按当前语言解析（content.json 里可写成 { "en": ..., "zh-CN": ... }） */
+const memberName = computed(() => localized(props.member.name))
+
 const initials = computed(() =>
-  props.member.name
+  memberName.value
     .split(/\s+/)
     .map((w) => w[0] ?? '')
     .filter(Boolean)
@@ -48,7 +51,7 @@ const initials = computed(() =>
               <img
                 v-if="showImage"
                 :src="member.avatar"
-                :alt="member.name"
+                :alt="memberName"
                 loading="lazy"
                 decoding="async"
                 @error="imgFailed = true"
@@ -59,7 +62,7 @@ const initials = computed(() =>
         </div>
         <!-- 姓名 -->
         <div class="member-name flex w-full items-center justify-center gap-1.5 font-bold text-base-content">
-          <span class="truncate">{{ member.name }}</span>
+          <span class="truncate">{{ memberName }}</span>
           <SvgIcon
             v-if="member.homepage"
             type="share"
