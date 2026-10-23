@@ -55,6 +55,35 @@
   "timeline": [
     {
       "date": {
+        "en": "October 21",
+        "zh-CN": "10月21日"
+      },
+      "version": "0.7.5",
+      "features": [
+        {
+          "en": "Region comparison upgrade: NPZ mask import alongside drawn ROIs and KMeans clusters",
+          "zh-CN": "区域比较升级：支持导入 NPZ 掩膜，与绘制 ROI、KMeans 簇同列比较区域"
+        },
+        {
+          "en": "Differential and enriched ion export from comparison results (A-only, B-only, A-enriched, B-enriched)",
+          "zh-CN": "比较结果支持差异与富集离子导出（A 独有、B 独有、A 富集、B 富集）"
+        },
+        {
+          "en": "New reference database page (HMDB): keyword / origin / mass-range filtering and full-library CSV download",
+          "zh-CN": "新增参考数据库页（HMDB）：关键词、来源、质量区间筛选与整库 CSV 下载"
+        },
+        {
+          "en": "Import full annotation libraries from the platform reference database, reused locally without re-downloading",
+          "zh-CN": "注释可从平台参考库整库导入，本地保存复用、不重复下载"
+        },
+        {
+          "en": "New database guide (zh/en), annotation guide updates and navigation polish",
+          "zh-CN": "新增数据库指南（中英）、注释指南更新与导航细节优化"
+        }
+      ]
+    },
+    {
+      "date": {
         "en": "October 9",
         "zh-CN": "10月9日"
       },
@@ -110,34 +139,26 @@
           "zh-CN": "加载骨架统一与界面一致性优化"
         }
       ]
-    },
-    {
-      "date": {
-        "en": "September 17",
-        "zh-CN": "9月17日"
-      },
-      "version": "0.7.2",
-      "features": [
-        {
-          "en": "Multi-select filtering and server-side search for datasets and collections",
-          "zh-CN": "数据集与集合筛选支持多选，搜索改为服务端处理"
-        },
-        {
-          "en": "Shareable public file pages via non-enumerable links (no sign-in required)",
-          "zh-CN": "文件公开分享页：不可枚举链接，免登录访问"
-        },
-        {
-          "en": "Share private datasets in one click via make-public confirmation",
-          "zh-CN": "私有数据集一键分享（确认设为公开后自动复制链接）"
-        },
-        {
-          "en": "Visualization workbench: 10-color ion channels, per-layer opacity and mask export polish",
-          "zh-CN": "可视化工作台：离子通道扩至十色、逐层透明度与蒙版导出优化"
-        }
-      ]
     }
   ],
   "team": [
+    {
+      "name": "Zongwei Cai",
+      "role": {
+        "en": "Project Sponsor",
+        "zh-CN": "项目发起人"
+      },
+      "degree": {
+        "en": "Chair Professor",
+        "zh-CN": "讲席教授"
+      },
+      "school": {
+        "en": "EIT, Ningbo",
+        "zh-CN": "宁波东方理工大学"
+      },
+      "avatar": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/20261022162619921.jpg",
+      "homepage": "https://faculty.eitech.edu.cn/chem/czw/main.htm"
+    },
     {
       "name": "Jiyang Dong",
       "role": {
@@ -152,7 +173,7 @@
         "en": "Xiamen University",
         "zh-CN": "厦门大学"
       },
-      "avatar": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/mmexport1780303224964.jpg",
+      "avatar": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/20261022162718728.jpg",
       "homepage": "https://ese.xmu.edu.cn/info/1071/1735.htm"
     },
     {
@@ -169,7 +190,7 @@
         "en": "Fuzhou University",
         "zh-CN": "福州大学"
       },
-      "avatar": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/mmexport1780300337455.jpg",
+      "avatar": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/20261022162839327.png",
       "homepage": "https://iime.fzu.edu.cn/info/1038/1481.htm"
     },
     {

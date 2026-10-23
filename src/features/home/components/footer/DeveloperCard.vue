@@ -75,7 +75,7 @@ const initials = computed(() =>
           class="member-sub flex items-center justify-center gap-[0.4em] text-base-content/60 "
         >
           <SvgIcon type="institution" class="w-[1.5em] shrink-0" />
-          <div class="truncate leading-none">{{ localized(member.school) }}</div>
+          <div class="truncate leading-tight">{{ localized(member.school) }}</div>
         </div>
         <!-- 学位 -->
         <div
@@ -83,7 +83,7 @@ const initials = computed(() =>
           class="member-meta flex items-center justify-center gap-[0.4em] text-base-content/80"
         >
           <SvgIcon type="research" class="w-[1.5em] shrink-0 text-primary" />
-          <div class="truncate leading-none">{{ localized(member.degree) }}</div>
+          <div class="truncate leading-tight">{{ localized(member.degree) }}</div>
         </div>
       </div>
     </div>
