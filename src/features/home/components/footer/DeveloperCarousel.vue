@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import DeveloperCard from './DeveloperCard.vue'
 import { getConfig } from '@/shared/config'
+import { localized } from '@/shared/config/localizedText'
 import { getContent } from '@/features/home/config/contentConfig'
 import { useCarouselScroll } from '@/features/home/composables/useCarouselScroll'
 
@@ -24,7 +25,7 @@ const { trackRef, atStart, atEnd, cols, GAP, MAX_CARD, TRACK_MAX, scrollByPage }
       :aria-label="$t('home.team.carousel')"
       tabindex="0"
     >
-      <li v-for="member in TEAM_MEMBERS" :key="member.name" class="dev-cell shrink-0 snap-start">
+      <li v-for="member in TEAM_MEMBERS" :key="localized(member.name)" class="dev-cell shrink-0 snap-start">
         <!-- 内层包裹：承载缩放/淡入淡出，不影响 li 的 snap 几何 -->
         <div class="carousel-item">
           <DeveloperCard :member="member" />

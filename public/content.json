@@ -143,7 +143,10 @@
   ],
   "team": [
     {
-      "name": "Zongwei Cai",
+      "name": {
+        "en": "Zongwei Cai",
+        "zh-CN": "蔡宗苇"
+      },
       "role": {
         "en": "Project Sponsor",
         "zh-CN": "项目发起人"
@@ -160,7 +163,10 @@
       "homepage": "https://faculty.eitech.edu.cn/chem/czw/main.htm"
     },
     {
-      "name": "Jiyang Dong",
+      "name": {
+        "en": "Jiyang Dong",
+        "zh-CN": "董继扬"
+      },
       "role": {
         "en": "Project Sponsor",
         "zh-CN": "项目发起人"
@@ -177,7 +183,10 @@
       "homepage": "https://ese.xmu.edu.cn/info/1071/1735.htm"
     },
     {
-      "name": "Lei Guo",
+      "name": {
+        "en": "Lei Guo",
+        "zh-CN": "郭磊"
+      },
       "role": {
         "en": "Project Sponsor",
         "zh-CN": "项目发起人"
@@ -194,7 +203,10 @@
       "homepage": "https://iime.fzu.edu.cn/info/1038/1481.htm"
     },
     {
-      "name": "Zeyu Zhu",
+      "name": {
+        "en": "Zeyu Zhu",
+        "zh-CN": "朱泽域"
+      },
       "role": {
         "en": "Project Lead",
         "zh-CN": "项目负责人"
@@ -211,7 +223,10 @@
       "homepage": "https://neonexusx.github.io/"
     },
     {
-      "name": "Yongkun Lin",
+      "name": {
+        "en": "Yongkun Lin",
+        "zh-CN": "林泳坤"
+      },
       "role": {
         "en": "Frontend Engineer",
         "zh-CN": "前端工程师"
@@ -228,7 +243,10 @@
       "homepage": "https://bionet.xmu.edu.cn/info/1073/2600.htm"
     },
     {
-      "name": "Qiurong Xiong",
+      "name": {
+        "en": "Qiurong Xiong",
+        "zh-CN": "熊秋榕"
+      },
       "role": {
         "en": "Backend Engineer",
         "zh-CN": "后端工程师"
@@ -245,7 +263,10 @@
       "homepage": "https://bionet.xmu.edu.cn/info/1073/2630.htm"
     },
     {
-      "name": "Leqiang Dong",
+      "name": {
+        "en": "Leqiang Dong",
+        "zh-CN": "董乐强"
+      },
       "role": {
         "en": "Algorithm Engineer",
         "zh-CN": "算法工程师"
@@ -262,7 +283,10 @@
       "homepage": "https://dil666555.github.io/"
     },
     {
-      "name": "Xun Zhong",
+      "name": {
+        "en": "Xun Zhong",
+        "zh-CN": "钟勋"
+      },
       "role": {
         "en": "Backend Engineer",
         "zh-CN": "后端工程师"
@@ -279,7 +303,10 @@
       "homepage": "https://b23.tv/ih7QjCW"
     },
     {
-      "name": "🐱Zai zai🐱",
+      "name": {
+        "en": "🐱Zai zai🐱",
+        "zh-CN": "🐱仔仔🐱"
+      },
       "role": {
         "en": "Trouble Maker",
         "zh-CN": "捣蛋鬼"
