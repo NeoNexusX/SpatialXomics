@@ -61,24 +61,24 @@
       "version": "0.7.5",
       "features": [
         {
-          "en": "Region comparison upgrade: NPZ mask import alongside drawn ROIs and KMeans clusters",
-          "zh-CN": "区域比较升级：支持导入 NPZ 掩膜，与绘制 ROI、KMeans 簇同列比较区域"
+          "en": "NPZ mask import for region comparison",
+          "zh-CN": "区域比较支持导入 NPZ 掩膜"
         },
         {
-          "en": "Differential and enriched ion export from comparison results (A-only, B-only, A-enriched, B-enriched)",
-          "zh-CN": "比较结果支持差异与富集离子导出（A 独有、B 独有、A 富集、B 富集）"
+          "en": "Export differential and enriched ions from comparisons",
+          "zh-CN": "比较结果可导出差异与富集离子"
         },
         {
-          "en": "New reference database page (HMDB): keyword / origin / mass-range filtering and full-library CSV download",
-          "zh-CN": "新增参考数据库页（HMDB）：关键词、来源、质量区间筛选与整库 CSV 下载"
+          "en": "New HMDB database page with filtering and CSV download",
+          "zh-CN": "新增 HMDB 数据库页，支持筛选与下载"
         },
         {
-          "en": "Import full annotation libraries from the platform reference database, reused locally without re-downloading",
-          "zh-CN": "注释可从平台参考库整库导入，本地保存复用、不重复下载"
+          "en": "Import full annotation libraries from the platform, reused locally",
+          "zh-CN": "注释库可从平台整库导入并复用"
         },
         {
-          "en": "New database guide (zh/en), annotation guide updates and navigation polish",
-          "zh-CN": "新增数据库指南（中英）、注释指南更新与导航细节优化"
+          "en": "New database guide and annotation guide updates",
+          "zh-CN": "新增数据库指南，注释指南更新"
         }
       ]
     },
@@ -94,24 +94,20 @@
           "zh-CN": "AI Agent 平台与注释多证据打分"
         },
         {
-          "en": "ROI selection highlights the main image and exports masks",
-          "zh-CN": "ROI 勾选联动主图高亮与掩膜导出"
+          "en": "ROI highlighting and mask export",
+          "zh-CN": "ROI 联动高亮与掩膜导出"
         },
         {
-          "en": "Annotation CSV decoding with GBK/GB18030 fallback",
-          "zh-CN": "注释 CSV 解码支持 GBK/GB18030 回退"
+          "en": "GBK/GB18030 support for annotation CSV",
+          "zh-CN": "注释 CSV 支持 GBK 编码"
         },
         {
-          "en": "Gamma and display range gray out while multi-ion overlay is active",
-          "zh-CN": "多离子叠加激活时置灰 Gamma 与显示范围控件"
+          "en": "Gray out Gamma and display range during multi-ion overlay",
+          "zh-CN": "多离子叠加时置灰不适用控件"
         },
         {
-          "en": "Documentation overhaul: unified bilingual guides, collections usage and account management",
-          "zh-CN": "文档大更新：中英指南基名统一、集合使用指南与账号管理重写"
-        },
-        {
-          "en": "E2E test suite overhaul: full-route coverage, clipboard/overlay tests and stable cross-browser downloads",
-          "zh-CN": "E2E 测试体系重构：全路由覆盖、剪贴板/叠加用例与跨浏览器下载稳定化"
+          "en": "Documentation overhaul: unified guides and account pages",
+          "zh-CN": "文档大更新：指南统一与账号管理重写"
         }
       ]
     },
@@ -123,20 +119,20 @@
       "version": "0.7.3",
       "features": [
         {
-          "en": "Collections v2 revamp with metadata vocabulary integration",
+          "en": "Collections v2 revamp with metadata vocabulary",
           "zh-CN": "集合中心 v2 改版，元数据接入词表"
         },
         {
-          "en": "One-click clipboard copy for share links across pages",
-          "zh-CN": "分享链接一键复制（跨页面统一）"
+          "en": "One-click share link copy",
+          "zh-CN": "分享链接一键复制"
         },
         {
-          "en": "Collections migrated to public_id; private datasets shareable without going public",
-          "zh-CN": "集合接口迁移 public_id；私有数据集可直接分享，不再强制设公开"
+          "en": "Private datasets shareable without going public",
+          "zh-CN": "私有数据集可直接分享，无需设公开"
         },
         {
-          "en": "Unified loading skeletons and UI consistency polish",
-          "zh-CN": "加载骨架统一与界面一致性优化"
+          "en": "Unified loading skeletons and UI polish",
+          "zh-CN": "加载骨架统一与界面优化"
         }
       ]
     }
