@@ -223,6 +223,23 @@
       "homepage": "https://neonexusx.github.io/"
     },
     {
+      "name": "Thomas Ka-Yam Lam",
+      "role": {
+        "en": "Technical Advisor",
+        "zh-CN": "技术指导"
+      },
+      "degree": {
+        "en": "Ph.D.",
+        "zh-CN": "博士"
+      },
+      "school": {
+        "en": "HKBU",
+        "zh-CN": "香港浸会大学"
+      },
+      "avatar": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/20261024203039907.jpg",
+      "homepage": "https://www.researchgate.net/profile/Thomas-K-Y-Lam"
+    },
+    {
       "name": {
         "en": "Yongkun Lin",
         "zh-CN": "林泳坤"
