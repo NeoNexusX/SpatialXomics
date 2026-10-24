@@ -53,11 +53,11 @@ function cells(wrapper: ReturnType<typeof mountBreakdown>, label: string): strin
 describe('AnnotationScoreBreakdown', () => {
   it('lists scores and contributions, including the two spatial components', () => {
     const wrapper = mountBreakdown()
-    expect(cells(wrapper, 'Mass')).toEqual(['Mass', '1.000', '60%', '0.600'])
-    expect(cells(wrapper, 'Adduct fit')).toEqual(['Adduct fit', '1.000', '10%', '0.100'])
-    expect(cells(wrapper, 'Spatial')).toEqual(['Spatial', '0.780', '30%', '0.234'])
-    expect(cells(wrapper, 'chaos')).toEqual(['chaos', '0.900', '6%', '0.054'])
-    expect(cells(wrapper, 'Co-loc')).toEqual(['Co-loc', '0.750', '24%', '0.180'])
+    expect(cells(wrapper, 'Mass')).toEqual(['Mass', '1.000', '40%', '0.400'])
+    expect(cells(wrapper, 'Adduct fit')).toEqual(['Adduct fit', '1.000', '20%', '0.200'])
+    expect(cells(wrapper, 'Spatial')).toEqual(['Spatial', '0.780', '40%', '0.312'])
+    expect(cells(wrapper, 'chaos')).toEqual(['chaos', '0.900', '8%', '0.072'])
+    expect(cells(wrapper, 'Co-loc')).toEqual(['Co-loc', '0.750', '32%', '0.240'])
     expect(wrapper.find('tfoot').text()).toContain('0.956')
     expect(wrapper.find('details').exists()).toBe(false)
     expect(wrapper.findAll('p')).toHaveLength(0)
@@ -72,9 +72,9 @@ describe('AnnotationScoreBreakdown', () => {
       spatialState: state,
       total: 0.8,
     })
-    expect(cells(wrapper, 'Spatial')).toEqual(['Spatial', '0.000', '30%', '0.000'])
-    expect(cells(wrapper, 'chaos')).toEqual(['chaos', '–', '6%', '–'])
-    expect(cells(wrapper, 'Co-loc')).toEqual(['Co-loc', '–', '24%', '–'])
+    expect(cells(wrapper, 'Spatial')).toEqual(['Spatial', '0.000', '40%', '0.000'])
+    expect(cells(wrapper, 'chaos')).toEqual(['chaos', '–', '8%', '–'])
+    expect(cells(wrapper, 'Co-loc')).toEqual(['Co-loc', '–', '32%', '–'])
     expect(wrapper.find('tfoot').text()).toContain('0.800')
     expect(wrapper.text()).not.toContain('0.150*')
     wrapper.unmount()
@@ -82,15 +82,15 @@ describe('AnnotationScoreBreakdown', () => {
 
   it('distinguishes absent co-localization from an uncomputed spatial score', () => {
     const wrapper = mountBreakdown({ coloc: null, spatial: 0.18, total: 0.836 })
-    expect(cells(wrapper, 'Spatial')).toEqual(['Spatial', '0.180', '30%', '0.054'])
-    expect(cells(wrapper, 'Co-loc')).toEqual(['Co-loc', '0.000', '24%', '0.000'])
+    expect(cells(wrapper, 'Spatial')).toEqual(['Spatial', '0.180', '40%', '0.072'])
+    expect(cells(wrapper, 'Co-loc')).toEqual(['Co-loc', '0.000', '32%', '0.000'])
     wrapper.unmount()
   })
 
   it.each([-0.4, 0.05, 0.1])('shows correlation %s as zero co-localization contribution', (r) => {
     const wrapper = mountBreakdown({ coloc: r, spatial: 0.18, total: 0.836 })
-    expect(cells(wrapper, 'Co-loc')).toEqual(['Co-loc', '0.000', '24%', '0.000'])
-    expect(cells(wrapper, 'chaos')).toEqual(['chaos', '0.900', '6%', '0.054'])
+    expect(cells(wrapper, 'Co-loc')).toEqual(['Co-loc', '0.000', '32%', '0.000'])
+    expect(cells(wrapper, 'chaos')).toEqual(['chaos', '0.900', '8%', '0.072'])
     wrapper.unmount()
   })
 

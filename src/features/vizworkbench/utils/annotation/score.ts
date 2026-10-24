@@ -24,7 +24,7 @@ export const MIN_SCORE_RATIO = 0.1
 export const MAX_SCORE_RATIO = SCORE_RATIO_TOTAL - 2 * MIN_SCORE_RATIO
 
 /** 默认比例 质量 : 加合适配度 : 空间 */
-export const DEFAULT_SCORE_RATIO: Readonly<ScoreWeights> = { mass: 6, adduct: 1, spatial: 3 }
+export const DEFAULT_SCORE_RATIO: Readonly<ScoreWeights> = { mass: 4, adduct: 2, spatial: 4 }
 
 /** 单个比例数在 [MIN_SCORE_RATIO, MAX_SCORE_RATIO] 内 */
 export function isValidScoreRatioPart(v: number): boolean {
