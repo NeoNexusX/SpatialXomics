@@ -63,7 +63,7 @@ const MASS = 'input[aria-label="Mass weight"]'
 const ADDUCT = 'input[aria-label="Adduct fit weight"]'
 const SPATIAL = 'input[aria-label="Spatial weight"]'
 const START = 'button[aria-label="Start annotation"]'
-const RESET = 'button[title="Reset to default weights 6:1:3"]'
+const RESET = 'button[title="Reset to default weights 4:2:4"]'
 
 let wrappers: VueWrapper[] = []
 
@@ -131,20 +131,20 @@ afterEach(() => {
 })
 
 describe('annotation score weights', () => {
-  it('starts with 6 : 1 : 3 and passes weights 0.6 / 0.1 / 0.3 to the engine', async () => {
+  it('starts with 4 : 2 : 4 and passes weights 0.4 / 0.2 / 0.4 to the engine', async () => {
     const { wrapper } = setupAnnotation()
     await flushPromises()
-    expect(values(wrapper)).toEqual(['6', '1', '3'])
+    expect(values(wrapper)).toEqual(['4', '2', '4'])
     expect(wrapper.find(RESET).exists()).toBe(false)
     await wrapper.get(START).trigger('click')
-    expect(lastWeights()).toEqual({ mass: 0.6, adduct: 0.1, spatial: 0.3 })
+    expect(lastWeights()).toEqual({ mass: 0.4, adduct: 0.2, spatial: 0.4 })
   })
 
   it('blocks Start until the three weights add up to 10, then runs with them', async () => {
     const { ann, wrapper } = setupAnnotation()
     await flushPromises()
     await wrapper.get(MASS).setValue('5')
-    expect(values(wrapper)).toEqual(['5', '1', '3'])
+    expect(values(wrapper)).toEqual(['5', '2', '4'])
     expect(ann.blockedReason.value).toBe('weights')
     expect(wrapper.get(START).attributes('disabled')).toBeDefined()
     expect(wrapper.get(MASS).attributes('aria-invalid')).toBe('true')
@@ -152,12 +152,12 @@ describe('annotation score weights', () => {
     ann.start()
     expect(engineRun).not.toHaveBeenCalled()
 
-    await wrapper.get(SPATIAL).setValue('4')
+    await wrapper.get(SPATIAL).setValue('3')
     expect(ann.blockedReason.value).toBeNull()
     expect(wrapper.get(MASS).attributes('aria-invalid')).toBe('false')
     expect(wrapper.get(MASS).classes()).not.toContain('input-error')
     await wrapper.get(START).trigger('click')
-    expect(lastWeights()).toEqual({ mass: 0.5, adduct: 0.1, spatial: 0.4 })
+    expect(lastWeights()).toEqual({ mass: 0.5, adduct: 0.2, spatial: 0.3 })
   })
 
   it('accepts decimals', async () => {
@@ -165,6 +165,7 @@ describe('annotation score weights', () => {
     await flushPromises()
     await wrapper.get(MASS).setValue('5.5')
     await wrapper.get(ADDUCT).setValue('1.5')
+    await wrapper.get(SPATIAL).setValue('3')
     await wrapper.get(START).trigger('click')
     const w = lastWeights()
     expect(w.mass).toBeCloseTo(0.55, 12)
@@ -176,8 +177,8 @@ describe('annotation score weights', () => {
     const { ann, wrapper } = setupAnnotation()
     await flushPromises()
     await wrapper.get(MASS).setValue(value)
-    expect(values(wrapper)).toEqual(['6', '1', '3'])
-    expect(ann.scoreRatio.value).toEqual({ mass: 6, adduct: 1, spatial: 3 })
+    expect(values(wrapper)).toEqual(['4', '2', '4'])
+    expect(ann.scoreRatio.value).toEqual({ mass: 4, adduct: 2, spatial: 4 })
   })
 
   it('restores the default of an input that is cleared', async () => {
@@ -186,7 +187,7 @@ describe('annotation score weights', () => {
     await wrapper.get(MASS).setValue('5')
     expect(ann.scoreRatioValid.value).toBe(false)
     await wrapper.get(MASS).setValue('')
-    expect(values(wrapper)).toEqual(['6', '1', '3'])
+    expect(values(wrapper)).toEqual(['4', '2', '4'])
     expect(ann.scoreRatioValid.value).toBe(true)
   })
 
@@ -194,39 +195,39 @@ describe('annotation score weights', () => {
     const first = setupAnnotation()
     await flushPromises()
     await first.wrapper.get(MASS).setValue('5')
-    await first.wrapper.get(SPATIAL).setValue('4')
+    await first.wrapper.get(SPATIAL).setValue('3')
     await vi.advanceTimersByTimeAsync(150)
     first.wrapper.unmount()
     wrappers = []
 
     const { wrapper, runId } = setupAnnotation()
     await flushPromises()
-    expect(values(wrapper)).toEqual(['5', '1', '4'])
+    expect(values(wrapper)).toEqual(['5', '2', '3'])
     await wrapper.get(RESET).trigger('click')
     await vi.advanceTimersByTimeAsync(150)
-    expect(values(wrapper)).toEqual(['6', '1', '3'])
+    expect(values(wrapper)).toEqual(['4', '2', '4'])
     expect(wrapper.find(RESET).exists()).toBe(false)
     expect(
       JSON.parse(localStorage.getItem(STORAGE_KEYS.annotationSettings + runId.value)!),
-    ).toMatchObject({ weights: { mass: 6, adduct: 1, spatial: 3 } })
+    ).toMatchObject({ weights: { mass: 4, adduct: 2, spatial: 4 } })
 
     runId.value = 'another-result'
     await flushPromises()
-    expect(values(wrapper)).toEqual(['6', '1', '3'])
+    expect(values(wrapper)).toEqual(['4', '2', '4'])
   })
 
   it.each([
     ['not adding up to 10', { mass: 6, adduct: 1, spatial: 2 }],
     ['below 0.1', { mass: 0, adduct: 1, spatial: 9 }],
     ['not numbers', { mass: '5', adduct: 1, spatial: 4 }],
-  ])('falls back to 6 : 1 : 3 for saved weights %s', async (_, weights) => {
+  ])('falls back to 4 : 2 : 4 for saved weights %s', async (_, weights) => {
     localStorage.setItem(
       STORAGE_KEYS.annotationSettings + RUN_ID,
       JSON.stringify({ tolValue: null, tolUnit: 'ppm', overrides: {}, polarity: null, weights }),
     )
     const { ann, wrapper } = setupAnnotation()
     await flushPromises()
-    expect(values(wrapper)).toEqual(['6', '1', '3'])
+    expect(values(wrapper)).toEqual(['4', '2', '4'])
     expect(ann.blockedReason.value).toBeNull()
   })
 
@@ -238,7 +239,7 @@ describe('annotation score weights', () => {
     expect(ann.runState.value).toBe('done')
 
     await wrapper.get(MASS).setValue('5')
-    await wrapper.get(SPATIAL).setValue('4')
+    await wrapper.get(SPATIAL).setValue('3')
     await vi.advanceTimersByTimeAsync(500)
     expect(ann.runState.value).toBe('idle')
     expect(ann.summary.value).toBeNull()

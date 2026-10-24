@@ -143,17 +143,17 @@ describe('scores', () => {
 
   it('counts uncomputed spatial scores as zero without changing computed scores', () => {
     const cfg = DEFAULT_ENGINE_CONFIG
-    expect(totalScore(1, 1, null, cfg)).toBeCloseTo(0.7, 9)
+    expect(totalScore(1, 1, null, cfg)).toBeCloseTo(0.6, 9)
     expect(totalScore(0, 0, null, cfg)).toBe(0)
-    expect(totalScore(1, 1, 0.95, cfg)).toBeCloseTo(0.985, 9)
-    expect(totalScore(1, 0, 0, cfg)).toBe(0.6)
+    expect(totalScore(1, 1, 0.95, cfg)).toBeCloseTo(0.98, 9)
+    expect(totalScore(1, 0, 0, cfg)).toBe(0.4)
   })
 })
 
 describe('score weight ratio', () => {
-  it('defaults to 6 : 1 : 3, i.e. weights 0.6 / 0.1 / 0.3', () => {
-    expect(DEFAULT_SCORE_RATIO).toEqual({ mass: 6, adduct: 1, spatial: 3 })
-    expect(DEFAULT_ENGINE_CONFIG.weights).toEqual({ mass: 0.6, adduct: 0.1, spatial: 0.3 })
+  it('defaults to 4 : 2 : 4, i.e. weights 0.4 / 0.2 / 0.4', () => {
+    expect(DEFAULT_SCORE_RATIO).toEqual({ mass: 4, adduct: 2, spatial: 4 })
+    expect(DEFAULT_ENGINE_CONFIG.weights).toEqual({ mass: 0.4, adduct: 0.2, spatial: 0.4 })
   })
 
   it('divides each part by the sum', () => {
