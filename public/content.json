@@ -7,9 +7,9 @@
       "INTELLIGENT ✧"
     ],
     "gallery": [
-      "https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260826173023933.png",
-      "https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260826173023909.png",
-      "https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260826173023945.png"
+      "https://cdn.neonexus.top/docs/20260826173023933.png",
+      "https://cdn.neonexus.top/docs/20260826173023909.png",
+      "https://cdn.neonexus.top/docs/20260826173023945.png"
     ]
   },
   "features": {
@@ -55,6 +55,35 @@
   "timeline": [
     {
       "date": {
+        "en": "October 21",
+        "zh-CN": "10月21日"
+      },
+      "version": "0.7.5",
+      "features": [
+        {
+          "en": "NPZ mask import for region comparison",
+          "zh-CN": "区域比较支持导入 NPZ 掩膜"
+        },
+        {
+          "en": "Export differential and enriched ions from comparisons",
+          "zh-CN": "比较结果可导出差异与富集离子"
+        },
+        {
+          "en": "New HMDB database page with filtering and CSV download",
+          "zh-CN": "新增 HMDB 数据库页，支持筛选与下载"
+        },
+        {
+          "en": "Import full annotation libraries from the platform, reused locally",
+          "zh-CN": "注释库可从平台整库导入并复用"
+        },
+        {
+          "en": "New database guide and annotation guide updates",
+          "zh-CN": "新增数据库指南，注释指南更新"
+        }
+      ]
+    },
+    {
+      "date": {
         "en": "October 9",
         "zh-CN": "10月9日"
       },
@@ -65,24 +94,20 @@
           "zh-CN": "AI Agent 平台与注释多证据打分"
         },
         {
-          "en": "ROI selection highlights the main image and exports masks",
-          "zh-CN": "ROI 勾选联动主图高亮与掩膜导出"
+          "en": "ROI highlighting and mask export",
+          "zh-CN": "ROI 联动高亮与掩膜导出"
         },
         {
-          "en": "Annotation CSV decoding with GBK/GB18030 fallback",
-          "zh-CN": "注释 CSV 解码支持 GBK/GB18030 回退"
+          "en": "GBK/GB18030 support for annotation CSV",
+          "zh-CN": "注释 CSV 支持 GBK 编码"
         },
         {
-          "en": "Gamma and display range gray out while multi-ion overlay is active",
-          "zh-CN": "多离子叠加激活时置灰 Gamma 与显示范围控件"
+          "en": "Gray out Gamma and display range during multi-ion overlay",
+          "zh-CN": "多离子叠加时置灰不适用控件"
         },
         {
-          "en": "Documentation overhaul: unified bilingual guides, collections usage and account management",
-          "zh-CN": "文档大更新：中英指南基名统一、集合使用指南与账号管理重写"
-        },
-        {
-          "en": "E2E test suite overhaul: full-route coverage, clipboard/overlay tests and stable cross-browser downloads",
-          "zh-CN": "E2E 测试体系重构：全路由覆盖、剪贴板/叠加用例与跨浏览器下载稳定化"
+          "en": "Documentation overhaul: unified guides and account pages",
+          "zh-CN": "文档大更新：指南统一与账号管理重写"
         }
       ]
     },
@@ -94,52 +119,50 @@
       "version": "0.7.3",
       "features": [
         {
-          "en": "Collections v2 revamp with metadata vocabulary integration",
+          "en": "Collections v2 revamp with metadata vocabulary",
           "zh-CN": "集合中心 v2 改版，元数据接入词表"
         },
         {
-          "en": "One-click clipboard copy for share links across pages",
-          "zh-CN": "分享链接一键复制（跨页面统一）"
+          "en": "One-click share link copy",
+          "zh-CN": "分享链接一键复制"
         },
         {
-          "en": "Collections migrated to public_id; private datasets shareable without going public",
-          "zh-CN": "集合接口迁移 public_id；私有数据集可直接分享，不再强制设公开"
+          "en": "Private datasets shareable without going public",
+          "zh-CN": "私有数据集可直接分享，无需设公开"
         },
         {
-          "en": "Unified loading skeletons and UI consistency polish",
-          "zh-CN": "加载骨架统一与界面一致性优化"
-        }
-      ]
-    },
-    {
-      "date": {
-        "en": "September 17",
-        "zh-CN": "9月17日"
-      },
-      "version": "0.7.2",
-      "features": [
-        {
-          "en": "Multi-select filtering and server-side search for datasets and collections",
-          "zh-CN": "数据集与集合筛选支持多选，搜索改为服务端处理"
-        },
-        {
-          "en": "Shareable public file pages via non-enumerable links (no sign-in required)",
-          "zh-CN": "文件公开分享页：不可枚举链接，免登录访问"
-        },
-        {
-          "en": "Share private datasets in one click via make-public confirmation",
-          "zh-CN": "私有数据集一键分享（确认设为公开后自动复制链接）"
-        },
-        {
-          "en": "Visualization workbench: 10-color ion channels, per-layer opacity and mask export polish",
-          "zh-CN": "可视化工作台：离子通道扩至十色、逐层透明度与蒙版导出优化"
+          "en": "Unified loading skeletons and UI polish",
+          "zh-CN": "加载骨架统一与界面优化"
         }
       ]
     }
   ],
   "team": [
     {
-      "name": "Jiyang Dong",
+      "name": {
+        "en": "Zongwei Cai",
+        "zh-CN": "蔡宗苇"
+      },
+      "role": {
+        "en": "Project Sponsor",
+        "zh-CN": "项目发起人"
+      },
+      "degree": {
+        "en": "Chair Professor",
+        "zh-CN": "讲席教授"
+      },
+      "school": {
+        "en": "EIT, Ningbo",
+        "zh-CN": "宁波东方理工大学"
+      },
+      "avatar": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/20261022162619921.jpg",
+      "homepage": "https://faculty.eitech.edu.cn/chem/czw/main.htm"
+    },
+    {
+      "name": {
+        "en": "Jiyang Dong",
+        "zh-CN": "董继扬"
+      },
       "role": {
         "en": "Project Sponsor",
         "zh-CN": "项目发起人"
@@ -152,11 +175,14 @@
         "en": "Xiamen University",
         "zh-CN": "厦门大学"
       },
-      "avatar": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/mmexport1780303224964.jpg",
+      "avatar": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/20261022162718728.jpg",
       "homepage": "https://ese.xmu.edu.cn/info/1071/1735.htm"
     },
     {
-      "name": "Lei Guo",
+      "name": {
+        "en": "Lei Guo",
+        "zh-CN": "郭磊"
+      },
       "role": {
         "en": "Project Sponsor",
         "zh-CN": "项目发起人"
@@ -169,11 +195,14 @@
         "en": "Fuzhou University",
         "zh-CN": "福州大学"
       },
-      "avatar": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/mmexport1780300337455.jpg",
+      "avatar": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/20261022162839327.png",
       "homepage": "https://iime.fzu.edu.cn/info/1038/1481.htm"
     },
     {
-      "name": "Zeyu Zhu",
+      "name": {
+        "en": "Zeyu Zhu",
+        "zh-CN": "朱泽域"
+      },
       "role": {
         "en": "Project Lead",
         "zh-CN": "项目负责人"
@@ -190,7 +219,27 @@
       "homepage": "https://neonexusx.github.io/"
     },
     {
-      "name": "Yongkun Lin",
+      "name": "Thomas Ka-Yam Lam",
+      "role": {
+        "en": "Technical Advisor",
+        "zh-CN": "技术指导"
+      },
+      "degree": {
+        "en": "Ph.D.",
+        "zh-CN": "博士"
+      },
+      "school": {
+        "en": "HKBU",
+        "zh-CN": "香港浸会大学"
+      },
+      "avatar": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/20261024203039907.jpg",
+      "homepage": "https://www.researchgate.net/profile/Thomas-K-Y-Lam"
+    },
+    {
+      "name": {
+        "en": "Yongkun Lin",
+        "zh-CN": "林泳坤"
+      },
       "role": {
         "en": "Frontend Engineer",
         "zh-CN": "前端工程师"
@@ -207,7 +256,10 @@
       "homepage": "https://bionet.xmu.edu.cn/info/1073/2600.htm"
     },
     {
-      "name": "Qiurong Xiong",
+      "name": {
+        "en": "Qiurong Xiong",
+        "zh-CN": "熊秋榕"
+      },
       "role": {
         "en": "Backend Engineer",
         "zh-CN": "后端工程师"
@@ -224,7 +276,10 @@
       "homepage": "https://bionet.xmu.edu.cn/info/1073/2630.htm"
     },
     {
-      "name": "Leqiang Dong",
+      "name": {
+        "en": "Leqiang Dong",
+        "zh-CN": "董乐强"
+      },
       "role": {
         "en": "Algorithm Engineer",
         "zh-CN": "算法工程师"
@@ -241,7 +296,10 @@
       "homepage": "https://dil666555.github.io/"
     },
     {
-      "name": "Xun Zhong",
+      "name": {
+        "en": "Xun Zhong",
+        "zh-CN": "钟勋"
+      },
       "role": {
         "en": "Backend Engineer",
         "zh-CN": "后端工程师"
@@ -258,7 +316,10 @@
       "homepage": "https://b23.tv/ih7QjCW"
     },
     {
-      "name": "🐱Zai zai🐱",
+      "name": {
+        "en": "🐱Zai zai🐱",
+        "zh-CN": "🐱仔仔🐱"
+      },
       "role": {
         "en": "Trouble Maker",
         "zh-CN": "捣蛋鬼"

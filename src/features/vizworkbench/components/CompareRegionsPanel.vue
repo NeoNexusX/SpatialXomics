@@ -19,6 +19,9 @@ const props = defineProps<{
   regionBIds: string[]
   minDetectionRate: number
   noiseFloorPercentile: number
+  /** Detection-rate ratio that counts as "enriched". Display-time only —
+   *  adjusting it re-labels existing results without re-scanning. */
+  enrichmentRatio: number
   comparing: boolean
   progress: number
   error: string | null
@@ -35,6 +38,7 @@ const emit = defineEmits<{
   (e: 'update:regionBIds', v: string[]): void
   (e: 'update:minDetectionRate', v: number): void
   (e: 'update:noiseFloorPercentile', v: number): void
+  (e: 'update:enrichmentRatio', v: number): void
   (e: 'update:expanded', v: boolean): void
   (e: 'compare'): void
   (e: 'cancel'): void
@@ -72,6 +76,9 @@ function onDetectionRate(e: Event) {
 function onNoiseFloor(e: Event) {
   emit('update:noiseFloorPercentile', Number((e.target as HTMLInputElement).value))
 }
+function onEnrichmentRatio(e: Event) {
+  emit('update:enrichmentRatio', Number((e.target as HTMLInputElement).value))
+}
 </script>
 
 <template>
@@ -84,9 +91,14 @@ function onNoiseFloor(e: Event) {
       <!-- Expand / collapse chevron -->
       <SvgIcon :type="expanded ? 'chevron_down' : 'chevron_right'" class="text-base-content/60" />
       <!-- Title -->
-      <span class="kawaru-text-87 font-semibold text-base-content">{{ $t('vizworkbench.compare.title') }}</span>
+      <span class="kawaru-text-87 font-semibold text-base-content">{{
+        $t('vizworkbench.compare.title')
+      }}</span>
       <!-- Show a compact status when collapsed -->
-      <span v-if="!expanded && comparing" class="ml-auto flex items-center gap-1 text-base-content/50">
+      <span
+        v-if="!expanded && comparing"
+        class="ml-auto flex items-center gap-1 text-base-content/50"
+      >
         <span class="loading loading-spinner loading-xs"></span>
         {{ progress }}%
       </span>
@@ -94,7 +106,10 @@ function onNoiseFloor(e: Event) {
 
     <!-- Expanded content (side panel, expanded state) -->
     <div v-if="expanded" class="px-3 pb-2.5 space-y-2">
-      <div v-if="!isComparisonAvailable" class="text-base-content/60 leading-relaxed kawaru-text-87">
+      <div
+        v-if="!isComparisonAvailable"
+        class="text-base-content/60 leading-relaxed kawaru-text-87"
+      >
         {{ $t('vizworkbench.compare.centroidOnly') }}
       </div>
       <!-- No regions hint -->
@@ -105,11 +120,7 @@ function onNoiseFloor(e: Event) {
       <!-- Region group selectors (multi-select checkboxes) -->
       <template v-else-if="isComparisonAvailable">
         <div class="space-y-1.5">
-          <div
-            v-for="side in (['a', 'b'] as const)"
-            :key="side"
-            class="flex items-center gap-2"
-          >
+          <div v-for="side in ['a', 'b'] as const" :key="side" class="flex items-center gap-2">
             <span
               class="w-7 h-7 rounded-full shrink-0 flex items-center justify-center kawaru-text-81 text-white font-bold"
               :style="{ backgroundColor: side === 'a' ? colorACss : colorBCss }"
@@ -179,6 +190,24 @@ function onNoiseFloor(e: Event) {
             class="range range-xs range-primary"
             :disabled="comparing"
             @input="onNoiseFloor"
+          />
+        </div>
+
+        <!-- Enrichment ratio (detection-rate ratio). Display-time only:
+             re-labels existing results, never re-scans. -->
+        <div class="space-y-0.5">
+          <div class="flex items-center justify-between text-base-content/60">
+            <span>{{ $t('vizworkbench.compare.enrichmentRatio') }}</span>
+            <span class="font-mono text-base-content">{{ enrichmentRatio }}×</span>
+          </div>
+          <input
+            type="range"
+            min="1.1"
+            max="4"
+            step="0.1"
+            :value="enrichmentRatio"
+            class="range range-xs range-primary"
+            @input="onEnrichmentRatio"
           />
         </div>
 

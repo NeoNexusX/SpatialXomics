@@ -134,7 +134,7 @@ const continuousStats = computed<{ label: string; value: string }[]>(() => [
   },
   {
     label: t('vizworkbench.spectrum.intensity'),
-    value: showingPixel.value ? pixelIntensityRange.value : props.intensityRange ?? '--',
+    value: showingPixel.value ? pixelIntensityRange.value : (props.intensityRange ?? '--'),
   },
   { label: t('vizworkbench.spectrum.selected'), value: props.selectedMz.toFixed(6) },
   { label: t('vizworkbench.spectrum.tolerance'), value: `±${props.mzTolerance}` },
@@ -228,8 +228,12 @@ const currentStats = computed(() =>
           data-testid="pixel-spectrum-coord"
           class="flex-1 text-center whitespace-nowrap"
         >
-          <span class="text-base-content/50 pr-[0.25em]">{{ $t('vizworkbench.spectrum.pixel') }}</span>
-          <span class="font-mono font-semibold">({{ pixelSpectrum.x }}, {{ pixelSpectrum.y }})</span>
+          <span class="text-base-content/50 pr-[0.25em]">{{
+            $t('vizworkbench.spectrum.pixel')
+          }}</span>
+          <span class="font-mono font-semibold"
+            >({{ pixelSpectrum.x }}, {{ pixelSpectrum.y }})</span
+          >
         </span>
         <!-- 还没选过像素：提示可以点击图像查看像素谱 -->
         <span

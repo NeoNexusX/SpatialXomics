@@ -1,13 +1,15 @@
 /**
  * Region comparison composable.
  *
- * Compares two region GROUPS (each a non-empty set of KMeans clusters and/or
- * ROIs) by OR-combining the member masks into one raster per side, then
+ * Compares two region GROUPS (each a non-empty set of KMeans clusters, ROIs,
+ * and/or file-imported masks) by OR-combining the member masks into one
+ * raster per side, then
  * streaming through the entire intensity array once and accumulating per-ion
  * statistics (sum, sum-of-squares, non-zero count) for each side. From these
  * it derives mean intensity, detection rate, both ratios (mean and detection),
  * and a category (A-only / B-only / A-enriched / B-enriched / shared, where
- * "enriched" means a >= 2x detection-rate ratio). The
+ * "enriched" means a higher detection-rate ratio, threshold user-adjustable
+ * and re-applied at display time). The
  * streaming/stats pipeline only ever sees two masks, so group semantics live
  * entirely in mask construction.
  *
@@ -29,6 +31,7 @@ import {
 } from '@/features/vizworkbench/composables/useZarrIonImage'
 import type { KmeansCluster } from '@/features/vizworkbench/composables/useOverlayData'
 import type { ConfirmedROI } from '@/features/vizworkbench/composables/useROI'
+import type { ImportedMask } from '@/features/vizworkbench/composables/useImportedMasks'
 import {
   COMPARISON_A_OVERLAY_ALPHA,
   COMPARISON_A_RGB,
@@ -57,15 +60,21 @@ export interface IonComparison {
   detB: number
   /** detA / detB. Infinity = A-only, 0 = B-only. Drives the enriched category. */
   detRatio: number
+  /** detA >= minDetectionRate at run time. Kept so the category can be
+   *  re-derived client-side when the enrichment ratio changes. */
+  aPresent: boolean
+  /** detB >= minDetectionRate at run time. Same rationale as aPresent. */
+  bPresent: boolean
   category: ComparisonCategory
 }
 
 export type RegionSource =
   | { type: 'cluster'; id: number }
   | { type: 'roi'; id: string }
+  | { type: 'imported'; id: string }
 
 export interface RegionOption {
-  /** String id for <select> value: "cluster:0" or "roi:roi-1" */
+  /** String id for <select> value: "cluster:0", "roi:roi-1" or "imported:import-1" */
   value: string
   label: string
   source: RegionSource
@@ -83,10 +92,26 @@ export interface RegionThumbnailRegion {
 
 // ---------- constants ----------
 
-/** Detection-rate ratio threshold for "enriched" (>= 2x higher detection rate). */
-const ENRICHMENT_RATIO = 2
-
 /** m/z bin width (Da) for processed-mode region comparison. */
+
+/**
+ * Category from per-ion stats. Pure so it can run both at scan time and
+ * again client-side when the user adjusts the enrichment ratio — the
+ * category is the ONLY thing the ratio affects, so re-categorizing never
+ * requires re-scanning the data.
+ */
+function categorize(
+  detRatio: number,
+  aPresent: boolean,
+  bPresent: boolean,
+  enrichmentRatio: number,
+): ComparisonCategory {
+  if (aPresent && !bPresent) return 'a-only'
+  if (!aPresent && bPresent) return 'b-only'
+  if (detRatio >= enrichmentRatio) return 'a-enriched'
+  if (detRatio > 0 && 1 / detRatio >= enrichmentRatio) return 'b-enriched'
+  return 'shared'
+}
 const PROCESSED_BIN_WIDTH = 0.01
 
 // ---------- composable ----------
@@ -96,6 +121,8 @@ export function useRegionComparison(deps: {
   kmeansLabelsAvailable: Ref<boolean>
   getKmeansLabels: () => Int32Array | null
   confirmedROIs: Ref<ConfirmedROI[]>
+  /** File-imported masks — selectable as comparison regions like ROIs. */
+  importedMasks: Ref<ImportedMask[]>
   ionCols: Ref<number>
   ionRows: Ref<number>
   dataMode: Ref<DataMode | null>
@@ -106,10 +133,26 @@ export function useRegionComparison(deps: {
   const regionBIds = ref<string[]>([])
   const minDetectionRate = ref(5) // percentage, 1-50
   const noiseFloorPercentile = ref(5) // percentile of non-zero mean spectrum, 0-20
+  /** Detection-rate ratio for "enriched", display-time only (1.1-4). */
+  const enrichmentRatio = ref(1.5)
   const comparing = ref(false)
   const progress = ref(0)
   const error = ref<string | null>(null)
   const results = shallowRef<IonComparison[]>([])
+  /**
+   * What the table displays: raw scan results re-categorized under the
+   * current enrichmentRatio. The ratio only relabels rows (a-enriched /
+   * b-enriched / shared) — every input it needs (detRatio, aPresent,
+   * bPresent) is stored per ion — so adjusting it is instant and never
+   * re-triggers the scan.
+   */
+  const categorizedResults = computed<IonComparison[]>(() => {
+    const r = enrichmentRatio.value
+    return results.value.map((c) => {
+      const cat = categorize(c.detRatio, c.aPresent, c.bPresent, r)
+      return cat === c.category ? c : { ...c, category: cat }
+    })
+  })
   const overlayVisible = ref(false)
   /** Breakdown of how many ions were filtered out and why. */
   const filterStats = ref<{ total: number; kept: number; filtered: number }>({
@@ -151,6 +194,14 @@ export function useRegionComparison(deps: {
         color: roi.color,
       })
     }
+    for (const m of deps.importedMasks.value) {
+      regions.push({
+        value: `imported:${m.id}`,
+        label: m.name,
+        source: { type: 'imported', id: m.id },
+        color: m.color,
+      })
+    }
     return regions
   })
 
@@ -162,17 +213,15 @@ export function useRegionComparison(deps: {
   })
 
   /** Selected A/B options (stale ids filtered out). */
-  const selectedRegionsA = computed(
-    () =>
-      regionAIds.value
-        .map((id) => availableRegions.value.find((r) => r.value === id))
-        .filter((r): r is RegionOption => !!r),
+  const selectedRegionsA = computed(() =>
+    regionAIds.value
+      .map((id) => availableRegions.value.find((r) => r.value === id))
+      .filter((r): r is RegionOption => !!r),
   )
-  const selectedRegionsB = computed(
-    () =>
-      regionBIds.value
-        .map((id) => availableRegions.value.find((r) => r.value === id))
-        .filter((r): r is RegionOption => !!r),
+  const selectedRegionsB = computed(() =>
+    regionBIds.value
+      .map((id) => availableRegions.value.find((r) => r.value === id))
+      .filter((r): r is RegionOption => !!r),
   )
 
   // Group identity colors are fixed (blue A / orange B) regardless of member
@@ -196,6 +245,9 @@ export function useRegionComparison(deps: {
     if (id.startsWith('roi:')) {
       return { type: 'roi', id: id.slice(4) }
     }
+    if (id.startsWith('imported:')) {
+      return { type: 'imported', id: id.slice(9) }
+    }
     return null
   }
 
@@ -205,24 +257,33 @@ export function useRegionComparison(deps: {
     const store = ctx.store
     if (!store) return null
     const [height, width] = store.spatialShape
-    const raster = new Uint8Array(width * height)
 
     if (source.type === 'cluster') {
       const labels = deps.getKmeansLabels()
       if (!labels) return null
+      const raster = new Uint8Array(width * height)
       // Local KMeans labels: -1 = background, 0..K-1 = cluster id
       for (let i = 0; i < labels.length; i++) {
         if (labels[i] === source.id) raster[i] = 1
       }
-    } else {
-      const roi = deps.confirmedROIs.value.find((r) => r.id === source.id)
-      if (!roi) return null
-      for (let r = 0; r < height; r++) {
-        const row = roi.mask[r]
-        if (!row) continue
-        for (let c = 0; c < width; c++) {
-          if (row[c]) raster[r * width + c] = 1
-        }
+      return raster
+    }
+    if (source.type === 'imported') {
+      // Imported masks are stored in exactly the raster layout buildRaster
+      // produces, so the array is handed out as-is (all consumers treat
+      // rasters as read-only).
+      const m = deps.importedMasks.value.find((x) => x.id === source.id)
+      if (!m || m.mask.length !== width * height) return null
+      return m.mask
+    }
+    const roi = deps.confirmedROIs.value.find((r) => r.id === source.id)
+    if (!roi) return null
+    const raster = new Uint8Array(width * height)
+    for (let r = 0; r < height; r++) {
+      const row = roi.mask[r]
+      if (!row) continue
+      for (let c = 0; c < width; c++) {
+        if (row[c]) raster[r * width + c] = 1
       }
     }
     return raster
@@ -245,10 +306,7 @@ export function useRegionComparison(deps: {
   }
 
   /** OR-combine member rasters into one group mask. */
-  function combineRasters(
-    members: { raster: Uint8Array }[],
-    size: number,
-  ): Uint8Array {
+  function combineRasters(members: { raster: Uint8Array }[], size: number): Uint8Array {
     const combined = new Uint8Array(size)
     for (const m of members) {
       const r = m.raster
@@ -297,9 +355,12 @@ export function useRegionComparison(deps: {
   function buildComparisons(
     nItems: number,
     mzAt: (i: number) => number,
-    sumA: Float64Array, countA: Int32Array,
-    sumB: Float64Array, countB: Int32Array,
-    pixelCountA: number, pixelCountB: number,
+    sumA: Float64Array,
+    countA: Int32Array,
+    sumB: Float64Array,
+    countB: Int32Array,
+    pixelCountA: number,
+    pixelCountB: number,
     noiseFloor: number,
   ): IonComparison[] {
     const minRate = minDetectionRate.value / 100
@@ -329,21 +390,7 @@ export function useRegionComparison(deps: {
       const aPresent = detA >= minRate
       const bPresent = detB >= minRate
       const detRatio = detB > 0 ? detA / detB : detA > 0 ? Infinity : 0
-      let category: ComparisonCategory
-      if (aPresent && !bPresent) {
-        category = 'a-only'
-      } else if (!aPresent && bPresent) {
-        category = 'b-only'
-      } else {
-        // 富集标准：检出率比值（detA/detB 或反向）≥ 2
-        if (detRatio >= ENRICHMENT_RATIO) {
-          category = 'a-enriched'
-        } else if (detRatio > 0 && 1 / detRatio >= ENRICHMENT_RATIO) {
-          category = 'b-enriched'
-        } else {
-          category = 'shared'
-        }
-      }
+      const category = categorize(detRatio, aPresent, bPresent, enrichmentRatio.value)
 
       const ratio = meanB > 0 ? meanA / meanB : meanA > 0 ? Infinity : 0
 
@@ -356,6 +403,8 @@ export function useRegionComparison(deps: {
         detA,
         detB,
         detRatio,
+        aPresent,
+        bPresent,
         category,
       })
     }
@@ -368,8 +417,10 @@ export function useRegionComparison(deps: {
 
     // 初始排序：检出率比值偏离 1 最多的排最前（富集标准即检出率比值）
     comparisons.sort((a, b) => {
-      const logA = a.detRatio === Infinity ? Infinity : a.detRatio === 0 ? -Infinity : Math.log2(a.detRatio)
-      const logB = b.detRatio === Infinity ? Infinity : b.detRatio === 0 ? -Infinity : Math.log2(b.detRatio)
+      const logA =
+        a.detRatio === Infinity ? Infinity : a.detRatio === 0 ? -Infinity : Math.log2(a.detRatio)
+      const logB =
+        b.detRatio === Infinity ? Infinity : b.detRatio === 0 ? -Infinity : Math.log2(b.detRatio)
       return Math.abs(logB) - Math.abs(logA)
     })
 
@@ -385,12 +436,8 @@ export function useRegionComparison(deps: {
       return
     }
 
-    const sourcesA = regionAIds.value
-      .map(parseRegion)
-      .filter((s): s is RegionSource => !!s)
-    const sourcesB = regionBIds.value
-      .map(parseRegion)
-      .filter((s): s is RegionSource => !!s)
+    const sourcesA = regionAIds.value.map(parseRegion).filter((s): s is RegionSource => !!s)
+    const sourcesB = regionBIds.value.map(parseRegion).filter((s): s is RegionSource => !!s)
     if (!sourcesA.length || !sourcesB.length) return
 
     comparing.value = true
@@ -468,7 +515,8 @@ export function useRegionComparison(deps: {
           Int32Array.from(bins, (b) => b.count[0]!),
           Float64Array.from(bins, (b) => b.sum[1]!),
           Int32Array.from(bins, (b) => b.count[1]!),
-          maskA.pixelCount, maskB.pixelCount,
+          maskA.pixelCount,
+          maskB.pixelCount,
           noiseFloor,
         )
       } else {
@@ -498,9 +546,12 @@ export function useRegionComparison(deps: {
         comparisons = buildComparisons(
           mzAxis.length,
           (i) => mzAxis[i]!,
-          stats[0]!.sum, stats[0]!.count,
-          stats[1]!.sum, stats[1]!.count,
-          maskA.pixelCount, maskB.pixelCount,
+          stats[0]!.sum,
+          stats[0]!.count,
+          stats[1]!.sum,
+          stats[1]!.count,
+          maskA.pixelCount,
+          maskB.pixelCount,
           noiseFloor,
         )
       }
@@ -508,7 +559,7 @@ export function useRegionComparison(deps: {
       results.value = comparisons
     } catch (e) {
       console.error('[useRegionComparison] compare failed:', e)
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = t('vizworkbench.compare.failed')
     } finally {
       comparing.value = false
     }
@@ -566,9 +617,10 @@ export function useRegionComparison(deps: {
 
   /**
    * Build thumbnail-ready masks for the currently selected A/B group members.
-   * Reuses buildRaster (kmeans labels / ROI mask -> Uint8Array grid) so the
-   * preview works the moment a region is selected, before any comparison run.
-   * Returns null when the zarr store (grid shape) isn't available yet.
+   * Reuses buildRaster (kmeans labels / ROI masks / imported masks -> Uint8Array
+   * grid) so the preview works the moment a region is selected, before any
+   * comparison run. Returns null when the zarr store (grid shape) isn't
+   * available yet.
    */
   function buildThumbnailRegions(): {
     a: RegionThumbnailRegion[]
@@ -605,15 +657,24 @@ export function useRegionComparison(deps: {
     cancelled = true
   }
 
+  /** True when the last comparison involved a member matching `pred`. */
+  function involves(predicate: (source: RegionSource) => boolean): boolean {
+    const has = (members: { source: RegionSource }[]) => members.some((m) => predicate(m.source))
+    return has(cachedMembersA) || has(cachedMembersB)
+  }
+
   /** True when the last comparison involved an ROI (either side). With an id,
    *  only that specific ROI counts. Used to decide whether deleting/clearing
    *  ROIs should also reset the comparison — a KMeans-vs-KMeans comparison is
    *  unaffected by ROI changes, and deleting an ROI that wasn't compared
    *  leaves the results valid. */
   function involvesRoi(id?: string): boolean {
-    const has = (members: { source: RegionSource }[]) =>
-      members.some((m) => m.source.type === 'roi' && (id === undefined || m.source.id === id))
-    return has(cachedMembersA) || has(cachedMembersB)
+    return involves((s) => s.type === 'roi' && (id === undefined || s.id === id))
+  }
+
+  /** Same contract as involvesRoi, but for file-imported masks. */
+  function involvesImportedMask(id?: string): boolean {
+    return involves((s) => s.type === 'imported' && (id === undefined || s.id === id))
   }
 
   function reset() {
@@ -636,10 +697,12 @@ export function useRegionComparison(deps: {
     regionBIds,
     minDetectionRate,
     noiseFloorPercentile,
+    enrichmentRatio,
     comparing,
     progress,
     error,
     results,
+    categorizedResults,
     overlayVisible,
     filterStats,
     availableRegions,
@@ -653,6 +716,7 @@ export function useRegionComparison(deps: {
     cancel,
     reset,
     involvesRoi,
+    involvesImportedMask,
     selectMz,
     toggleRegionOverlay,
     hideOverlay,

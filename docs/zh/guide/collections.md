@@ -14,7 +14,7 @@
 
 点击导航栏`Datahub`—`Collections`进入数据集合列表页面。此外，公开数据集与我的数据集页的筛选栏中提供了进入数据集合的链接；数据集合列表页的页头也提供了跳往公开数据集、我的数据集的按钮。
 
-![8cdf16d5380095f9c84d8ed3bfb2e74c](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008153852015.jpg_view)
+![8cdf16d5380095f9c84d8ed3bfb2e74c](https://cdn.neonexus.top/docs/20261008153852015.jpg_view)
 
 ### 2. 浏览与查找数据集合
 
@@ -26,7 +26,7 @@
 
 列表采用服务端分页，底部可切换页码与每页数量。
 
-![13b1e2f9747350467b5909b9b7226cc7](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008160300900.jpg_view)
+![13b1e2f9747350467b5909b9b7226cc7](https://cdn.neonexus.top/docs/20261008160300900.jpg_view)
 
 ### 3. 集合卡片
 
@@ -39,7 +39,7 @@
 
 点击`View Collection`会在新标签页打开集合详情页；卡片上的`Share`可复制该集合的公开链接（见第 7 节）；集合所有者与管理员可对集合进行删除（见第 8 节）。
 
-![08d68cd0b3daf066d5a8050d5910ba95](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008160355076.jpg_view)
+![08d68cd0b3daf066d5a8050d5910ba95](https://cdn.neonexus.top/docs/20261008160355076.jpg_view)
 
 ### 4. 创建集合
 
@@ -47,21 +47,21 @@
 
 **第 1 步：选择数据集。** 从已完成处理的公开 imzML 数据集中勾选成员，支持搜索定位；已勾选的数据集在翻页后保持选择状态。
 
-![image-20261008160500321](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008160500400.jpg_view)
+![image-20261008160500321](https://cdn.neonexus.top/docs/20261008160500400.jpg_view)
 
 **第 2 步：调整顺序。** 拖动成员卡片或使用`Move up`/`Move down`按钮调整展示顺序，`Remove from collection`可取消选择。
 
-![9a30c6537827d8fbe01e8d5e3d3bee19](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008160602518.jpg_view)
+![9a30c6537827d8fbe01e8d5e3d3bee19](https://cdn.neonexus.top/docs/20261008160602518.jpg_view)
 
 **第 3 步：集合信息。** 填写集合`Name`（必填，最多 80 个字符）与`Description`（选填，最多 300 个字符）。
 
-![image-20261008160820237](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008160820287.jpg_view)
+![image-20261008160820237](https://cdn.neonexus.top/docs/20261008160820287.jpg_view)
 
 **第 4 步：元数据。** `Member Type`、`Collection Type`以及`Sample`/`Acquisition`组中的`Organism`、`Organism Part`、`Sample Stabilization`、`Polarity`、`Ionisation Source`、`Analyzer`为必填；`Sample`与`Acquisition`相关字段会根据所选数据集自动填写，手动修改某个字段后，该字段不再随数据集自动更新，需要时可点击`Reset to detected`还原。`Citation`信息（`DOI`、`Title`、`Journal`、`Access`、`Published`、`Citation`、`Abstract`）均为选填，其中 DOI 需符合 `10.1000/xyz123`、`doi:10.1000/xyz123` 或 `https://doi.org/10.1000/xyz123` 格式。
 
-![A](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008160932254.jpg_view)
+![A](https://cdn.neonexus.top/docs/20261008160932254.jpg_view)
 
-![image-20261008161009263](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008161009351.jpg_view)
+![image-20261008161009263](https://cdn.neonexus.top/docs/20261008161009351.jpg_view)
 
 ::: warning 注意
 数据集合创建后即为公开，平台不提供私有集合。创建过程中离开页面会弹出确认提示，未保存的选择与信息将丢失。
@@ -75,9 +75,9 @@
 
 集合所有者与管理员可点击`Edit`进入编辑状态，原地修改名称、简介与元数据，点击`Save Changes`后提交（仅提交发生变化的字段）；`Name`必填且不超过 80 个字符，`Description`不超过 300 个字符，超出时页面会提示。
 
-![image-20261008161053722](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008161053801.jpg_view)
+![image-20261008161053722](https://cdn.neonexus.top/docs/20261008161053801.jpg_view)
 
-![image-20261008161200282](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008161200374.jpg_view)
+![image-20261008161200282](https://cdn.neonexus.top/docs/20261008161200374.jpg_view)
 
 ### 6. 管理集合成员
 
@@ -85,11 +85,11 @@
 
 - **添加成员**：点击`Add Members`，从公开数据集中选择并批量追加到列表末尾，已在集合中的数据集会标记`Already in collection`且不可重复选择。
 
-  <img src="https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008161234181.jpg_view" alt="image-20261008161234123" style="zoom:50%;" />
+  <img src="https://cdn.neonexus.top/docs/20261008161234181.jpg_view" alt="image-20261008161234123" style="zoom:50%;" />
 
 - **移除成员**：勾选成员后点击`Remove Selected`，完成后提示实际移除数量；已被他人在别处移除的成员会自动跳过并单独提示。
 
-  ![e76d5da425ab50194ce54ed4ecee5868](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008161347873.jpg_view)
+  ![e76d5da425ab50194ce54ed4ecee5868](https://cdn.neonexus.top/docs/20261008161347873.jpg_view)
 
 - **调整顺序**：在编辑状态下，可拖动成员或使用`Move up`/`Move down`调整顺序；若他人在别处修改过顺序，页面会提示并自动刷新为最新顺序。
 
@@ -109,4 +109,4 @@
 
 集合所有者与管理员可在详情页点击`Delete`，在`Delete collection?`确认弹窗中确认后删除该集合。删除仅移除集合本身，其中的数据集不受任何影响。
 
-![4f125424a255308135ef0e308677e516](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008172114280.jpg_view)
+![4f125424a255308135ef0e308677e516](https://cdn.neonexus.top/docs/20261008172114280.jpg_view)

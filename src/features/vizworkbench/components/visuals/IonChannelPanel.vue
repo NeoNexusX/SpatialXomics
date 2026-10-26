@@ -1,7 +1,7 @@
 <template>
-  <div class="kawaru-text-81">
+  <div class="kawaru-text-68">
     <!-- Mode toggle -->
-    <label class="flex items-center justify-between mb-2 cursor-pointer select-none kawaru-text-87">
+    <label class="flex items-center justify-between mb-2 cursor-pointer select-none kawaru-text-75">
       <span class="text-base-content">{{ $t('vizworkbench.channels.overlayMode') }}</span>
       <input
         type="checkbox"
@@ -57,7 +57,7 @@
         <button
           v-else-if="c.error"
           class="text-error shrink-0"
-          :title="$t('vizworkbench.channels.loadFailed', { error: c.error })"
+          :title="$t('vizworkbench.channels.loadFailed')"
           @click="emit('retry', c.id)"
         >
           <SvgIcon type="warning" class="w-[1.1em] h-[1.1em]" />
@@ -75,7 +75,7 @@
     <!-- Add current m/z stays on its own row. -->
     <div class="flex items-center gap-1 mb-1">
       <button
-        class="btn btn-sm btn-primary w-full kawaru-text-81"
+        class="btn btn-sm btn-primary w-full kawaru-text-68"
         :disabled="!enabled || !canAdd"
         :title="addTitle"
         @click="emit('add-current')"
@@ -89,7 +89,7 @@
     <!-- Batch mode listens to user m/z clicks; Clear shares this row. -->
     <div class="flex items-center gap-1">
       <button
-        class="btn btn-sm flex-1 kawaru-text-81"
+        class="btn btn-sm flex-1 kawaru-text-68"
         :class="batchAddMode ? 'btn-secondary' : 'btn-ghost'"
         :disabled="!enabled || !canAdd"
         :title="$t('vizworkbench.channels.batchHint')"
@@ -99,7 +99,7 @@
         <MzText :text="$t('vizworkbench.channels.batchAdd')" />
       </button>
       <button
-        class="btn btn-ghost btn-sm kawaru-text-81"
+        class="btn btn-ghost btn-sm kawaru-text-68"
         :disabled="!channels.length"
         @click="emit('clear')"
       >

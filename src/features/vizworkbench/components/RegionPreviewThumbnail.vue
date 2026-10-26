@@ -50,16 +50,30 @@ interface LegendEntry {
   label: string
   css: string
 }
+/** 展示名：导入掩膜的标签来自文件名，带扩展名（"Cancerous regions.csv"）——隐藏。 */
+function displayLabel(label: string): string {
+  return label.replace(/\.(csv|npy|npz)$/i, '')
+}
 // One legend entry per group: member labels joined, swatch in the group's
 // fixed color (all members carry the same group color).
 const legendsA = computed<LegendEntry[]>(() =>
   props.a.length
-    ? [{ label: `A · ${props.a.map((r) => r.label).join(' + ')}`, css: rgbCss(props.a[0]!.color) }]
+    ? [
+        {
+          label: `A · ${props.a.map((r) => displayLabel(r.label)).join(' + ')}`,
+          css: rgbCss(props.a[0]!.color),
+        },
+      ]
     : [],
 )
 const legendsB = computed<LegendEntry[]>(() =>
   props.b.length
-    ? [{ label: `B · ${props.b.map((r) => r.label).join(' + ')}`, css: rgbCss(props.b[0]!.color) }]
+    ? [
+        {
+          label: `B · ${props.b.map((r) => displayLabel(r.label)).join(' + ')}`,
+          css: rgbCss(props.b[0]!.color),
+        },
+      ]
     : [],
 )
 
@@ -229,7 +243,9 @@ watch(
 <template>
   <div class="border-0 rounded-none bg-transparent overflow-visible">
     <div class="px-3 pt-2 pb-1.5 flex items-center justify-between">
-      <span class="font-semibold text-base-content kawaru-text-87">{{ $t('vizworkbench.compare.preview') }}</span>
+      <span class="font-semibold text-base-content kawaru-text-87">{{
+        $t('vizworkbench.compare.preview')
+      }}</span>
     </div>
     <div
       v-if="legendsA.length || legendsB.length"
@@ -244,7 +260,7 @@ watch(
           class="w-2.5 h-2.5 rounded-sm border border-base-content/30 shrink-0"
           :style="{ backgroundColor: legend.css }"
         ></span>
-        <span class="truncate max-w-[180px]" :title="legend.label">{{ legend.label }}</span>
+        <span class="truncate" :title="legend.label">{{ legend.label }}</span>
       </span>
     </div>
     <div ref="containerRef" class="px-3 pb-2">

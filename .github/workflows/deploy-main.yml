@@ -12,8 +12,8 @@
 #
 # 正式环境配置替换：构建镜像前自动执行 scripts/apply-prod-config.mjs，把
 # env/config.prod.overrides.json 深合并进 public/config.json。正式服务器与
-# 测试服务器有差异的配置（目前是 OSS 预览图域名）只写进覆盖文件即可，
-# 其余配置两边共用仓库主文件，无需维护两份完整 config。
+# 测试服务器有差异的配置（目前是 OSS 预览图域名，正式服指向 CDN）只写进
+# 覆盖文件即可，其余配置两边共用仓库主文件，无需维护两份完整 config。
 #
 # 需要的 GitHub Secrets（Settings → Secrets and variables → Actions → Secrets 标签页）：
 #   MAIN_SERVER_HOST     — 生产服务器 IP

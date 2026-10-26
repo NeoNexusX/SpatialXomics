@@ -229,7 +229,11 @@ describe('summarizeImportedMask', () => {
       expectedShape: [2, 3],
     })
     // masked values: 20, 40, 50, 60 → mean 42.5, std √218.75
-    const summary = summarizeImportedMask(result, 'colon_mask.csv', new Float32Array([10, 20, 30, 40, 50, 60]))
+    const summary = summarizeImportedMask(
+      result,
+      'colon_mask.csv',
+      new Float32Array([10, 20, 30, 40, 50, 60]),
+    )
 
     expect(summary.name).toBe('colon_mask.csv')
     expect(summary.format).toBe('csv')

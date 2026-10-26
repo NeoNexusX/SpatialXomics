@@ -12,7 +12,7 @@
  *
  * ⚠️ 模块级单例：store / mzAxisRef / dataModeRef 等约 20 个状态已抽到
  * services/zarr/zarrSharedState（跨 feature 共享 API，assistant 只读消费），
- * 由可视化工作台（VizWorkbench）独占写入（useRegionComparison / useAnnotationMatch 等横向消费）。
+ * 由可视化工作台（VizWorkbench）独占写入（useRegionComparison / useAnnotation 等横向消费）。
  * 路由是单实例（/viz 组件复用 + onUnmounted dispose），因此成立；
  * 但切勿同时挂载两个消费者（KeepAlive 多实例、第二页签组件），否则后 init 的
  * 实例会 dispose 前者仍在用的 store。如需多实例，须重构为 provide/inject 工厂。
@@ -53,7 +53,7 @@ import { getConfig } from '@/shared/config'
 import { formatNumber } from '@/shared/utils/format'
 import { t } from '@/i18n'
 
-// 转发导出：feature 内既有导入路径不变（SpectrumSection / useAnnotationMatch /
+// 转发导出：feature 内既有导入路径不变（SpectrumSection / useAnnotation /
 // useRegionComparison / useResultMeta / VizWorkbench 等）；跨 feature 消费者
 // （assistant）应直接 import '@/services/zarr/zarrSharedState'
 export {
@@ -273,9 +273,7 @@ async function loadIonSliceSum(indices: number[]): Promise<Float32Array> {
   const { width, height } = ionDims.value
   const matrix = await s.getSummedIonImageByMzIndices(indices)
   if (matrix.length !== width * height) {
-    throw new Error(
-      `ion matrix size mismatch: expected ${width * height}, got ${matrix.length}`,
-    )
+    throw new Error(`ion matrix size mismatch: expected ${width * height}, got ${matrix.length}`)
   }
   return matrix
 }
@@ -289,10 +287,7 @@ async function loadIonSliceSum(indices: number[]): Promise<Float32Array> {
  * or a store swap while the read was in flight) — callers surface the message
  * on the channel row.
  */
-export async function loadIonMatrixByIndex(
-  idx: number,
-  tolerance: number,
-): Promise<Float32Array> {
+export async function loadIonMatrixByIndex(idx: number, tolerance: number): Promise<Float32Array> {
   if (dataModeRef.value !== 'continuous') {
     throw new Error('Multi-ion overlay is only available for continuous data')
   }
@@ -301,10 +296,7 @@ export async function loadIonMatrixByIndex(
   if (!requestStore || !axis) throw new Error('Zarr store is unavailable')
   if (idx < 0 || idx >= axis.length) throw new Error('Invalid m/z index')
   // 钳位容差到 [min, max]，与 loadForMzIndex 保持一致的语义
-  const tol = Math.min(
-    ZARR_STORE.maxMzTolerance,
-    Math.max(ZARR_STORE.minMzTolerance, tolerance),
-  )
+  const tol = Math.min(ZARR_STORE.maxMzTolerance, Math.max(ZARR_STORE.minMzTolerance, tolerance))
   const matrix = await loadIonSliceSum(findMzRangeIndices(idx, tol))
   // 读取期间 store 被 dispose/替换（换 run 或离开页面）→ 结果作废
   if (!store || store !== requestStore) throw new Error('Zarr session changed')
@@ -359,9 +351,7 @@ export function useZarrIonImage() {
   // Computed
   const ionCols = computed(() => ionDims.value?.width ?? 0)
   const ionRows = computed(() => ionDims.value?.height ?? 0)
-  const totalPeaks = computed(() =>
-    mzAxisRef.value ? formatNumber(mzAxisRef.value.length) : '--',
-  )
+  const totalPeaks = computed(() => (mzAxisRef.value ? formatNumber(mzAxisRef.value.length) : '--'))
 
   const isContinuous = computed(() => dataModeRef.value === 'continuous')
   const isProcessed = computed(() => dataModeRef.value === 'processed')
@@ -399,7 +389,8 @@ export function useZarrIonImage() {
       ionMatrix.value = matrix
     } catch (e) {
       if (requestId !== ionImageRequestId || store !== requestStore) return
-      error.value = e instanceof Error ? e.message : String(e)
+      // UI 只说「什么问题」，底层原因留在控制台
+      error.value = t('vizworkbench.ionImage.updateFailed')
       console.error('[useZarrIonImage] loadForMzIndex failed:', e)
     } finally {
       if (requestId === ionImageRequestId) loading.value = false
@@ -451,7 +442,11 @@ export function useZarrIonImage() {
       normalizationFactors.value = factors
     } catch (e) {
       if (store !== requestStore) return
-      normalizationError.value = e instanceof Error ? e.message : String(e)
+      // 「旧数据没有预计算 TIC」是用户可懂的原因，单独说明；其余统一一句话
+      normalizationError.value =
+        e instanceof Error && e.message.includes('no pre-computed TIC')
+          ? t('vizworkbench.ionImage.noTic')
+          : t('vizworkbench.ionImage.loadFailed')
       if (requestId !== normalizationRequestId) return
       normalizationFactors.value = null
     } finally {
@@ -586,13 +581,12 @@ export function useZarrIonImage() {
     } catch (e) {
       if (!isCurrent()) return // 本次会话已被 dispose/替换，错误不必再呈现
       console.error('[useZarrIonImage] init failed:', e)
-      // v1.0 等不再支持的布局：给出本地化的「格式不兼容」提示，而不是底层读取错误
+      // v1.0 等不再支持的布局：给出本地化的「格式不兼容」提示，而不是底层读取错误；
+      // 其余失败只报一句话，原因进控制台
       error.value =
         e instanceof ZarrIncompatibleError
           ? t('vizworkbench.ionImage.incompatibleFormat')
-          : e instanceof Error
-            ? e.message
-            : String(e)
+          : t('vizworkbench.ionImage.loadFailed')
     } finally {
       if (isCurrent()) loading.value = false
     }

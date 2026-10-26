@@ -10,31 +10,31 @@ Track analysis tasks, follow their progress, and open finished results.
 
 Go to **Workspace > Workspace**.
 
-![Navigation](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909173325409.jpg_view)
+![Navigation](https://cdn.neonexus.top/docs/20260909173325409.jpg_view)
 
 ## Page Layout
 
 The workspace has four sections:
 
-![Layout](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909173705219.jpg_view)
+![Layout](https://cdn.neonexus.top/docs/20260909173705219.jpg_view)
 
 ### 1. Go to My Datasets
 
 Click **Go to MyDatasets** to jump to your uploaded datasets (see [Upload Data](./upload-data)).
 
-![My Datasets link](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909174025496.jpg_view)
+![My Datasets link](https://cdn.neonexus.top/docs/20260909174025496.jpg_view)
 
 ### 2. New Task
 
 Click **New Task** to create a new analysis (see [Dataset Analysis](./dataset-analysis)).
 
-![New Task](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909174235481.jpg_view)
+![New Task](https://cdn.neonexus.top/docs/20260909174235481.jpg_view)
 
 ### 3. Summary and Task List
 
 The summary bar at the top counts your tasks by state — for example, "0 analyzing, 4 completed, 0 failed."
 
-![Task list](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260909174322612.jpg_view)
+![Task list](https://cdn.neonexus.top/docs/20260909174322612.jpg_view)
 
 The table below lists every task. You can also search it by dataset name.
 

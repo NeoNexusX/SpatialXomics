@@ -20,7 +20,7 @@
 
 用户可根据需求用其中任意一段搜索查找。
 
-![数据集命名规则](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908161627268.jpg_view)
+![数据集命名规则](https://cdn.neonexus.top/docs/20260908161627268.jpg_view)
 
 
 
@@ -28,7 +28,7 @@
 
 用户可根据需求，在搜索状态栏直接输入需要查找的数据集名称，点击`Search`进行搜索查找。
 
-![image-20260908162509756](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260908162509801.jpg_view)
+![image-20260908162509756](https://cdn.neonexus.top/docs/20260908162509801.jpg_view)
 
 
 
@@ -36,7 +36,7 @@
 
 点击`Add filter`按需求选择筛选条件，再点击`Apply`即可查找目标数据集。
 
-![image-20260914193954370](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20260914193954466.jpg_view)
+![image-20260914193954370](https://cdn.neonexus.top/docs/20260914193954466.jpg_view)
 
 各筛选条件对应解释如下：
 
@@ -67,5 +67,5 @@
 
 点击搜索状态栏右侧的排序下拉框，即可按需选择排序方式，共四种：提交时间从新到旧（默认）、提交时间从旧到新、文件大小从大到小、文件大小从小到大。
 
-![image-20261008174924334](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261008174924392.jpg_view)
+![image-20261008174924334](https://cdn.neonexus.top/docs/20261008174924392.jpg_view)
 

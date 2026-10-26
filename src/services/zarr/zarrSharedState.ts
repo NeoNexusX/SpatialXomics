@@ -44,10 +44,9 @@ export const rowAxisRef = shallowRef<'pixel' | 'ion' | null>(null)
 /** Metadata from /metadata/.zattrs */
 export const metadataAttrsRef = shallowRef<MetadataAttrs | null>(null)
 
-/** Result polarity (e.g. 'positive'/'negative'). Populated from the zarr
- *  metadata attrs, with an API fallback applied by useResultMeta.
- *  Shared so consumers (the annotation panel) can read it directly like
- *  {@link mzAxisRef} instead of threading it through props. */
+/** Result polarity (e.g. 'positive'/'negative'). Written by useResultMeta
+ *  (zarr metadata attrs first, source-file record as fallback). Shared so the
+ *  AI assistant can read it directly like {@link mzAxisRef}. */
 export const polarityRef = ref('')
 
 // ---- Mean spectrum state (continuous mode) ----
@@ -55,8 +54,7 @@ export const polarityRef = ref('')
 export const meanChartData = shallowRef<[number, number][]>([])
 /** Raw mean-spectrum intensities aligned with {@link mzAxisRef}. Unlike
  *  {@link meanChartData} (which drops zero/NaN points for charting), this is
- *  the unfiltered array - used for per-peak intensity lookup such as the
- *  annotation-CSV m/z matching (see useAnnotationMatch). */
+ *  the unfiltered array, for per-peak intensity lookup. */
 export const meanSpectrumRef = shallowRef<Float32Array | null>(null)
 export const spectrumLoading = ref(false)
 export const spectrumError = ref<string | null>(null)

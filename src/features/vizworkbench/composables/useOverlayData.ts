@@ -56,7 +56,10 @@ function deriveKmeansClusters(labels: Int32Array): KmeansCluster[] {
  *    on the min-max scaling corners (noise/background spectra fed to UMAP)
  *  - coordinateRange beyond [0, w-1]/[0, h-1]       → mapping would clip
  */
-function logUmapDiagnostics(emb: UmapEmbedding, image: { width: number; height: number; data: Uint8Array }): void {
+function logUmapDiagnostics(
+  emb: UmapEmbedding,
+  image: { width: number; height: number; data: Uint8Array },
+): void {
   const { scaledEmbedding, coordinates, count } = emb
   const min = [Infinity, Infinity, Infinity]
   const max = [-Infinity, -Infinity, -Infinity]
@@ -126,11 +129,7 @@ function logUmapDiagnostics(emb: UmapEmbedding, image: { width: number; height: 
  * - `ready` is only ever set by a successful zarr load - the status fields
  *   steer the UI, but the data itself is the final gate.
  */
-export function useOverlayData(
-  runId: Ref<string>,
-  ionRows: Ref<number>,
-  ionCols: Ref<number>,
-) {
+export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols: Ref<number>) {
   // State - UMAP and KMeans are mutually exclusive: only one shows at a time.
   const umapVisible = ref(false)
   const kmeansVisible = ref(false)
@@ -323,7 +322,9 @@ export function useOverlayData(
     if (s.includes('fail') || task.error_message) {
       stopPolling()
       clusteringComputing.value = false
-      overlayError.value = task.error_message || t('vizworkbench.overlay.taskStatus', { status: s || 'failed' })
+      // 后端 error_message 不外显（内容/长度不可控），统一一句话；原始任务记录留控制台
+      if (task.error_message) console.error('[useOverlayData] clustering task failed:', task.error_message)
+      overlayError.value = t('vizworkbench.overlay.taskFailed')
       return
     }
     clusteringComputing.value = true
@@ -428,7 +429,7 @@ export function useOverlayData(
   }
 
   function toggleKmeansCluster(id: number) {
-    const all = kmeansClusters.value.map(c => c.id)
+    const all = kmeansClusters.value.map((c) => c.id)
     const cur = selectedKmeansIds.value ?? new Set(all)
     const next = new Set(cur)
     if (next.has(id)) next.delete(id)
@@ -497,14 +498,7 @@ export function useOverlayData(
     if (!ok || !umapEmbedding || !dims) return false
     kmeansComputing.value = true
     try {
-      const result = await computeKmeansFromUmap(
-        umapEmbedding,
-        dims.height,
-        dims.width,
-        k,
-        42,
-        30,
-      )
+      const result = await computeKmeansFromUmap(umapEmbedding, dims.height, dims.width, k, 42, 30)
       kmeansRgb = result.rgb
       kmeansLabels = result.labels
       kmeansClusters.value = deriveKmeansClusters(result.labels)
@@ -560,9 +554,13 @@ export function useOverlayData(
 
   // Recompute the KMeans overlay when the cluster selection changes. Deep
   // watch: the ref holds a Set whose membership is mutated in place.
-  watch(selectedKmeansIds, () => {
-    if (kmeansVisible.value && kmeansRgb && kmeansLabels) recomputeOverlay()
-  }, { deep: true })
+  watch(
+    selectedKmeansIds,
+    () => {
+      if (kmeansVisible.value && kmeansRgb && kmeansLabels) recomputeOverlay()
+    },
+    { deep: true },
+  )
 
   // Recompute overlays once BOTH the raster data and the ion dimensions are
   // available, whichever arrives last (the zarr load can beat the ion image).
@@ -587,9 +585,13 @@ export function useOverlayData(
 
   // Page-entry UMAP probe: once per run, once the zarr data mode is known and
   // only for continuous storage (processed data has no UMAP).
-  watch([runId, dataModeRef], ([id, mode]) => {
-    if (id && mode === 'continuous') probeExisting()
-  }, { immediate: true })
+  watch(
+    [runId, dataModeRef],
+    ([id, mode]) => {
+      if (id && mode === 'continuous') probeExisting()
+    },
+    { immediate: true },
+  )
 
   // Release the clustering zarr store + cached rasters on unmount.
   onBeforeUnmount(() => {
@@ -607,12 +609,7 @@ export function useOverlayData(
    * Background pixels (0,0,0) become transparent. Used by the UMAP/KMeans
    * export buttons so the user gets a clean image without the ion image.
    */
-  function exportRgbPng(
-    rgb: Uint8Array,
-    width: number,
-    height: number,
-    filename: string,
-  ) {
+  function exportRgbPng(rgb: Uint8Array, width: number, height: number, filename: string) {
     const scale = 4 // upscale for a usable image (originals are small, e.g. 93×227)
     const canvas = document.createElement('canvas')
     canvas.width = width * scale
@@ -634,7 +631,7 @@ export function useOverlayData(
       imgData.data[i * 4 + 1] = g
       imgData.data[i * 4 + 2] = b
       // Background (0,0,0) = transparent, everything else = opaque
-      imgData.data[i * 4 + 3] = (r || g || b) ? 255 : 0
+      imgData.data[i * 4 + 3] = r || g || b ? 255 : 0
     }
     sctx.putImageData(imgData, 0, 0)
     ctx.drawImage(src, 0, 0, canvas.width, canvas.height)

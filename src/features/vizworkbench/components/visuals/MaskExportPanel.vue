@@ -1,49 +1,58 @@
 <template>
-  <div class="kawaru-text-81">
+  <div class="kawaru-text-68">
     <!-- Import is available even when there are no locally-created regions. -->
     <div class="flex items-center gap-1 mb-3">
       <input
         ref="importInput"
         type="file"
         class="hidden"
-        accept=".npz,.csv"
+        accept=".npz,.npy,.csv"
+        multiple
         @change="onImportChange"
       />
-      <button class="btn btn-sm btn-ghost flex-1 kawaru-text-81" @click="importInput?.click()">
+      <button class="btn btn-sm btn-ghost flex-1 kawaru-text-68" @click="importInput?.click()">
         <SvgIcon type="upload" />
         {{ $t('vizworkbench.mask.import') }}
       </button>
-      <button
-        v-if="importedMaskName"
-        class="btn btn-sm btn-ghost text-error kawaru-text-81"
-        :title="$t('vizworkbench.mask.clearImport')"
-        @click="emit('clear-imported-mask')"
+    </div>
+
+    <!-- 已导入的掩膜列表：勾选 = 应用该掩膜的过滤（并集），trash = 移除该导入。
+         每个掩膜同时也是比较面板里的可选区域。 -->
+    <div v-if="importedMasks?.length" class="space-y-1 mb-2">
+      <div
+        v-for="m in importedMasks"
+        :key="m.id"
+        class="flex items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-base-200/60"
       >
-        <SvgIcon type="trash" />
-      </button>
+        <label
+          class="flex items-center gap-1.5 min-w-0 flex-1 cursor-pointer select-none kawaru-text-75"
+          :title="
+            m.active
+              ? $t('vizworkbench.mask.showOriginalHint')
+              : $t('vizworkbench.mask.applyMaskHint')
+          "
+        >
+          <input
+            type="checkbox"
+            class="checkbox checkbox-xs checkbox-primary"
+            :checked="m.active"
+            @change="emit('toggle-imported-mask', m.id)"
+          />
+          <span
+            class="w-3 h-3 rounded-sm border border-base-content/30 shrink-0"
+            :style="{ backgroundColor: m.color }"
+          ></span>
+          <span class="text-base-content truncate" :title="m.name">{{ m.name }}</span>
+        </label>
+        <button
+          class="text-base-content hover:text-error shrink-0"
+          :title="$t('vizworkbench.mask.removeImport')"
+          @click="emit('remove-imported-mask', m.id)"
+        >
+          <SvgIcon type="trash" />
+        </button>
+      </div>
     </div>
-    <div
-      v-if="importedMaskName"
-      class="text-base-content/60 mb-2 truncate"
-      :title="importedMaskName"
-    >
-      {{ $t('vizworkbench.mask.imported', { name: importedMaskName }) }}
-    </div>
-    <!-- 显示原图 ↔ 应用掩膜：暂停/恢复导入掩膜的过滤（导入本身保留）。
-         独占一行：与导入按钮同行会把「导入掩膜」文案挤出按钮框 -->
-    <button
-      v-if="importedMaskName"
-      class="btn btn-sm w-full mb-2 kawaru-text-81"
-      :class="importedMaskActive ? 'btn-ghost' : 'btn-primary'"
-      :title="
-        importedMaskActive
-          ? $t('vizworkbench.mask.showOriginalHint')
-          : $t('vizworkbench.mask.applyMaskHint')
-      "
-      @click="emit('toggle-imported-mask')"
-    >
-      {{ importedMaskActive ? $t('vizworkbench.mask.showOriginal') : $t('vizworkbench.mask.applyMask') }}
-    </button>
 
     <!-- Format -->
     <div class="flex items-center gap-2 mb-2">
@@ -52,7 +61,7 @@
         <button
           v-for="f in FORMATS"
           :key="f.value"
-          class="btn btn-xs join-item kawaru-text-81"
+          class="btn btn-xs join-item kawaru-text-68"
           :class="format === f.value ? 'btn-primary' : 'btn-ghost'"
           @click="format = f.value"
         >
@@ -79,7 +88,7 @@
           <label
             v-for="roi in rois"
             :key="roi.id"
-            class="flex items-center gap-1.5 py-0.5 cursor-pointer select-none kawaru-text-87"
+            class="flex items-center gap-1.5 py-0.5 cursor-pointer select-none kawaru-text-75"
           >
             <input
               type="checkbox"
@@ -108,7 +117,7 @@
           <label
             v-for="c in kmeansClusters"
             :key="c.id"
-            class="flex items-center gap-1.5 py-0.5 cursor-pointer select-none kawaru-text-87"
+            class="flex items-center gap-1.5 py-0.5 cursor-pointer select-none kawaru-text-75"
           >
             <input
               type="checkbox"
@@ -133,7 +142,7 @@
       <!-- Actions -->
       <div class="flex items-center gap-1">
         <button
-          class="btn btn-sm btn-primary flex-1 kawaru-text-81"
+          class="btn btn-sm btn-primary flex-1 kawaru-text-68"
           :disabled="selectedCount === 0"
           :title="$t('vizworkbench.mask.exportHint')"
           @click="onExport"
@@ -141,10 +150,10 @@
           <SvgIcon type="download" />
           {{ $t('vizworkbench.mask.export') }}
         </button>
-        <button class="btn btn-ghost btn-sm kawaru-text-81" @click="selectAll">
+        <button class="btn btn-ghost btn-sm kawaru-text-68" @click="selectAll">
           {{ $t('vizworkbench.mask.all') }}
         </button>
-        <button class="btn btn-ghost btn-sm kawaru-text-81" @click="clearAll">
+        <button class="btn btn-ghost btn-sm kawaru-text-68" @click="clearAll">
           {{ $t('common.action.clear') }}
         </button>
       </div>
@@ -157,6 +166,7 @@ import { computed, ref } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 import type { ConfirmedROI } from '@/features/vizworkbench/composables/useROI'
 import type { KmeansCluster } from '@/features/vizworkbench/composables/useOverlayData'
+import type { ImportedMask } from '@/features/vizworkbench/composables/useImportedMasks'
 import type { ExportFormat, MaskExportPayload } from '@/features/vizworkbench/utils/maskExport'
 
 const props = defineProps<{
@@ -172,9 +182,8 @@ const props = defineProps<{
   /** Shared KMeans selection (null = all). Same state the ion-image overlay
    *  uses, so checking a cluster here also shows it on the image. */
   selectedKmeansIds: Set<number> | null
-  importedMaskName?: string | null
-  /** 导入掩膜过滤是否生效（false = 显示原图） */
-  importedMaskActive?: boolean
+  /** 已导入的掩膜：勾选 = 应用过滤，trash = 移除导入 */
+  importedMasks?: ImportedMask[]
 }>()
 
 const emit = defineEmits<{
@@ -185,9 +194,9 @@ const emit = defineEmits<{
   (e: 'toggle-kmeans-cluster', id: number): void
   (e: 'kmeans-select-all'): void
   (e: 'kmeans-clear-all'): void
-  (e: 'import-mask', file: File): void
-  (e: 'clear-imported-mask'): void
-  (e: 'toggle-imported-mask'): void
+  (e: 'import-masks', files: File[]): void
+  (e: 'remove-imported-mask', id: string): void
+  (e: 'toggle-imported-mask', id: string): void
 }>()
 
 const FORMATS: { value: ExportFormat; label: string }[] = [
@@ -244,8 +253,8 @@ function onExport() {
 
 function onImportChange(event: Event) {
   const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
+  const files = Array.from(input.files ?? [])
   input.value = ''
-  if (file) emit('import-mask', file)
+  if (files.length) emit('import-masks', files)
 }
 </script>

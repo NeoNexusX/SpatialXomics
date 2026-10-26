@@ -14,6 +14,13 @@ import type {
   ComparisonCategory,
 } from '@/features/vizworkbench/composables/useRegionComparison'
 import { scrollIntoContainer } from '@/features/vizworkbench/utils/scrollIntoContainer'
+import { buildComparisonCsv } from '@/features/vizworkbench/utils/comparisonExport'
+import {
+  sharedAnnotationIons,
+  sharedAnnotationMolecules,
+} from '@/features/vizworkbench/utils/annotation/sharedResults'
+import { downloadBlob } from '@/shared/utils/download'
+import { useToast } from '@/shared/composables/useToast'
 import { t } from '@/i18n'
 
 const props = defineProps<{
@@ -238,6 +245,37 @@ function onFilterChange(e: Event) {
   page.value = 0
 }
 
+// ---------- export differing rows (only + enriched) that have annotation ----------
+
+const { showToast } = useToast()
+
+function exportComparisonCsv() {
+  // shared 离子在两组都有、不体现差异；导出其余四个差异类别。
+  const differing = props.results.filter((r) => r.category !== 'shared')
+  if (!differing.length) {
+    showToast(t('vizworkbench.compare.noEnriched'), 'info')
+    return
+  }
+  if (!sharedAnnotationIons.value.length) {
+    showToast(t('vizworkbench.compare.noAnnotationRun'), 'info')
+    return
+  }
+  const { csv, count } = buildComparisonCsv(
+    differing,
+    sharedAnnotationIons.value,
+    sharedAnnotationMolecules.value,
+  )
+  if (!count) {
+    showToast(t('vizworkbench.compare.noAnnotatedEnriched'), 'info')
+    return
+  }
+  downloadBlob(
+    new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }),
+    'region_comparison.csv',
+  )
+  showToast(t('vizworkbench.compare.exported', { count }), 'success')
+}
+
 // ---- Cross-table sync: jump to the page + row of the externally selected m/z ----
 // This table and AnnotationPanel share `selectedMzIndex` (the average-spectrum
 // axis index). When a row is clicked there, we switch to the page containing
@@ -325,6 +363,16 @@ watch(
               })
             }}
           </span>
+
+          <!-- Export enriched rows that have annotation (CSV opens in Excel) -->
+          <button
+            class="btn btn-sm btn-ghost gap-1.5 kawaru-text-75 ml-auto"
+            :title="$t('vizworkbench.compare.exportEnrichedHint')"
+            @click="exportComparisonCsv"
+          >
+            <SvgIcon type="download" />
+            {{ $t('vizworkbench.compare.exportEnriched') }}
+          </button>
 
           <!-- Pagination -->
           <div v-if="totalPages > 1" class="ml-auto flex items-center gap-1">

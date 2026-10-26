@@ -23,6 +23,7 @@
 import type { Context, Plugin } from 'cordis'
 import { defineTool } from './defineTool'
 import { getJson, take, createLazyJsonLoader } from './httpJson'
+import { adductShiftTable } from '@/shared/chem/adducts'
 
 const PUBCHEM_BASE = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug'
 const OLS4_BASE = 'https://www.ebi.ac.uk/ols4/api'
@@ -147,28 +148,11 @@ export type LipidRow = [
 ]
 
 /** 常见加合物的单同位素离子质量位移（Da）：neutral = m/z − shift。
- *  覆盖必须与面板评分的规则表（annotationScoring.ADDUCT_RULES）及 python
- *  参考（adduct_filter_helper.PRIMARY_ADDUCT_RULES_*）保持一致——检索表
- *  缺项时，模型会对着面板刚给出多加合物加分（M×n）的 m/z 报「无候选」。
- *  bioTools 的 HMDB 质量检索复用同一张表。 */
+ *  数值来自共享加合物表（shared/chem/adducts.ts，按元素质量现算、含电子质量），注释面板
+ *  用的是同一张表；这里列出助手检索要扫的子集。bioTools 的 HMDB 质量检索复用同一张表。 */
 export const ADDUCTS: Record<'positive' | 'negative', Record<string, number>> = {
-  positive: {
-    '[M+H]+': 1.007276,
-    '[M+Na]+': 22.989218,
-    '[M+K]+': 38.963158,
-    '[M+NH4]+': 18.033823,
-    // 7Li 7.016003 − e；s2fmt 常见形式（DESI），面板按一级准分子离子计分
-    '[M+Li]+': 7.015455,
-  },
-  negative: {
-    '[M-H]-': -1.007276,
-    '[M+Cl]-': 34.969402,
-    '[M+HCOO]-': 44.998201,
-    '[M+CH3COO]-': 59.013304,
-    // CAMERA 原表（PRIMARY_ADDUCT_RULES_NEGATIVE）的杂二聚体形式
-    '[M-2H+Na]-': 20.974666,
-    '[M-2H+K]-': 36.948606,
-  },
+  positive: adductShiftTable(['M+H', 'M+Na', 'M+K', 'M+NH4', 'M+Li']),
+  negative: adductShiftTable(['M-H', 'M+Cl', 'M+HCOO', 'M+CH3COO', 'M-2H+Na', 'M-2H+K']),
 }
 
 /** 懒加载 LMSD 索引（同源静态资源，模块级缓存；首次 ~940KB gzip） */
