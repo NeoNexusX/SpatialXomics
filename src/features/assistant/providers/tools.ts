@@ -156,17 +156,28 @@ export class ToolRuntime extends Service {
         timeoutMs,
         call.signal,
       )
-      // output.render 缺省：字符串原样、其余 JSON.stringify（全部内置工具同此）
-      const rendered = def.output?.render
-        ? def.output.render(validated.args, value)
+      // output.render 缺省：字符串原样、其余 JSON.stringify（全部内置工具同此）。
+      // 自定义 render 的产出不再被一刀切——render 本身就是工具对「模型可见文本」
+      // 的完整控制点（read_archived_result 的取回指引都在 render 里处理），仍需
+      // 截断的工具在自己的 render 里截。默认渲染按工具自己的 maxResultChars
+      // （缺省 TOOL_RESULT_CHARS=2000）截断——skill 加载的 SKILL.md 全文是
+      // 3k-10k 字符的工作流文档，必须放宽：被截到 2k 会让模型读不到工作流后半段
+      //（生物化学工具编排）和输出模板，此前已发生。
+      const customRender = def.output?.render
+      const rendered = customRender
+        ? customRender(validated.args, value)
         : typeof value === 'string'
           ? value
           : JSON.stringify(value)
+      const limit = def.maxResultChars ?? TOOL_RESULT_CHARS
+      const capped = customRender ? rendered : truncate(rendered, limit)
       result = {
         isError: false,
         value,
-        content: truncate(rendered, TOOL_RESULT_CHARS),
-        fullContent: rendered.length > TOOL_RESULT_CHARS ? rendered : undefined,
+        content: capped,
+        // fullContent 只在管线真的截断时存在（否则全文会被重复写档）；
+        // 自定义 render 豁免截断后由 render 自己负责内容完整性。
+        fullContent: capped.length < rendered.length ? rendered : undefined,
       }
     } catch (err: any) {
       if (err?.name === 'AbortError' || call.signal.aborted) {

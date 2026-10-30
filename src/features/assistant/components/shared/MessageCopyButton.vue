@@ -13,7 +13,7 @@
     :title="$t('common.action.copy')"
     @click="copy(props.text)"
   >
-    <svg-icon type="duplicate" class="w-3 h-3" />
+    <svg-icon type="duplicate" class="w-4 h-4" />
   </button>
 </template>
 

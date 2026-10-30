@@ -64,6 +64,7 @@ export const ICON_SETS = {
     'arrow-trending-up',
     'cpu-chip',
     'book-open',
+    'photo',
   ],
   'simple-icons': ['github', 'wechat', 'alibabacloud'],
   lucide: ['lasso', 'square'],

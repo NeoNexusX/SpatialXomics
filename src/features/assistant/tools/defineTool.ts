@@ -11,12 +11,16 @@ import type { ToolSchema } from '../agenttypes/assistant'
 // ---- 参数 schema DSL ----
 
 export interface ParamSpec {
-  type: 'string' | 'number' | 'integer' | 'boolean'
+  type: 'string' | 'number' | 'integer' | 'boolean' | 'array'
   /** 必填标记；仅影响 JSON Schema 的 required 与运行时校验，不影响 InferArgs */
   required?: boolean
   description?: string
   /** 仅 string 类型：限定可选值 */
   enum?: string[]
+  /** 仅 array 类型：元素类型（缺省 string） */
+  items?: 'string' | 'number' | 'integer'
+  /** 仅 array 类型：最大元素数（超出静默截断，防模型一次塞几百个） */
+  maxItems?: number
 }
 
 export interface ParameterSchemaSpec {
@@ -30,13 +34,17 @@ export interface ParameterSchemaSpec {
  * 可选键模型未传时为 undefined，工具内部自行判空。
  */
 export type InferArgs<S extends ParameterSchemaSpec> = {
-  [K in keyof S]: S[K]['type'] extends 'string'
-    ? string
-    : S[K]['type'] extends 'number' | 'integer'
-      ? number
-      : S[K]['type'] extends 'boolean'
-        ? boolean
-        : never
+  [K in keyof S]: S[K]['type'] extends 'array'
+    ? S[K]['items'] extends 'number' | 'integer'
+      ? number[]
+      : string[]
+    : S[K]['type'] extends 'string'
+      ? string
+      : S[K]['type'] extends 'number' | 'integer'
+        ? number
+        : S[K]['type'] extends 'boolean'
+          ? boolean
+          : never
 }
 
 // ---- 工具执行上下文 ----
@@ -55,7 +63,6 @@ export interface ToolRunContext {
  * - files      后端文件/任务/配额
  * - chemistry  化学信息（PubChem / 离线库 / ChEBI）
  * - biology    生物信息（HMDB / KEGG：代谢物→组织/疾病/通路）
- * - spectral   参考谱库搜索（实测峰列表 vs 库谱）
  * - literature 文献检索（PubMed / Europe PMC / OpenAlex）
  * - system     助手自身（存档读取等）
  */
@@ -64,7 +71,6 @@ export type ToolCategory =
   | 'files'
   | 'chemistry'
   | 'biology'
-  | 'spectral'
   | 'literature'
   | 'system'
 
@@ -84,6 +90,10 @@ export interface ToolDefinition<A extends ParameterSchemaSpec = any, V = any> {
   }
   /** 工具执行超时（ms）；缺省 15000 */
   timeoutMs?: number
+  /** 单工具结果截断上限（字符）；缺省 TOOL_RESULT_CHARS=2000。
+   *  仅给「内容本身就该完整」的工具用（如 skill 加载的 SKILL.md 全文，
+   *  10k 级）——被截断会让模型读不到工作流后半段和输出模板。 */
+  maxResultChars?: number
   /** 工具的执行体 */
   execute(args: InferArgs<A>, exec: ToolRunContext): Promise<V>
 }
@@ -101,6 +111,37 @@ export function defineTool<A extends ParameterSchemaSpec, V>(
   def: ToolDefinition<A, V>,
 ): ToolDefinition<A, V> {
   return def
+}
+
+// ---- 批量工具输出拼接 ----
+
+/**
+ * 批量工具的统一输出形态：单项时与旧版单查输出完全一致（不加节标题，存量
+ * 测试/提示词措辞不受影响）；多项时逐项加 `### <label>` 节标题拼接。
+ *
+ * 单项 render 抛错按原样上抛（索引未构建等全局错误应让整次调用失败）；
+ * 多项时单项失败不拖垮整批——错误文本就地成为该节内容（批量 PubChem/ChEBI
+ * 查询里一个未知名字不该让其余结果全丢）。
+ */
+export async function renderBatch<T>(
+  items: T[],
+  label: (item: T) => string,
+  render: (item: T) => string | Promise<string>,
+): Promise<string> {
+  if (items.length === 1) {
+    return await render(items[0]!)
+  }
+  const sections: string[] = []
+  for (const item of items) {
+    let body: string
+    try {
+      body = await render(item)
+    } catch (err) {
+      body = `Error: ${(err as Error).message}`
+    }
+    sections.push(`### ${label(item)}\n${body}`)
+  }
+  return sections.join('\n\n')
 }
 
 // ---- 参数校验 ----
@@ -153,6 +194,43 @@ export function validateArgs<A extends ParameterSchemaSpec>(
           parsed[key] = value
         }
         break
+      case 'array': {
+        if (!Array.isArray(value)) {
+          errors.push({ field: key, message: `"${key}" must be an array, got ${typeof value}` })
+          break
+        }
+        const itemType = spec.items ?? 'string'
+        const out: (string | number)[] = []
+        let bad = false
+        for (const el of value) {
+          if (itemType === 'string') {
+            if (typeof el !== 'string') {
+              errors.push({
+                field: key,
+                message: `"${key}" must contain only strings, got ${typeof el}`,
+              })
+              bad = true
+              break
+            }
+            out.push(el)
+          } else {
+            if (typeof el !== 'number' || Number.isNaN(el)) {
+              errors.push({
+                field: key,
+                message: `"${key}" must contain only numbers, got ${typeof el}`,
+              })
+              bad = true
+              break
+            }
+            out.push(itemType === 'integer' ? Math.floor(el) : el)
+          }
+        }
+        if (!bad) {
+          // maxItems：静默截断（模型侧列表超长不构成错误，只是用不完）
+          parsed[key] = spec.maxItems != null ? out.slice(0, spec.maxItems) : out
+        }
+        break
+      }
     }
   }
 
@@ -172,6 +250,10 @@ export function toToolSchema(def: ToolDefinition): ToolSchema {
     const spec = rawSpec as ParamSpec
     const prop: Record<string, unknown> = {
       type: spec.type === 'integer' ? 'integer' : spec.type,
+    }
+    if (spec.type === 'array') {
+      prop.items = { type: spec.items === 'number' || spec.items === 'integer' ? spec.items : 'string' }
+      if (spec.maxItems != null) prop.maxItems = spec.maxItems
     }
     if (spec.description) prop.description = spec.description
     if (spec.enum) prop.enum = spec.enum

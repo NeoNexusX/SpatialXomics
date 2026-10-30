@@ -11,21 +11,28 @@ grounding, not memory. Chemistry answers *what it is*; this skill answers
 *what it does and where*.
 
 ## 1. Workflow
-1. Start from evidence: `get_annotation_top` / `get_annotation_detail(mz)` for
-   the molecule(s) the user cares about. Take the top candidates (putative),
+> **Batch first**: the lookup tools take arrays — pass several names in ONE call
+> (`hmdb_lookup(queries=[...])`, `kegg_pathway_lookup(queries=[...])`,
+> `chebi_lookup(queries=[...])`, `library_lookup(queries=[...])`,
+> `pubchem_compound_lookup(names=[...])`) instead of one call per molecule.
+> A name that fails does not block the rest.
+
+1. Start from evidence: `get_annotation_top` / `get_annotation_detail(mzs=[...])`
+   for the molecule(s) the user cares about. Take the top candidates (putative),
    note the adduct and level.
-2. **Identity cross-check** (cheap, do first): `library_lookup(name)` (lipids,
-   offline LMSD) or `pubchem_compound_lookup(name)` (formula/mass/synonyms) —
-   confirm the name you are about to interpret matches the formula.
-3. **Small-molecule biology (HMDB)**: `hmdb_lookup(name)` → tissue
+2. **Identity cross-check** (cheap, do first): `library_lookup` (lipids,
+   offline LMSD) or `pubchem_compound_lookup` (formula/mass/synonyms) —
+   confirm the names you are about to interpret match their formulas.
+3. **Small-molecule biology (HMDB)**: `hmdb_lookup` → tissue
    localization, disease associations, biological function, KEGG id.
-   For an unknown m/z (non-lipid), `hmdb_lookup(mz=<value>, polarity=...)`
+   For unknown m/z values (non-lipid), `hmdb_lookup(mzs=[...], polarity=...)`
    does adduct-aware mass matching against the metabolite database.
-4. **Pathways (KEGG)**: `kegg_pathway_lookup(<name or C number>)` → the
-   pathways this metabolite belongs to; `kegg_pathway_lookup(<pathway>)`
-   reverses to member compounds — use to test "is this annotation set
-   enriched in one pathway" by mapping the top N annotations and counting.
-5. **Semantic role (ChEBI)**: `chebi_lookup(name)` → biological role terms
+4. **Pathways (KEGG)**: `kegg_pathway_lookup(<names or C numbers>)` → the
+   pathways these metabolites belong to; `kegg_pathway_lookup(<pathway>)`
+   reverses to member compounds. To test "is this annotation set enriched in
+   one pathway" across the whole table at once, call `pathway_enrichment(topN)`
+   — it batch-maps the top annotations and ranks pathways by molecule count.
+5. **Semantic role (ChEBI)**: `chebi_lookup` → biological role terms
    (antioxidant, xenobiotic, detergent, ...). Good for one-line "what kind of
    molecule is this".
 6. **Literature**: `europepmc_search("{molecule} {tissue}")` for imaging or
@@ -65,7 +72,8 @@ studies; quote a short phrase from the abstract when decisive>.
 no MS/MS | isomer ambiguity>.
 ```
 
-For a batch of annotations, add a pathway rollup:
+For a batch of annotations, add a pathway rollup (get it directly from
+`pathway_enrichment(topN)` rather than counting by hand):
 
 ```
 ### Pathway rollup (top N annotations)

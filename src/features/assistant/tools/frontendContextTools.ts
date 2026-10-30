@@ -7,7 +7,7 @@
  */
 
 import type { Context, Plugin } from 'cordis'
-import { defineTool } from './defineTool'
+import { defineTool, renderBatch } from './defineTool'
 import {
   buildDatasetOverview,
   buildIonImageStats,
@@ -20,7 +20,7 @@ import {
   getAnnotationRows,
   getAnnotationWeights,
 } from '../providers/analysisContext'
-import { DEFAULT_TOP_N, MAX_TOP_N } from '../agentconfig/defaults'
+import { DEFAULT_TOP_N, MAX_TOP_N, MAX_BATCH_QUERIES } from '../agentconfig/defaults'
 import type {
   DatasetOverview,
   IonImageStats,
@@ -390,46 +390,84 @@ export const frontendContextTools: Plugin.Function<void> = (ctx: Context) => {
   )
 
   // 单条注释的完整证据：get_annotation_top 为省字符做了精简（紧凑 token），
-  // 模型深挖某一行（复核可信度/写报告）时用本工具拿全字段
+  // 模型深挖某一行（复核可信度/写报告）时用本工具拿全字段。
+  // mzs/rowIds 支持批量：一次调取多行详情（annotation-review 的 step 3 常要
+  // 深查多行，逐行调用是工具调用次数膨胀的主要来源）
   ctx.tools.register(
     defineTool({
       category: 'page',
       name: 'get_annotation_detail',
       description:
-        'Get the FULL evidence for one annotation row (get_annotation_top abbreviates): score ' +
+        'Get the FULL evidence for annotation rows (get_annotation_top abbreviates): score ' +
         'breakdown, chaos and co-localization, the other adduct ions of the same molecule with ' +
         'their Pearson r, enabled adducts that were not detected, other annotations on the same ' +
-        'peak, and all candidate names. Identify the row by rowId, or by observed m/z (the ' +
-        'best-ranked row on the closest peak is returned).',
+        'peak, and all candidate names. Identify rows by rowId, or by observed m/z (the ' +
+        'best-ranked row on the closest peak is returned). BATCHING: pass "mzs" or "rowIds" ' +
+        '(arrays) to fetch several rows in ONE call instead of one call per row.',
       parameters: {
         mz: { type: 'number', description: 'Observed m/z of the row (from get_annotation_top)' },
+        mzs: {
+          type: 'array',
+          items: 'number',
+          maxItems: MAX_BATCH_QUERIES,
+          description: 'Batch form of "mz": many m/z values in one call',
+        },
         rowId: { type: 'integer', description: 'Row id if known (takes precedence over mz)' },
+        rowIds: {
+          type: 'array',
+          items: 'integer',
+          maxItems: MAX_BATCH_QUERIES,
+          description: 'Batch form of "rowId": many row ids in one call',
+        },
       },
       async execute(args) {
-        if (args.mz == null && args.rowId == null) {
-          throw new Error('Provide "mz" or "rowId" to identify the annotation row')
-        }
         const rows = getAnnotationRows()
         if (!rows || rows.length === 0) return unavailable('Annotation data')
-        let row: AnnotationRow | undefined
-        if (args.rowId != null) {
-          row = rows.find((r) => r.id === args.rowId)
-        } else {
-          const dist = (r: AnnotationRow) => Math.abs(r.obsMz - args.mz!)
+
+        // rowId 批（若有）；否则 mz 批（含单值）；两者都没给 → 报错
+        const rowIdList = args.rowIds ?? (args.rowId != null ? [args.rowId] : [])
+        const mzList = args.mzs ?? (args.mz != null ? [args.mz] : [])
+        if (rowIdList.length === 0 && mzList.length === 0) {
+          throw new Error('Provide "mz"/"mzs" or "rowId"/"rowIds" to identify the annotation row(s)')
+        }
+
+        // 单行定位（保留原语义：rowId 精确；mz 取 0.5 Da 内最近峰中排名最高的行）
+        const findByRowId = (id: number): AnnotationRow | undefined => rows.find((r) => r.id === id)
+        const findByMz = (mz: number): AnnotationRow | undefined => {
+          const dist = (r: AnnotationRow) => Math.abs(r.obsMz - mz)
           const minD = rows.reduce((m, r) => Math.min(m, dist(r)), Infinity)
-          // 最近峰也不在 0.5 Da 内 → 视为没有对应注释行；同一峰有多种解释时取排名最高的
-          if (minD <= 0.5) {
-            row = rows
-              .filter((r) => dist(r) - minD <= 1e-9)
-              .reduce((best, r) => (r.rank < best.rank ? r : best))
+          if (minD > 0.5) return undefined
+          return rows
+            .filter((r) => dist(r) - minD <= 1e-9)
+            .reduce((best, r) => (r.rank < best.rank ? r : best))
+        }
+        const renderRow = (rowId: number | undefined, mz: number | undefined) => {
+          const row = rowId != null ? findByRowId(rowId) : findByMz(mz!)
+          if (!row) {
+            return rowId != null
+              ? `No annotation row with rowId ${rowId}. Call get_annotation_top to list valid rows.`
+              : `No annotation row matched near m/z ${mz}. Call get_annotation_top to list valid rows.`
           }
+          return renderAnnotationDetail(row)
         }
-        if (!row) {
-          return args.rowId != null
-            ? `No annotation row with rowId ${args.rowId}. Call get_annotation_top to list valid rows.`
-            : `No annotation row matched near m/z ${args.mz}. Call get_annotation_top to list valid rows.`
-        }
-        return renderAnnotationDetail(row)
+
+        const idPart =
+          rowIdList.length > 0
+            ? await renderBatch(
+                rowIdList,
+                (id) => `rowId ${id}`,
+                (id) => renderRow(id, undefined),
+              )
+            : ''
+        const mzPart =
+          mzList.length > 0
+            ? await renderBatch(
+                mzList,
+                (mz) => `m/z ${mz}`,
+                (mz) => renderRow(undefined, mz),
+              )
+            : ''
+        return [idPart, mzPart].filter(Boolean).join('\n\n')
       },
     }),
   )
@@ -439,6 +477,10 @@ export const frontendContextTools: Plugin.Function<void> = (ctx: Context) => {
     defineTool({
       category: 'system',
       name: 'skill',
+      // SKILL.md 全文 3k-10k 字符（msi-analysis ~10k）：是完整工作流文档，必须
+      // 整体可见——截到默认 2000 会让工作流后半段（生物化学工具编排/通路发现）
+      // 和输出模板永远读不到（此前已发生：模型反复加载拿到同一份半截文档）
+      maxResultChars: 12_000,
       description:
         'Load a domain skill by name to get detailed analysis instructions. Available skill names are listed in the system prompt.',
       parameters: {

@@ -83,7 +83,16 @@ export function buildAnnotationDb(
 
 const ID_ALIASES = ['id', 'hmdb id', 'hmdb_id', 'accession', 'compound id', 'compound_id']
 const NAME_ALIASES = ['name', 'compound', 'compound name', 'candidate']
-const FORMULA_ALIASES = ['formula', 'neutral formula', 'molecular formula']
+const FORMULA_ALIASES = [
+  'formula',
+  'neutral formula',
+  'molecular formula',
+  // 旧「按加合物展开」格式的分子式列写法（如 lipidmaps_candidates 的 formula_ion）：
+  // 该列存的其实是中性分子式（Ion type 列单独记加合物），故同样认作分子式列
+  'formula_ion',
+  'formula ion',
+  'formulaion',
+]
 const INCHI_ALIASES = ['inchi']
 const ORIGIN_ALIASES = ['origin']
 const MASS_ALIASES = [
