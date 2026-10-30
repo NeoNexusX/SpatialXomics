@@ -3,7 +3,7 @@ import { Context } from 'cordis'
 import { llmProvider } from '../providers/llm'
 import { toolsProvider } from '../providers/tools'
 import { skillsProvider } from '../providers/skills'
-import { agentLoopProvider, QUICK_PROMPTS } from '../plugins/agentLoop'
+import { agentLoopProvider } from '../plugins/agentLoop'
 import { defineTool } from '../tools/defineTool'
 import { readArchive } from '../utils/opfsStore'
 import { STORAGE_KEYS } from '@/shared/config/storageKeys'
@@ -283,13 +283,14 @@ describe('AgentLoop', () => {
         name: 'slow',
         description: 'returns a big result (forces the archive path)',
         parameters: {},
-        // fullContent 看 render 输出长度（> TOOL_RESULT_CHARS 才走存档）
-        output: { render: () => 'x'.repeat(3000) },
+        // execute 直接返回长字符串：走默认渲染管线被截到 TOOL_RESULT_CHARS、
+        // fullContent 带全文 → writeArchive（自定义 render 已豁免截断，
+        // 不再产生 fullContent，触发不了存档窗口）
         async execute() {
           await new Promise<void>((r) => {
             releaseTool = r
           })
-          return 'ok'
+          return 'x'.repeat(3000)
         },
       }),
     )
@@ -357,11 +358,6 @@ describe('AgentLoop', () => {
 
     const lastMsg = doneMessages[doneMessages.length - 1]!
     expect(lastMsg).toContain('Maximum steps')
-  })
-
-  it('exposes quick prompts', () => {
-    expect(QUICK_PROMPTS.length).toBe(4)
-    expect(QUICK_PROMPTS.map((p) => p.tKey)).toEqual(['summarize', 'explain', 'preprocess', 'report'])
   })
 
   it('blocks send and emits guidance error when no LLM is configured', async () => {
@@ -504,6 +500,126 @@ describe('AgentLoop', () => {
     expect(m!.content).toContain('[earlier reply truncated for context budget]')
   })
 
+  // ---- 自动 Compact（maybeCompact：阈值触发 → 摘要替换旧历史） ----
+
+  /** 构造超过 COMPACT_TRIGGER_CHARS 的历史：user + 长 assistant + 收尾 */
+  function oversizedHistory(): ChatMessage[] {
+    return [
+      { role: 'user', content: '分析一下这些数据' },
+      { role: 'assistant', content: 'A'.repeat(30_000) },
+      { role: 'user', content: '继续' },
+      { role: 'assistant', content: 'B'.repeat(20_000) },
+    ] // ≈50k > 40k 触发线
+  }
+
+  it('auto-compacts oversized history at turn boundary and emits assistant/compacted', async () => {
+    // chunk 批次顺序：第 1 批给 compact 摘要请求，第 2 批给正常 turn
+    const { ctx, calls } = await setupAgent([
+      [
+        { type: 'text-delta', text: '## Confirmed findings\n- PC 34:1 high confidence' },
+        { type: 'finish', reason: 'stop' },
+      ],
+      [
+        { type: 'text-delta', text: 'OK, continuing.' },
+        { type: 'finish', reason: 'stop' },
+      ],
+    ])
+    ctx.agent.setHistory(oversizedHistory())
+
+    let compacted: [number, number] | null = null
+    ctx.on('assistant/compacted', (before: number, after: number) => (compacted = [before, after]))
+
+    await ctx.agent.send('下一步')
+
+    // 摘要请求确实发出：2 次调用（compact + turn），compact 请求不带 tools
+    expect(calls.length).toBe(2)
+    expect(calls[0]!.tools).toBeUndefined()
+    expect(calls[0]!.maxTokens).toBe(2_000)
+
+    // 旧历史被替换为 [压缩标记 user, 摘要 assistant, 新 user, 本 turn 回复]
+    const h = ctx.agent.getHistory()
+    expect(h.length).toBe(4)
+    expect(h[0]!.role).toBe('user')
+    expect(h[0]!.content).toContain('compacted')
+    expect(h[1]!.role).toBe('assistant')
+    expect(h[1]!.content).toContain('PC 34:1')
+    expect(h[2]!.content).toBe('下一步')
+    expect(h[3]!.content).toBe('OK, continuing.')
+    expect(compacted).not.toBeNull()
+    expect(compacted![0]).toBeGreaterThan(40_000)
+    expect(compacted![1]).toBeLessThan(1_000)
+  })
+
+  it('does not compact below the trigger threshold', async () => {
+    const { ctx, calls } = await setupAgent([
+      [
+        { type: 'text-delta', text: 'short answer' },
+        { type: 'finish', reason: 'stop' },
+      ],
+    ])
+    ctx.agent.setHistory([
+      { role: 'user', content: 'q' },
+      { role: 'assistant', content: 'a'.repeat(1_000) },
+    ])
+    await ctx.agent.send('next')
+    // 只有正常 turn 一次调用；历史原样 + 新 user + 回复
+    expect(calls.length).toBe(1)
+    const h = ctx.agent.getHistory()
+    expect(h.length).toBe(4)
+    expect(h[2]!.content).toBe('next')
+  })
+
+  it('compact failure (empty summary) silently falls back — user message still goes through', async () => {
+    // 第 1 批 = compact 请求只吐 finish（空流）→ 摘要为空 → 放弃压缩；
+    // 第 2 批 = 正常 turn 照常进行
+    const { ctx, calls } = await setupAgent([
+      [{ type: 'finish', reason: 'stop' }],
+      [
+        { type: 'text-delta', text: 'recovered' },
+        { type: 'finish', reason: 'stop' },
+      ],
+    ])
+    ctx.agent.setHistory(oversizedHistory())
+    let compacted = false
+    ctx.on('assistant/compacted', () => (compacted = true))
+
+    await ctx.agent.send('下一步')
+
+    expect(compacted).toBe(false)
+    // 历史未替换（旧 4 条 + 新 user + 本 turn 回复 = 6 条），
+    // 但用户消息正常入列、turn 正常完成
+    const h = ctx.agent.getHistory()
+    expect(h.length).toBe(6)
+    expect(h[4]!.content).toBe('下一步')
+    expect(calls.length).toBe(2)
+  })
+
+  it('compact history after a tool-heavy turn has no dangling tool messages', async () => {
+    const { ctx } = await setupAgent([
+      [
+        { type: 'text-delta', text: 'summary of tool work' },
+        { type: 'finish', reason: 'stop' },
+      ],
+      [
+        { type: 'text-delta', text: 'done' },
+        { type: 'finish', reason: 'stop' },
+      ],
+    ])
+    // 完整工具轮历史（assistant(tool_calls)+tool 配对完整），总量超线
+    const hist = toolHeavyHistory(10)
+    for (let i = 0; i < 10; i++) {
+      const t = hist.find((m) => m.role === 'tool' && m.tool_call_id === `c${i}_0`)
+      if (t) t.content = 'r'.repeat(4_500) // ≈45k > 40k
+    }
+    ctx.agent.setHistory(hist)
+    await ctx.agent.send('continue')
+
+    const h = ctx.agent.getHistory()
+    // 压缩后只剩 [标记 user, 摘要 assistant, 新 user, 本 turn 回复]，无任何 tool 消息残留
+    expect(h.length).toBe(4)
+    expect(h.filter((m) => m.role === 'tool')).toHaveLength(0)
+  })
+
   // ---- 工具结果存档链路（fullContent 在截断前捕获） ----
 
   it('archives the full tool result and appends a recovery pointer when truncated', async () => {
@@ -580,5 +696,86 @@ describe('AgentLoop', () => {
     })
     expect(large.content.length).toBeLessThanOrEqual(2000)
     expect(large.fullContent).toHaveLength(2500)
+  })
+
+  // ---- 多模态图片：拒图 400 的历史善后 ----
+
+  it('strips images from persistent history when the adapter reports the model rejected images', async () => {
+    // openaiAdapter 拒图降级（rejectsImages → stripImages 重发）时会回调
+    // setOnImagesRejected：持久 history 里 user 消息的 images 必须被清掉，
+    // 否则带图消息留在历史里，之后每条纯文字提问都重发同一张图 → 会话
+    // 每轮 400 直到手动清空
+    const { ctx } = await setupAgent([[{ type: 'finish', reason: 'stop' }]])
+    const IMG = 'data:image/png;base64,AAAA'
+    await ctx.agent.send('look at this', [IMG])
+    // 模拟适配器拒图回调
+    ctx.agent['stripHistoryImages']()
+    const hist = ctx.agent.getHistory()
+    const userMsg = hist.find((m) => m.role === 'user')!
+    expect(userMsg.images).toBeUndefined()
+    // 轮次结构保留：文字 + 占位提示仍在
+    expect(userMsg.content).toContain('look at this')
+    expect(userMsg.content).toContain('[image omitted]')
+  })
+
+  it('keeps images in history when no rejection is reported', async () => {
+    const { ctx } = await setupAgent([[{ type: 'finish', reason: 'stop' }]])
+    const IMG = 'data:image/png;base64,BBBB'
+    await ctx.agent.send('check this', [IMG])
+    const userMsg = ctx.agent.getHistory().find((m) => m.role === 'user')!
+    expect(userMsg.images).toEqual([IMG])
+  })
+
+  it('trimHistory keeps only the latest user message\'s images and stubs older ones', async () => {
+    // 旧图留在历史里会让每轮请求全量重传几百 KB 的 dataURL；只保留最近
+    // keepRecent 窗口内最后一条带图 user 消息的图片，更早的换占位文字
+    const { ctx } = await setupAgent([])
+    const agent = ctx.agent as unknown as {
+      setHistory(m: ChatMessage[]): void
+      trimHistory(): Promise<void>
+    }
+    const IMG = 'data:image/png;base64,' + 'x'.repeat(100)
+    const hist: ChatMessage[] = [
+      { role: 'user', content: 'first pic', images: [IMG] },
+      { role: 'assistant', content: 'seen it' },
+      { role: 'user', content: 'second pic', images: [IMG] },
+      { role: 'assistant', content: 'ok' },
+    ]
+    agent.setHistory(hist)
+    await agent.trimHistory()
+    const h = ctx.agent.getHistory()
+    // 更早的带图消息：图片被剥、正文追加占位
+    const first = h.find((m) => m.content === 'first pic\n[image omitted]')!
+    expect(first).toBeDefined()
+    expect(first.images).toBeUndefined()
+    // 最后一条带图消息保留原样
+    const second = h.find((m) => m.content === 'second pic')!
+    expect(second).toBeDefined()
+    expect(second.images).toEqual([IMG])
+  })
+
+  it('trimHistory counts image dataURLs toward the char budget', async () => {
+    // 图片不计入预算 → 预算判断永远低估、旧图永不触发压缩；计费=dataURL 长度
+    const { ctx } = await setupAgent([])
+    const agent = ctx.agent as unknown as {
+      setHistory(m: ChatMessage[]): void
+      trimHistory(): Promise<void>
+    }
+    const bigImg = 'data:image/png;base64,' + 'y'.repeat(70_000) // 单张即超 60k 预算
+    const hist: ChatMessage[] = [
+      { role: 'user', content: 'q', images: [bigImg] },
+      { role: 'assistant', content: 'a' },
+      { role: 'user', content: 'follow-up' },
+      { role: 'assistant', content: 'b' },
+      { role: 'user', content: 'latest' }, // 把带图消息推出 keepRecent 窗口
+      { role: 'assistant', content: 'c' },
+    ]
+    agent.setHistory(hist)
+    await agent.trimHistory()
+    const h = ctx.agent.getHistory()
+    // 窗口外的带图消息被剥离，正文追加占位
+    const stripped = h.find((m) => m.role === 'user' && m.content?.includes('[image omitted]'))
+    expect(stripped).toBeDefined()
+    expect(h.every((m) => !m.images?.length)).toBe(true)
   })
 })

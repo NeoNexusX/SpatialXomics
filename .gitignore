@@ -23,9 +23,6 @@ docs/.vitepress/.temp
 # AI 审查工具的本地产物
 .codex-review/
 
-# MassBank 离线索引构建的本地产物（下载缓存/重试脚本，见 build-massbank-index.mjs）
-scripts/.massbank-*
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

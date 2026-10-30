@@ -51,6 +51,7 @@ export const ICON_MAP = {
   sparkles: 'heroicons:sparkles',
   scale: 'heroicons:scale',
   close: 'heroicons:x-mark',
+  photo: 'heroicons:photo',
   circle_stack: 'heroicons:circle-stack',
   queue_list: 'heroicons:queue-list',
   rectangle_stack: 'heroicons:rectangle-stack',

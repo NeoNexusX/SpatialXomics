@@ -10,6 +10,7 @@
 import type { Context, Plugin } from 'cordis'
 import { defineTool } from './defineTool'
 import { readArchive } from '../utils/opfsStore'
+import { ARCHIVE_WINDOW_CHARS } from '../agentconfig/defaults'
 
 export const archiveTools: Plugin.Function<void> = (ctx: Context) => {
   ctx.tools.register(
@@ -19,20 +20,54 @@ export const archiveTools: Plugin.Function<void> = (ctx: Context) => {
       description:
         'Read the full text of a previously truncated tool result from the assistant archive. ' +
         'History truncation stubs mention an archive id — pass it here to recover the complete ' +
-        'output (e.g. the untruncated annotation listing or database result).',
+        'output (e.g. the untruncated annotation listing or database result). ' +
+        'Long archives are returned in windows: pass the returned nextOffset to read the ' +
+        'following section.',
       parameters: {
         archiveId: {
           type: 'string',
           required: true,
           description: 'Archive id from the truncation stub (the tool_call_id)',
         },
+        offset: {
+          type: 'integer',
+          description: 'Character offset to start reading from (default 0). ' +
+            'Use nextOffset from a previous call to continue reading.',
+        },
       },
       async execute(args) {
+        const offset = Math.max(0, args.offset ?? 0)
         const text = await readArchive(args.archiveId!)
         if (text == null) {
           return `No archived result for id "${args.archiveId}" (archive expired, OPFS unavailable, or the id is wrong).`
         }
-        return text
+        return { text, offset }
+      },
+      // 存档取回的语义是「全文」，不能被 ToolRuntime 截到 TOOL_RESULT_CHARS——
+      // 否则模型反复调用都拿到同一份被砍的文本（skill 工作流因此读不全）。
+      // 窗口化读取：每次返回 ARCHIVE_WINDOW_CHARS 字符 + nextOffset 续读指针，
+      // 模型按需翻页，而不是假装一次性给全文。
+      output: {
+        render(_args, value) {
+          const { text, offset } =
+            typeof value === 'object' && value !== null
+              ? (value as { text: string; offset: number })
+              : { text: String(value), offset: 0 }
+          const window = text.slice(offset, offset + ARCHIVE_WINDOW_CHARS)
+          const note =
+            offset > 0
+              ? `[archive continuation from char ${offset}]\n`
+              : ''
+          if (offset + ARCHIVE_WINDOW_CHARS >= text.length) {
+            return `${note}${window}\n[end of archived result (${text.length} chars total)]`
+          }
+          const next = offset + ARCHIVE_WINDOW_CHARS
+          return (
+            `${note}${window}\n` +
+            `…[archive is ${text.length} chars — read the next section with ` +
+            `read_archived_result(archiveId, offset=${next})]`
+          )
+        },
       },
     }),
   )

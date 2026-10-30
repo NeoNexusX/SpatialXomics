@@ -16,17 +16,13 @@ import {
   type UserLlmConfig,
 } from '../agentconfig/userLlmConfig'
 import { humanizeHttpError, devRelayTarget, resolveDefaultModel } from '../agentservices/openaiAdapter'
-import {
-  ANTHROPIC_DEFAULT_BASE,
-  ANTHROPIC_DEFAULT_MODEL,
-} from '../agentservices/anthropicAdapter'
 import { ENV } from '@/shared/config/env'
 
 // ---- 模块级共享状态（设置面板与 header 徽标共享同一份） ----
 
 const config = ref<UserLlmConfig>(loadUserLlmConfig())
 
-/** 用户是否填了任意一项自定义配置（仅选了 provider 不算——没有凭据可用） */
+/** 用户是否填了任意一项自定义配置 */
 const hasCustom = computed(
   () => !!(config.value.baseUrl || config.value.apiKey || config.value.model),
 )
@@ -40,7 +36,6 @@ export function useLlmSettings() {
   /** 保存表单值（归一化空白后落库） */
   function save(next: UserLlmConfig): void {
     const normalized: UserLlmConfig = {
-      provider: next.provider,
       baseUrl: next.baseUrl.trim(),
       apiKey: next.apiKey.trim(),
       model: next.model.trim(),
@@ -51,7 +46,7 @@ export function useLlmSettings() {
 
   /** 清除自定义配置，回到 env 默认 */
   function clear(): void {
-    config.value = { baseUrl: '', apiKey: '', model: '', provider: 'openai' }
+    config.value = { baseUrl: '', apiKey: '', model: '' }
     clearUserLlmConfig()
   }
 
@@ -62,14 +57,9 @@ export function useLlmSettings() {
  * 用给定配置测连通性（不要求已保存）。返回 null 表示成功，否则为用户可读的错误信息。
  * 发 max_tokens=1 的非流式最小请求，一次往返同时验证地址、密钥与模型名。
  * 端点解析与运行时一致（dev 下经 vite 同源转发，绕开本机代理对直连的干扰）。
+ * 只支持 OpenAI 兼容端点（/chat/completions）。
  */
 export async function testLlmConnection(cfg: UserLlmConfig): Promise<string | null> {
-  if (cfg.provider === 'anthropic') return testAnthropicConnection(cfg)
-  return testOpenAiConnection(cfg)
-}
-
-/** OpenAI 兼容端点探测：POST {base}/chat/completions，校验返回带 choices 数组 */
-async function testOpenAiConnection(cfg: UserLlmConfig): Promise<string | null> {
   const base = (cfg.baseUrl.trim() || ENV.llmProxyUrl).replace(/\/+$/, '')
   const key = cfg.apiKey.trim() || ENV.llmApiKey
   // 模型默认链与真实请求同源（openaiAdapter.resolveDefaultModel）：
@@ -112,61 +102,6 @@ async function testOpenAiConnection(cfg: UserLlmConfig): Promise<string | null> 
       /* 非 JSON，落入下面的报错 */
     }
     return 'Got HTTP 200 but the response is not a valid LLM reply (looks like an HTML page). The Base URL likely points at a website, not an API — try appending /v1 (e.g. https://host/v1).'
-  } catch (err) {
-    return `Cannot reach ${base} — check the URL and that the endpoint allows browser (CORS) access. (${
-      (err as Error)?.message || 'network error'
-    })`
-  }
-}
-
-/**
- * Anthropic 端点探测：POST {base}/messages，x-api-key 鉴权，校验返回带
- * content 数组（Anthropic 响应形态）。默认链与 anthropicAdapter 一致
- * （env 默认是 OpenAI 部署的，不掺和）。
- */
-async function testAnthropicConnection(cfg: UserLlmConfig): Promise<string | null> {
-  const base = (cfg.baseUrl.trim() || ANTHROPIC_DEFAULT_BASE).replace(/\/+$/, '')
-  const key = cfg.apiKey.trim()
-  const model = cfg.model.trim() || ANTHROPIC_DEFAULT_MODEL
-  if (!key) return 'API key is required'
-
-  const direct = `${base}/messages`
-  // BYOK 目标与运行时一致（anthropicAdapter）：baseUrl 留空时把官方默认端点
-  // 当作 BYOK 目标传入——否则空串走 env 分支，测试会打到 OpenAI 兼容的
-  // /llm-proxy（必 404/401）或直连官方端点，而实际聊天走 /llm-relay 正常
-  const relay = devRelayTarget(direct, cfg.baseUrl.trim() || ANTHROPIC_DEFAULT_BASE)
-  const url = relay?.url ?? direct
-
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-        ...(relay?.targetOrigin ? { 'x-llm-target': relay.targetOrigin } : {}),
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 1,
-        messages: [{ role: 'user', content: 'Hi' }],
-        stream: false,
-      }),
-    })
-    if (!res.ok) {
-      const body = await res.text().catch(() => '')
-      return humanizeHttpError(res.status, body)
-    }
-    // SPA fallback 防呆：只认 content 数组（Anthropic 响应形态）
-    const bodyText = await res.text().catch(() => '')
-    try {
-      const parsed = JSON.parse(bodyText) as { content?: unknown }
-      if (parsed && Array.isArray(parsed.content)) return null
-    } catch {
-      /* 非 JSON，落入下面的报错 */
-    }
-    return 'Got HTTP 200 but the response is not a valid Anthropic reply (looks like an HTML page). For the official API use https://api.anthropic.com/v1 as the Base URL.'
   } catch (err) {
     return `Cannot reach ${base} — check the URL and that the endpoint allows browser (CORS) access. (${
       (err as Error)?.message || 'network error'

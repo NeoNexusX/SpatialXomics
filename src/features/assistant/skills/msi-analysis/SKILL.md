@@ -38,29 +38,32 @@ Caveats:
 - Clusters driven by a few extreme pixels usually indicate noise or dead-pixel artifacts — check cluster size vs image.
 
 ## 5. Annotation (m/z → molecule)
-Workflow (evidence priority: the user's scored candidates first, external databases for cross-checking, de novo search only when no library is loaded):
 
-1. **Record the polarity** and probable adducts. Common adduct mass shifts (monoisotopic, Da):
+The core loop is short: **left annotation panel results as the basis → orchestrate the knowledge tools for biochemical & literature analysis**. The engine already did the mass matching, adduct plausibility, spatial scoring and FDR — the assistant's job is to confirm, contextualize, and discover beyond those scores.
 
-   | Positive | shift | Negative | shift |
-   |---|---|---|---|
-   | [M+H]+ | +1.0073 | [M−H]− | −1.0073 |
-   | [M+Na]+ | +22.9892 | [M+Cl]− | +34.9694 |
-   | [M+K]+ | +38.9632 | [M+HCOO]− | +44.9982 |
-   | [M+NH4]+ | +18.0338 | [M+CH3COO]− | +59.0133 |
-   | [M+H−H2O]+ | −17.0027 | [M−H2O−H]− | −19.0178 |
+### Step 1 — Read the annotation panel's results (the basis)
 
-   Neutral mass M = m/z − shift. In MALDI, [M+Na]+ / [M+K]+ often dominate despite [M+H]+ being "expected" — check all.
-2. **Mass error** in ppm: `err = 1e6 × |m/z_observed − m/z_calculated| / m/z_calculated`.
-   Orbitrap/FTICR: < 3 ppm is a good match; TOF (common in MSI): < 10 ppm acceptable, < 5 ppm good. PPM alone never proves identity — it only filters candidates.
-3. **Platform candidates first (primary route)**: call `get_annotation_top` — the user's own imported annotation library, already scored by the platform's evidence pipeline (mass × isotope composite with target-decoy FDR q, multi-adduct bonus, and spatial MSM/chaos/colocalization for top rows). Rows carry tokens like `L4 c=0.87 q=2% add=0.50×3 msm=0.79 ar=0.83`: `add=s×n` = multi-adduct evidence (same molecule as n distinct adduct ions on different peaks, CAMERA Σips-based bonus already inside `c`), `ar` = spatial co-localization Pearson of that adduct group (≥ 0.70 confirmed). Whenever a library is loaded (annotation matches > 0 in `get_page_state`), START here: read the evidence tokens, cut at q ≤ 5–10%, distinguish L4 (isotope-supported) from L5 (mass-only), and analyze from the strongest evidence down. To dig into one row call `get_annotation_detail(mz)` (full scores, adduct group peers, candidates, isotope envelope). Treat as candidates, not identifications.
-4. **Cross-check identity** for the rows you discuss: `library_lookup` (shorthand → species, classification, exact mass; deployed offline library = LIPID MAPS LMSD) and `pubchem_compound_lookup` (synonyms, SMILES/InChIKey). For a suspicious row or a competing candidate, `library_mass_search(mz, polarity)` re-derives candidates independently — adduct-aware matching, returns candidates with Δppm and lipid class.
-5. **No library loaded (annotation matches = 0)? De novo route**: for lipids call `library_mass_search(mz, polarity)`; for non-lipid / small metabolites call `hmdb_lookup(mz=<value>, polarity=...)` (adduct-aware mass search with tissue/disease context) or enumerate formula candidates with `pubchem_formula_search`, then check the candidate is a plausible tissue molecule (metabolite, drug).
-6. **Isotope sanity**: ¹³C spacing 1.0034 Da; visible M+2 ⇒ Cl (3:1) or Br (1:1); S gives weak M+2 (~4%). The row's `iso=<score> (obs/exp peaks)` token and the envelope in `get_annotation_detail` give the expected pattern.
-7. **Fragment evidence (stage ③)**: if the user has MS/MS peaks (pixel spectrum via `get_pixel_spectrum`), run `spectral_library_search(precursorMz, peaks=...)` against the offline MassBank reference library — matched-peak counts beat any rule table.
-8. **Isomers & isobars**: one sum composition (e.g. PC 34:1) covers many sn-position/double-bond isomers — an image is a composite unless isomer-resolved (ion mobility, MS/MS, derivatization; see *Int J Mass Spectrom* 2024, PMID 40766833).
-9. **In-source fragments / dimers / adducts of adducts** ([2M+H]+, [M+Na+K]²⁺) inflate false candidates — check for half-integer charge states and paired m/z.
-10. **Everything above is putative**: imaging-only annotation is never an identification — confirmation requires on-tissue MS/MS or standards (reporting practice: Balluff et al., *Histochem Cell Biol* 2011, doi:10.1007/s00418-011-0843-x).
+`get_page_state` (confirm annotation count > 0, note polarity) → `get_annotation_top` (topN up to 20).
+
+One row = one adduct ion; the total score is a weighted sum `s = 0.6×mass + 0.1×adduct fit + 0.3×spatial` (the user can change these weights in the annotation conditions) (mass = Gaussian on the ppm error, fit = adduct plausibility under the acquisition, spatial = 0.2×chaos + 0.8×same-molecule co-localization; uncomputed spatial counts as 0), with target-decoy FDR q-values (decoys are impossible element adducts; q is re-estimated after spatial scoring finishes). Rows carry tokens like `#1 PC 34:1 [M+H]+ mz=760.5856 (+0.6ppm) s=0.94 q=0.4% m=0.97 fit=1.0 ch=0.95 col=0.91 sib=[M+Na]+,[M+K]+ samePeak=1`: `sib` = other adduct ions of the same molecule (each its own row), `col` = best image Pearson with them, `samePeak` = other annotations explaining the same peak. Cut at q ≤ 5–10%, prefer rows with ch ≥ 0.6 and co-localized siblings. For the rows you will report, `get_annotation_detail(mzs=[...])` (ONE batched call with all of them) gives the full breakdown (score decomposition, sibling ions with r, undetected enabled adducts, same-peak alternatives, candidates). Treat as candidates, not identifications.
+
+If no library is loaded (annotation count = 0): de novo route — lipids via `library_mass_search(mzs=[...], polarity)`; non-lipid small metabolites via `hmdb_lookup(mzs=[...], polarity=...)` or `pubchem_formula_search`, then judge plausibility as a tissue molecule.
+
+### Step 2 — Orchestrate the knowledge tools (the assistant's value-add)
+
+For the molecules you will report, query the biochemical and literature sources and synthesize. **Batch first**: the lookup tools accept arrays — collect all names and query them in ONE call per source (`hmdb_lookup(queries=[...])`, `kegg_pathway_lookup(queries=[...])`, `chebi_lookup(queries=[...])`, `library_lookup(queries=[...])`, `pubchem_compound_lookup(names=[...])`) instead of one call per molecule; a failed name does not block the rest.
+
+- **Identity cross-check**: `library_lookup` (shorthand → species, classification, exact mass) and `pubchem_compound_lookup` (synonyms, SMILES/InChIKey) verify the molecular identity; for a suspicious row or competing candidate, `library_mass_search(mzs=[...], polarity)` re-derives candidates independently.
+- **Tissue & disease context**: `hmdb_lookup` — endogenous metabolites? Expected tissues, disease associations, biological function. A molecule whose HMDB tissue profile matches the imaged sample region strengthens the annotation.
+- **Pathway discovery**: `kegg_pathway_lookup` — which metabolic pathways contain them? When SEVERAL top annotations fall on ONE pathway (glycolysis, TCA, phospholipid biosynthesis …), that is independent coherence evidence: report the pathway and its members to the user as a NEW finding ("the annotation set is enriched in pathway X — the spatial pattern of these ions likely maps that pathway's activity"). To test the whole set at once, call `pathway_enrichment(topN)` — it batch-maps the top annotations onto KEGG pathways and ranks them by molecule count. You can also query a pathway name via `kegg_pathway_lookup` to list its member compounds and check which ones appear in the annotations.
+- **Biological role**: `chebi_lookup` — role terms (antioxidant, xenobiotic metabolite …) for the report's semantic layer.
+- **Literature**: `europepmc_search` / `pubmed_search` ("{molecule} mass spectrometry imaging {tissue}") — has this molecule been imaged in this tissue/modality before? Prior imaging literature corroborates; absence is not counter-evidence but worth stating. Cite PMID/DOI.
+
+The reverse direction also works: a suspicious row whose "identity" has no biochemical existence (no HMDB entry, no pathway, no literature in any tissue) drops in credibility.
+
+### Step 3 — Report with discipline
+
+Everything is putative: imaging-level annotation is never an identification — confirmation requires on-tissue MS/MS or standards (reporting practice: Balluff et al., *Histochem Cell Biol* 2011, doi:10.1007/s00418-011-0843-x). State the sort criterion (total score descending) and keep the verdict vocabulary of the annotation-review skill.
 
 ### Authoritative databases to cite / verify against
 - **LIPID MAPS / LMSD** (https://www.lipidmaps.org) — lipid systematics, shorthand notation, calculated masses; queried offline by the `library_*` tools (deployed index).
@@ -68,10 +71,7 @@ Workflow (evidence priority: the user's scored candidates first, external databa
 - **HMDB** (https://hmdb.ca) — human metabolites, tissue/disease context (`hmdb_lookup`, offline index).
 - **KEGG** (https://www.kegg.jp) — metabolic pathways (`kegg_pathway_lookup`, offline index).
 - **ChEBI** (https://www.ebi.ac.uk/chebi) — biological role ontology (`chebi_lookup`, online).
-- **METLIN** (https://metlin.scripps.edu) — MS/MS reference for metabolites.
-- **MassBank** (https://massbank.eu) — open MSⁿ spectra (`spectral_library_search`, offline index).
-- **GNPS** (https://gnps.ucsd.edu) — molecular networking / library spectra (needs backend proxy; not browser-callable).
-- **LipidBlast / mzCloud** — in-silico and reference MS/MS libraries.
+- **METLIN / GNPS / LipidBlast / mzCloud** — MS/MS reference collections (not browser-callable; cite only, the platform has no MS/MS search tool).
 MSI-specific: confirmation requires on-tissue MS/MS or standards — imaging-only annotation is "putative" (review & reporting practice: Balluff et al., *Histochem Cell Biol* 2011, doi:10.1007/s00418-011-0843-x).
 
 ### Recent key literature
@@ -95,7 +95,7 @@ Structure the report as:
 <instrument, mode, dims × pixel size, polarity; steps actually applied>
 
 ## 2. Key ions & annotations (putative)
-| m/z | Candidate | Adduct | Evidence (L, q, add, MSM) | Spatial pattern |
+| m/z | Candidate | Adduct | Evidence (s, q, fit, ch/col) | Spatial pattern |
 |---|---|---|---|---|
 
 ## 3. Spatial structure
