@@ -15,38 +15,38 @@
   "features": {
     "items": [
       {
-        "word": "OPEN",
+        "word": "可视化",
         "title": {
-          "en": "Open & Interoperable",
-          "zh-CN": "开放与互通"
+          "en": "From Mass Signals to Spatial Distributions",
+          "zh-CN": "从质谱信号到空间分布"
         },
         "desc": {
-          "en": "Designed with an open-source spirit from the ground up, we break down data silos, enable open knowledge sharing, and collectively advance the spatial omics community.",
-          "zh-CN": "秉持开源精神打造，打破数据孤岛，促进知识共享，共同推动空间组学领域发展。"
+          "en": "Ion images, mass spectra, and clustering maps intuitively reveal signal distributions and tissue structures. Multi-ion overlays and spatial mapping let you examine regional differences from multiple perspectives.",
+          "zh-CN": "通过离子图、质谱与聚类图，直观呈现信号分布和组织结构。支持多离子叠加与空间映射，从不同角度观察数据中的区域差异。"
         },
         "image": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/mz726.539885.png"
       },
       {
-        "word": "SMART",
+        "word": "可交互",
         "title": {
-          "en": "SMART Analysis",
-          "zh-CN": "智能分析"
+          "en": "Linked Views, Explore Data on Demand",
+          "zh-CN": "多视图联动，按需探索数据"
         },
         "desc": {
-          "en": "Powered by cloud-native infrastructure and AI, every analysis becomes faster, smarter, and more accessible to researchers at any scale.",
-          "zh-CN": "依托云原生基础设施与人工智能，让每一次分析更快、更智能，也让不同规模的研究者都能轻松使用。"
+          "en": "Search ions, inspect pixel spectra, and select and compare regions — all within linked views. Drill down from whole-slide distributions to local regions, keeping observation and analysis in one flow.",
+          "zh-CN": "支持离子检索、像素谱查看、区域选择与比较，在联动视图中探索感兴趣的信号。从整体分布深入局部区域，让观察与分析紧密衔接。"
         },
         "image": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/kmeans_image2.png"
       },
       {
-        "word": "FAST",
+        "word": "可扩展",
         "title": {
-          "en": "Fast at Scale",
-          "zh-CN": "规模化高速处理"
+          "en": "Elastic Cloud Computing at Any Scale",
+          "zh-CN": "弹性云计算，适应数据规模"
         },
         "desc": {
-          "en": "Backed by a homegrown computing framework and cloud-native infrastructure, SpatialXomics delivers high-performance computation that scales effortlessly with your data.",
-          "zh-CN": "基于自主研发的计算框架和云原生基础设施，SpatialXomics 提供可随数据规模灵活扩展的高性能计算能力。"
+          "en": "Built on a cloud-native architecture that schedules compute resources per task, it meets data-processing demands of any scale. Cloud preprocessing works hand in hand with in-browser analysis, easing the burden on local hardware.",
+          "zh-CN": "依托云原生架构，按任务调度计算资源，满足不同规模的数据处理需求。云端预处理与浏览器端分析协同，减轻本地配置与算力负担。"
         },
         "image": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/umap_image2.png"
       }
