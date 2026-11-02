@@ -5,7 +5,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
  * ==============================
  * 覆盖：列表页（加载 / 服务端搜索与清空）、创建→编辑→成员管理（添加 / 调序；
  * 移除成员因后端 DELETE 500 暂跳过，见用例内注释）→ 删除全流程、
- * 公开分享页（建后免登录可读 + 免登录 404）。
+ * 分享页（查看需登录：匿名弹登录页，登录态只读可看）。
  *
  * 全流程依赖后端已有 ≥4 个「public + completed + imzML」数据集（建集合选 3 个、
  * 加成员弹窗再加 1 个）；不足时跳过，避免空环境下误报（与 datasets.spec 的
@@ -137,20 +137,20 @@ test.describe('Collection full lifecycle', () => {
     await expect(page.getByRole('heading', { name: 'Members' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Collection Metadata' })).toBeVisible()
 
-    // ---- 公开分享页（免登录可读）----
-    // /collections/{publicId} 只读展示；用全新空 context 访问（页面自己的
-    // context 带登录态，证明不了免登录可读）。同时验证「新建即可分享」的契约：
-    // 后端对非公开集合在此返回 404（PublicCollectionView 渲染 notFound 态）。
+    // ---- 分享页（查看需登录，与数据集分享页统一）----
+    // 匿名弹登录的契约由「Public collection page (login required)」组覆盖：本机
+    // browser.newContext() 会带上已登录的 localStorage，造不出真匿名态，不可靠。
+    // 此处验证登录态访问分享 URL 的只读渲染（与 overview 同构）。
     const publicId = page.url().match(/\/collections\/overview\/([A-Za-z0-9]+)/)?.[1]
     expect(publicId, 'overview URL 应带 publicId').toBeTruthy()
-    const guestContext = await page.context().browser()!.newContext()
-    const guest = await guestContext.newPage()
-    await guest.goto(`/collections/${publicId}`)
-    await expect(guest.locator('.skeleton')).toHaveCount(0, { timeout: 15_000 })
-    await expect(guest.locator('h1')).toContainText(name)
-    await expect(guest.getByRole('heading', { name: 'Members' })).toBeVisible()
-    await expect(guest.getByText('Collection not found')).toHaveCount(0)
-    await guestContext.close()
+    await page.goto(`/collections/${publicId}`)
+    await expect(page.locator('.skeleton')).toHaveCount(0, { timeout: 15_000 })
+    await expect(page.locator('h1')).toContainText(name)
+    await expect(page.getByRole('heading', { name: 'Members' })).toBeVisible()
+    await expect(page.getByText('Collection not found')).toHaveCount(0)
+    // 回到 overview 继续后续「编辑」环节
+    await page.goto(`/collections/overview/${publicId}`)
+    await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible({ timeout: 15_000 })
 
     // ---- 编辑：页内原地改元数据（改名 + 简介 + 学术字段 Title）----
     // toast 是保存真正落到后端的信号（头部是草稿联动，不能单独作数）
@@ -263,7 +263,7 @@ test.describe('Share link copy', () => {
 
       await page.locator('button[title="Copy share link"]').first().click()
 
-      // 剪贴板内容 = 免登录公开页 URL（与 PublicCollectionView 同构）
+      // 剪贴板内容 = 分享页 URL（与 PublicCollectionView 同构；查看需登录）
       const copied = await page.evaluate(() => navigator.clipboard.readText())
       expect(copied).toContain(`/collections/${publicId}`)
     } finally {
@@ -273,16 +273,18 @@ test.describe('Share link copy', () => {
 })
 
 // ============================================================
-// 公开页（免登录）
+// 分享页（查看需登录）
 // ============================================================
 
-test.describe('Public collection page', () => {
-  // 免登录：清空登录态验证公开页不依赖 token
+test.describe('Public collection page (login required)', () => {
+  // 清空登录态：匿名访问任何 /collections/:id（含无效 id）都被路由守卫
+  // 弹去 /login 且带回跳地址，页面本身不再渲染
   test.use({ storageState: { cookies: [], origins: [] } })
 
-  test('invalid public id shows not-found state without auth', async ({ page }) => {
+  test('anonymous visit redirects to login with redirect back', async ({ page }) => {
     await page.goto('/collections/00000000000000000000000000000000')
-    await expect(page.getByText('Collection not found')).toBeVisible({ timeout: 15_000 })
-    await expect(page.locator('h1:has-text("Collections")')).toHaveCount(0)
+    // vue-router 不对 query 值做百分号编码，斜杠原样出现在 URL 里
+    await expect(page).toHaveURL(/\/login\?redirect=(\/|%2F)collections\//, { timeout: 15_000 })
+    await expect(page.getByText('Collection not found')).toHaveCount(0)
   })
 })
