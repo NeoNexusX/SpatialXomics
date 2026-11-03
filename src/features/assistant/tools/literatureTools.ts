@@ -11,7 +11,7 @@
  * 限 ~3 req/s，每次调用只发 1-2 个请求。
  */
 
-import type { Context, Plugin } from 'cordis'
+import type { Context, Plugin } from '@deepseek-ai/cordis'
 import { defineTool } from './defineTool'
 import { getJson, excerpt } from './httpJson'
 

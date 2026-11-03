@@ -24,7 +24,6 @@ export function useDatasetDetail() {
   // State
   const dataset = ref<File | null>(null)
   const loading = ref(true)
-  const isCopied = ref(false)
   const ticImageUrl = ref<string>('')
   const ticImageError = ref(false)
 
@@ -32,21 +31,15 @@ export function useDatasetDetail() {
   // 正常入口 public_id 来自路径参数（/overview/{public_id}，刷新不丢）；
   // 分享页沿用 /s/{token} 解析
   const filePublicId = computed(() =>
-    isShareView.value
-      ? sharedToken.value?.kind === 'publicId'
-        ? sharedToken.value.value
-        : ''
-      : ((route.params.publicId as string) ?? ''),
+    isShareView.value ? (sharedToken.value ?? '') : ((route.params.publicId as string) ?? ''),
   )
   // 来源列表走 query ?source=my|public（新标签页打开，history.state 不可用）；
   // 分享页按 public 来源处理：goBack 回公开列表、需登录操作的登录回跳以 /datasets 为基准
   const source = computed<'my' | 'public'>(() =>
     isShareView.value ? 'public' : route.query.source === 'public' ? 'public' : 'my',
   )
-  /** 分享 token 非 16 位 publicId → 无效链接（含旧 Base64 链接，兑换接口已下线），不发任何请求 */
-  const isInvalidShare = computed(
-    () => isShareView.value && sharedToken.value?.kind !== 'publicId',
-  )
+  /** 分享 token 不是 16 位 publicId → 无效链接，不发任何请求 */
+  const isInvalidShare = computed(() => isShareView.value && !sharedToken.value)
   /** Normal entry needs history state; shared entry needs a valid token. */
   const isStale = computed(() => (isShareView.value ? isInvalidShare.value : !filePublicId.value))
   /** 匿名访问分享链接被 401：渲染「登录 / 注册」引导而不是错误态 */
@@ -60,19 +53,6 @@ export function useDatasetDetail() {
       showGuides: true,
     })
   })
-
-  const copyHash = async (hash: string) => {
-    if (!hash) return
-    try {
-      await navigator.clipboard.writeText(hash)
-      isCopied.value = true
-      setTimeout(() => {
-        isCopied.value = false
-      }, 2000)
-    } catch (err) {
-      console.error('Failed to copy text: ', err)
-    }
-  }
 
   const goBack = () => {
     if (source.value === 'public') {
@@ -147,8 +127,7 @@ export function useDatasetDetail() {
 
   const fetchDatasetDetails = async () => {
     const currentRequest = ++requestId
-    // 仅 publicId 形态的 token 会发请求；legacy token 由 isInvalidShare 渲染死链态
-    const token = isShareView.value && sharedToken.value?.kind === 'publicId' ? sharedToken.value : null
+    const token = sharedToken.value
     if (!token && !filePublicId.value) {
       dataset.value = null
       ticImageUrl.value = ''
@@ -193,14 +172,12 @@ export function useDatasetDetail() {
     goRegister,
     dataset,
     loading,
-    isCopied,
     isShareCopied,
     ticImageUrl,
     ticImageError,
     placeholderSvg,
     formatSize: formatBytes,
     formatString: formatVocabOrText,
-    copyHash,
     shareCurrent,
     goBack,
     downloadCurrent,

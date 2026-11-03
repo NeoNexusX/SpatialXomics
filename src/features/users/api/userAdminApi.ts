@@ -1,6 +1,5 @@
 import { auth_api } from '@/shared/api/httpClient'
 import type {
-  AdminUser,
   UserListFilters,
   UserQuotaLimits,
   UsersClassification,

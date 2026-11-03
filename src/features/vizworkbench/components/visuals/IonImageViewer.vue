@@ -253,7 +253,7 @@ function onContainerMouseDown(e: MouseEvent) {
 
   // 缩放 > 1 时支持拖拽平移
   if (zoom.value > 1 && e.button === 0) {
-    onPanStart(e, containerRef.value)
+    onPanStart(e)
     // 监听 mouseup 来判断是拖拽还是点击
     const onUp = (ev: MouseEvent) => {
       const dx = ev.clientX - mouseDownPos.x

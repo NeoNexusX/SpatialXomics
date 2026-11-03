@@ -13,6 +13,7 @@
     @update:model-value="onSelectChange"
     @change="$emit('change', $event)"
     @focus="$emit('focus')"
+    @blur="$emit('blur')"
   >
     <div v-if="isOther" class="mt-1">
       <input

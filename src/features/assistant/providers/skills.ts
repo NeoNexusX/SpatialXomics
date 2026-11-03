@@ -14,10 +14,10 @@
  * 前端手写正则解析 frontmatter（~30 行，不引 yaml 依赖）。
  */
 
-import { Context, Service } from 'cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import type { SkillSummary } from '../agenttypes/assistant'
 
-declare module 'cordis' {
+declare module '@deepseek-ai/cordis' {
   interface Context {
     skills: SkillsRegistry
   }

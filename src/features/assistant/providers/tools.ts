@@ -5,7 +5,7 @@
  * 执行管线：validateArgs → pre-execute(bail) → execute(超时) → post-execute(waterfall) → result(emit)。
  */
 
-import { Context, Service } from 'cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import type { ToolSchema } from '../agenttypes/assistant'
 import {
   defineTool,
@@ -42,7 +42,7 @@ export interface ToolGateDecision {
   reason?: string
 }
 
-declare module 'cordis' {
+declare module '@deepseek-ai/cordis' {
   interface Context {
     tools: ToolRuntime
   }

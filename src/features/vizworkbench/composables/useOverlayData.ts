@@ -46,67 +46,6 @@ function deriveKmeansClusters(labels: Int32Array): KmeansCluster[] {
 }
 
 /**
- * DEV-only sanity report for a loaded UMAP embedding. The rendered color is a
- * pure function of the embedding values, so stray saturated pixels on the
- * UMAP raster (e.g. irregular blue dots) mean stray values in the data, not a
- * rendering bug. This log tells them apart:
- *  - nonFinite > 0            → backend wrote NaN/Inf (bad data)
- *  - outOfRange > 0 / max > 1 → embedding not scaled to [0,1] (bad scaling)
- *  - min exactly 0 on ≥2 channels + many bluePixels → outlier points sitting
- *    on the min-max scaling corners (noise/background spectra fed to UMAP)
- *  - coordinateRange beyond [0, w-1]/[0, h-1]       → mapping would clip
- */
-function logUmapDiagnostics(
-  emb: UmapEmbedding,
-  image: { width: number; height: number; data: Uint8Array },
-): void {
-  const { scaledEmbedding, coordinates, count } = emb
-  const min = [Infinity, Infinity, Infinity]
-  const max = [-Infinity, -Infinity, -Infinity]
-  let nonFinite = 0
-  let outOfRange = 0
-  for (let i = 0; i < count * 3; i++) {
-    const v = scaledEmbedding[i]!
-    if (!Number.isFinite(v)) {
-      nonFinite++
-      continue
-    }
-    if (v < 0 || v > 1) outOfRange++
-    const c = i % 3
-    if (v < min[c]!) min[c] = v
-    if (v > max[c]!) max[c] = v
-  }
-  // Points whose rendered pixel is strongly blue-dominant (the reported
-  // symptom): B high, R/G near zero.
-  let bluePixels = 0
-  const d = image.data
-  for (let i = 0; i < d.length / 3; i++) {
-    if (d[i * 3 + 2]! > 150 && d[i * 3]! < 50 && d[i * 3 + 1]! < 50) bluePixels++
-  }
-  const cMin = [Infinity, Infinity]
-  const cMax = [-Infinity, -Infinity]
-  for (let i = 0; i < count * 2; i++) {
-    const v = coordinates[i]!
-    const c = i % 2
-    if (v < cMin[c]!) cMin[c] = v
-    if (v > cMax[c]!) cMax[c] = v
-  }
-  console.log('[useOverlayData] UMAP diagnostics', {
-    points: count,
-    grid: `${image.width}×${image.height}`,
-    channelMin: min.map((v) => (Number.isFinite(v) ? +v.toFixed(4) : v)),
-    channelMax: max.map((v) => (Number.isFinite(v) ? +v.toFixed(4) : v)),
-    nonFinite,
-    outOfRange,
-    coordinateRange: {
-      x: [Number.isFinite(cMin[0]) ? cMin[0] : null, Number.isFinite(cMax[0]) ? cMax[0] : null],
-      y: [Number.isFinite(cMin[1]) ? cMin[1] : null, Number.isFinite(cMax[1]) ? cMax[1] : null],
-    },
-    blueDominantPixels: bluePixels,
-  })
-}
-
-/**
  * UMAP / KMeans overlay data.
  *
  * UMAP comes from the run's own zarr (GET /processes/{run_id}/zarr - the same
@@ -139,9 +78,6 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
   // Independent overlay opacity per mode (stored as 0-255 alpha; default 255 = 100%).
   const umapAlpha = ref(255)
   const kmeansAlpha = ref(255)
-  // Comparison overlay (region A/B highlight). When set, takes priority over
-  // UMAP/KMeans so the two compared regions are visible on the ion image.
-  const comparisonOverlay = ref<Uint8ClampedArray | null>(null)
 
   let store: ClusteringZarrStore | null = null
   let umapRgb: Uint8Array | null = null
@@ -242,7 +178,6 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     kmeansLabelsAvailable.value = false
     kmeansK.value = null
     selectedKmeansIds.value = null
-    comparisonOverlay.value = null
     clusteringReady.value = false
   }
 
@@ -280,7 +215,6 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
       umapRgb = umap.image.data
       umapEmbedding = umap.embedding
       dims = { height: umap.image.height, width: umap.image.width }
-      if (import.meta.env.DEV) logUmapDiagnostics(umap.embedding, umap.image)
       clusteringReady.value = true
       clusteringComputing.value = false
       // Preload the ml-kmeans chunk now - the user is on the result page and
@@ -466,25 +400,10 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
   }
 
   const recomputeOverlay = () => {
-    // Comparison overlay takes priority over UMAP/KMeans.
-    if (comparisonOverlay.value) {
-      overlayData.value = comparisonOverlay.value
-      return
-    }
     // Overlays are mutually exclusive, so at most one is non-null here.
     if (umapVisible.value) overlayData.value = computeUmapOverlay()
     else if (kmeansVisible.value) overlayData.value = computeKmeansOverlay()
     else overlayData.value = null
-  }
-
-  /**
-   * Set a custom comparison overlay (region A/B highlight) that takes
-   * priority over UMAP/KMeans. Pass null to clear and restore the previous
-   * overlay mode.
-   */
-  function setComparisonOverlay(rgba: Uint8ClampedArray | null) {
-    comparisonOverlay.value = rgba
-    recomputeOverlay()
   }
 
   /**
@@ -690,7 +609,6 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     /** Current KMeans labels (Int32Array, -1 = background) or null. */
     getKmeansLabels,
     /** Set/clear a comparison overlay (region A/B highlight) that overrides UMAP/KMeans. */
-    setComparisonOverlay,
     /** Export the UMAP RGB image as a standalone PNG. */
     exportUmapPng,
     /** Export the KMeans RGB image as a standalone PNG. */

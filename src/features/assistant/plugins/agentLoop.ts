@@ -1,23 +1,34 @@
-﻿/**
+/**
  * Agent loop 插件：turn / step 循环、abort、事件发射、system prompt 组装。
  *
  * 注入 ctx.agent 服务。每个 turn 包括多个 step（一次 LLM + 可能工具调用），
  * 通过 cordis 事件（assistant/*）向 Vue 层广播状态变化。
+ *
+ * 历史的约定（各家端点对思考块的要求都依赖它）：
+ * - assistant 消息按模型返回的顺序完整保存内容块，思考块从不丢弃，每次请求原样回传；
+ *   端点的差异由适配器处理。
+ * - 回合内只追加、system 与 tools 固定。裁剪和压缩都在回合边界做。
  */
 
-import { Context, Service } from 'cordis'
-import type { ChatMessage, ToolCall } from '../agenttypes/assistant'
+import { Context, Service } from '@deepseek-ai/cordis'
+import type {
+  AssistantMessage,
+  AssistantPart,
+  ChatMessage,
+  GenerateOptions,
+  StreamChunk,
+  ToolMessage,
+} from '../agenttypes/assistant'
 import type { ToolCategory } from '../tools/defineTool'
-import { MAX_AGENT_STEPS, MAX_HISTORY_MESSAGES, MAX_EMPTY_STREAM_RETRIES, TOOL_RESULT_CHARS, TOOL_STUB_KEEP, HISTORY_CHAR_BUDGET, COMPACT_TRIGGER_CHARS, COMPACT_SUMMARY_MAX_TOKENS } from '../agentconfig/defaults'
+import { MAX_AGENT_STEPS, TOOL_RESULT_CHARS, TOOL_STUB_KEEP, TOOL_PREVIEW_CHARS, HISTORY_CHAR_BUDGET, COMPACT_TRIGGER_CHARS, COMPACT_SUMMARY_MAX_TOKENS, IMAGE_HISTORY_COST } from '../agentconfig/defaults'
 import { writeArchive } from '../utils/opfsStore'
-import { isLlmConfigured, sanitizeToolName, setOnImagesRejected } from '../agentservices/openaiAdapter'
 import { buildDatasetOverview } from '../providers/analysisContext'
 import { renderDataset } from '../tools/frontendContextTools'
 import { t } from '@/i18n'
 
 // ---- 声明服务键 ----
 
-declare module 'cordis' {
+declare module '@deepseek-ai/cordis' {
   interface Context {
     agent: AgentLoop
   }
@@ -37,16 +48,14 @@ export interface AgentEvents {
   'assistant/step': (step: number) => void
   /** 流式文本增量 */
   'assistant/message-delta': (text: string) => void
-  /** 思考流增量（推理模型 reasoning_content） */
+  /** 思考流增量 */
   'assistant/reasoning-delta': (text: string) => void
-  /** 流式连接中途断开（部分内容已保留） */
-  'assistant/stream-truncated': () => void
   /** 工具调用开始 */
-  'assistant/tool-call': (name: string, args: unknown) => void
+  'assistant/tool-call': (id: string, name: string, input: unknown) => void
   /** 工具调用结果 */
-  'assistant/tool-result': (name: string, isError: boolean, preview: string) => void
+  'assistant/tool-result': (id: string, isError: boolean, preview: string) => void
   /** 助手消息完成 */
-  'assistant/message-done': (message: ChatMessage) => void
+  'assistant/message-done': (message: AssistantMessage) => void
   /** turn 结束 */
   'assistant/turn-end': (aborted: boolean) => void
   /** 历史 compact 完成（摘要替换了旧历史）。参数：压缩前字符总量、摘要长度 */
@@ -55,23 +64,14 @@ export interface AgentEvents {
   'assistant/error': (message: string) => void
 }
 
-// ---- AgentLoop 服务 ----
+type StepFinish = Extract<StreamChunk, { type: 'finish' }>
 
-/** 单步 LLM 流的汇总结果（streamOnce 产出） */
-interface StepStreamResult {
-  assistantContent: string
-  reasoningContent: string
-  /** 按 index 合并的工具调用分片 */
-  toolCallMap: Map<number, ToolCall>
-  /** SSE 层检测到连接中途断开（已收部分数据） */
-  streamTruncated: boolean
-  /** 本轮是否收到过任何实质增量（text/reasoning/tool-call） */
-  receivedContent: boolean
-  /** finish 报 error（已自行 emit assistant/error），调用方应终止 turn 且不再二次报错 */
-  hardError: boolean
-  /** 适配器已做过一次非流式重发且未恢复（同一请求已两连败，不值得再叠加重试） */
-  fallbackAttempted: boolean
+/** assistant 消息的正文（不含思考和工具调用） */
+export function assistantText(message: AssistantMessage): string {
+  return message.parts.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('')
 }
+
+// ---- AgentLoop 服务 ----
 
 export class AgentLoop extends Service {
   /** 当前 turn 的 AbortController */
@@ -81,31 +81,13 @@ export class AgentLoop extends Service {
 
   constructor(ctx: Context) {
     super(ctx, 'agent')
-    // 拒图降级的善后：openaiAdapter 识别出「模型不吃图片」的 400 并剥图重试时，
-    // 持久 history 里 user 消息的 images 必须同步清掉——否则带图消息留在历史里，
-    // 之后每条纯文字提问都重发同一张图，会话每轮 400 直到手动清空（刷新也救不回：
-    // localStorage 恢复逻辑会把 images 一并回灌）。替换为占位文字而非删除消息，
-    // 保持对话轮次完整。
-    setOnImagesRejected(() => this.stripHistoryImages())
-  }
-
-  /** 清掉持久历史里所有 user 消息的 images（换成占位文字，保留轮次结构） */
-  private stripHistoryImages(): void {
-    for (const m of this.history) {
-      if (m.role === 'user' && m.images?.length) {
-        const note = m.images.length > 1 ? `[${m.images.length} images omitted]` : '[image omitted]'
-        m.content = m.content ? `${m.content}\n${note}` : note
-        m.images = undefined
-      }
-    }
   }
 
   /**
    * 发送 user 消息，启动一个 turn。
    * 不注入任何数据快照——页面状态一律由模型按需调用 get_page_state 等
    * 工具实时读取（避免历史中残留过时快照，且兼容纯工具调用模型）。
-   * @param images 多模态：附带的图片 base64 dataURL（仅视觉模型可消费；
-   *  非 vision 模型 400 后适配器会剥图重试并回调清掉历史里的 images）
+   * @param images 多模态：附带的图片 base64 dataURL
    */
   async send(userText: string, images?: string[]): Promise<void> {
     if (this.abortController) {
@@ -115,9 +97,9 @@ export class AgentLoop extends Service {
       await new Promise((r) => setTimeout(r, 50))
     }
 
-    // BYOK 前置检查：用户自配与 env 默认都没有可用凭据时不发起请求，
-    // 走正常错误事件流（turn-start → error → turn-end），让 UI 出可重试的错误气泡
-    if (!isLlmConfigured()) {
+    // 没有可用连接时不发起请求，走正常错误事件流（turn-start → error → turn-end），
+    // 让 UI 出可重试的错误提示
+    if (!this.ctx.connection.current()) {
       this.ctx.emit('assistant/turn-start')
       this.ctx.emit('assistant/error', t('common.assistant.noApiConfigured'))
       this.ctx.emit('assistant/turn-end', false)
@@ -132,12 +114,13 @@ export class AgentLoop extends Service {
     try {
       const userMsg: ChatMessage = { role: 'user', content: userText }
       if (images && images.length > 0) userMsg.images = images
-      // 自动 Compact（先于新 user 入列——此刻历史尾部必是完整消息边界，
-      // 不存在悬空 tool_calls；compact 把整段旧历史换成「标记 user + 摘要
-      // assistant」，失败静默降级走下方 trimHistory 兜底）
+      this.closeInterruptedToolCalls()
+      // 自动 Compact（先于新 user 入列——此刻历史尾部必是完整消息边界；
+      // compact 把整段旧历史换成「标记 user + 摘要 assistant」，
+      // 失败静默降级走下方 trimHistory 兜底）
       await this.maybeCompact(signal)
       this.history.push(userMsg)
-      // 裁剪历史
+      // 裁剪历史（只在回合边界做）
       await this.trimHistory()
 
       await this.runSteps(signal)
@@ -178,103 +161,112 @@ export class AgentLoop extends Service {
     this.history = messages
   }
 
+  /** 撤销最后一个 turn：历史回退到最后一条 user 消息之前（重试时用） */
+  dropLastTurn(): void {
+    for (let i = this.history.length - 1; i >= 0; i--) {
+      if (this.history[i]!.role === 'user') {
+        this.history = this.history.slice(0, i)
+        return
+      }
+    }
+  }
+
   // ---- 内部实现 ----
 
+  /**
+   * tool_use 后面必须紧跟对应的 tool_result。上一个 turn 中途停止或出错时可能有调用
+   * 没拿到结果，新 turn 开始前给它们补一条报错结果，否则之后的请求都会 400。
+   */
+  private closeInterruptedToolCalls(): void {
+    const answered = new Set(
+      this.history.flatMap((m) => (m.role === 'tool' ? [m.toolCallId] : [])),
+    )
+    const next: ChatMessage[] = []
+    for (const message of this.history) {
+      next.push(message)
+      if (message.role !== 'assistant') continue
+      for (const part of message.parts) {
+        if (part.type === 'tool-call' && !answered.has(part.id)) {
+          next.push({
+            role: 'tool',
+            toolCallId: part.id,
+            name: part.name,
+            content: 'Interrupted before this tool finished; no result is available.',
+            isError: true,
+          })
+        }
+      }
+    }
+    this.history = next
+  }
+
   private async runSteps(signal: AbortSignal): Promise<void> {
+    // 回合内 system 与 tools 固定：思考块的签名绑定了它们，也让 prompt 缓存能命中
     const tools = this.ctx.tools.schemas()
+    const system = this.assembleSystemPrompt()
 
     for (let step = 1; step <= MAX_AGENT_STEPS; step++) {
       if (signal.aborted) return
 
       this.ctx.emit('assistant/step', step)
 
-      // 组装 system prompt 与 messages（重试时保持不变）
-      const systemPrompt = this.assembleSystemPrompt()
-      const messages: ChatMessage[] = [
-        { role: 'system', content: systemPrompt },
-        ...this.history,
-      ]
+      const finish = await this.streamStep(
+        {
+          system,
+          messages: [...this.history],
+          tools: tools.length > 0 ? tools : undefined,
+        },
+        signal,
+      )
+      if (signal.aborted || !finish) return
 
-      // 单步流（空流自动重试，见 streamOnce）。拿到结果或明确放弃后统一处理。
-      const stepResult = await this.streamOnceWithRetry(messages, tools, signal)
-      if (signal.aborted) return
-      // 硬错误：streamOnce 已 emit 过具体的 assistant/error，终止 turn 且不二次报错
-      if (stepResult === 'hard-error') return
-      // 空流重试耗尽 → 报错并终止 turn
-      if (!stepResult) {
-        this.ctx.emit('assistant/error', t('common.assistant.noData'))
+      if (finish.reason === 'error') {
+        this.ctx.emit('assistant/error', finish.error || 'LLM error')
+        return
+      }
+      if (finish.reason === 'refusal') {
+        this.ctx.emit('assistant/error', t('common.assistant.errors.refused'))
         return
       }
 
-      const { assistantContent, reasoningContent, toolCallMap, streamTruncated } = stepResult
-
-      // 中断流的工具调用不可信（参数可能只有半截）且本轮不会再执行——
-      // 一律不写入。悬空的 tool_calls（后面没有 tool 消息应答）会让
-      // 本会话后续所有请求被 OpenAI 兼容端点 400 拒掉。
-      // 同理，模型流式回传的 id/name 也不可信：name 偶发带换行/点号/中文
-      //（或漏发）、id 偶发为空，原样入史回喂会被严格网关按
-      // messages[i].tool_calls[j].function.name 400（报错路径常被打码，
-      // strictToolCallsError 认不出、折叠兜底不触发），且历史持久化后本会话
-      // 每轮都炸。入史前统一清洗 name、补齐 id（工具结果按同一 id 回喂，
-      // 配对不受影响；清洗后的 name 仍能命中注册表——带尾换行的名字即复原）。
-      const toolCalls: ToolCall[] = streamTruncated
-        ? []
-        : [...toolCallMap.values()].map((tc, i) => ({
-            ...tc,
-            id: tc.id || `call_${Date.now()}_${step}_${i}`,
-            name: sanitizeToolName(tc.name),
-          }))
-
-      // 构建 assistant 消息
-      const assistantMsg: ChatMessage = {
-        role: 'assistant',
-        content: assistantContent || null,
-        tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
-        // reasoning 只留 UI 展示用；不发回 API（OpenAI 兼容端点普遍不接受
-        // assistant 消息里的 reasoning 字段，部分会直接 400）
-        reasoning: reasoningContent || undefined,
-      }
-      // 只有存在正文或工具调用时才入列：截断在思考阶段（正文为空、工具调用
-      // 已被丢弃）时把 {content: null} 且无 tool_calls 的 assistant 消息写进
-      // 历史，部分严格的 OpenAI 兼容端点会对此 400，且之后每轮都失败。
-      if (assistantContent || toolCalls.length > 0) {
-        this.history.push(assistantMsg)
-      }
+      // 达到输出上限时工具入参可能不完整，只保留已生成的正文，不再继续工具循环
+      const parts: AssistantPart[] =
+        finish.reason === 'length'
+          ? finish.parts.filter((part) => part.type === 'text')
+          : finish.parts
+      const assistantMsg: AssistantMessage = { role: 'assistant', parts }
+      // 只有正文或工具调用时才入列：只有思考的空回复写进历史没有意义
+      if (parts.some((part) => part.type !== 'reasoning')) this.history.push(assistantMsg)
       this.ctx.emit('assistant/message-done', assistantMsg)
 
-      // 中断流 → 按提前结束处理（附截断标记），不再继续工具循环。
-      // 思考阶段断流（正文为空）也走这里：UI 会展示截断提示与已有思考。
-      if (streamTruncated) {
-        this.ctx.emit('assistant/stream-truncated')
+      if (finish.reason === 'length') {
+        this.ctx.emit('assistant/error', t('common.assistant.errors.outputLimit'))
         return
       }
 
+      const toolCalls = parts.flatMap((part) => (part.type === 'tool-call' ? [part] : []))
       // 无工具调用 → turn 结束
-      if (toolCalls.length === 0) {
-        return
-      }
+      if (toolCalls.length === 0) return
 
       // 执行工具调用（串行，只读工具量小）
-      for (const tc of toolCalls) {
+      for (const call of toolCalls) {
         if (signal.aborted) return
 
-        let args: unknown
-        try {
-          args = JSON.parse(tc.arguments)
-        } catch {
-          args = {}
-        }
-
-        this.ctx.emit('assistant/tool-call', tc.name, args)
+        this.ctx.emit('assistant/tool-call', call.id, call.name, call.input)
 
         const result = await this.ctx.tools.execute({
-          callId: tc.id,
-          name: tc.name,
-          arguments: args,
+          callId: call.id,
+          name: call.name,
+          arguments: call.input,
           signal,
         })
 
-        this.ctx.emit('assistant/tool-result', tc.name, result.isError, result.content.slice(0, 200))
+        this.ctx.emit(
+          'assistant/tool-result',
+          call.id,
+          result.isError,
+          result.content.slice(0, TOOL_PREVIEW_CHARS),
+        )
 
         // 超过截断线的结果全文存 OPFS 存档。content 在 ToolRuntime 里已被
         // 截到 ≤TOOL_RESULT_CHARS——判断是否截断必须看 fullContent（按
@@ -283,174 +275,59 @@ export class AgentLoop extends Service {
         // 模型仍可用 read_archived_result(id) 取回全文。
         let toolContent = result.content
         if (result.fullContent) {
-          const archived = await writeArchive(tc.id, result.fullContent)
+          const archived = await writeArchive(call.id, result.fullContent)
           if (archived) {
-            toolContent += `\n[full result archived — call read_archived_result("${tc.id}")]`
+            toolContent += `\n[full result archived — call read_archived_result("${call.id}")]`
           }
         }
 
         // 中止后不回填工具结果：send() 对旧 turn 只等 50ms，writeArchive 的
         // 串行 OPFS 链路可能远超之——迟到的 tool 消息会排到下一 turn 的
-        // user 消息之后（其配对的 tool_calls 在更早处），OpenAI 兼容端点
-        // 对此 400 且现有折梯/裁剪均无法修复，会话将持续报错
-        // 直到清空。execute 内部已把中止转成正常返回，这里必须显式重查。
+        // user 消息之后（其配对的 tool_use 在更早处），端点对此 400。
+        // execute 内部已把中止转成正常返回，这里必须显式重查。
         if (signal.aborted) return
 
         // 工具结果消息回列
         this.history.push({
           role: 'tool',
+          toolCallId: call.id,
+          name: call.name,
           content: toolContent,
-          tool_call_id: tc.id,
-          name: tc.name,
+          isError: result.isError,
         })
       }
-
-      // 裁剪历史
-      await this.trimHistory()
     }
 
-    // 超步数：注入提示强制收尾
-    const finalMsg: ChatMessage = {
-      role: 'assistant',
-      content: '(Maximum steps reached. Please summarize your findings based on the information gathered so far.)',
-    }
+    // 超步数：提示强制收尾
+    const notice =
+      '(Maximum steps reached. Please summarize your findings based on the information gathered so far.)'
+    const finalMsg: AssistantMessage = { role: 'assistant', parts: [{ type: 'text', text: notice }] }
     this.history.push(finalMsg)
+    this.ctx.emit('assistant/message-delta', notice)
     this.ctx.emit('assistant/message-done', finalMsg)
   }
 
-  /**
-   * 单步 LLM 流，空流自动重试。
-   *
-   * 「空流」= 连接成功、未报错，但一个实质增量（text/reasoning/tool-call）都没收到——
-   * 中转对带 tool 历史的多步请求静默失败时最常见（拿到工具结果准备总结的那一轮）。
-   * 这种失败是瞬时的，直接重发同一批 messages 往往就能恢复，因此最多重试
-   * MAX_EMPTY_STREAM_RETRIES 次（指数退避）再放弃；放弃时返回 null，由调用方报 noData。
-   * 真截断（收到一半内容被掐）与明确错误不重试，原样上抛。
-   *
-   * 重试预算的边界：适配器内部还带一层「非流式重发」降级（见 openaiAdapter）。
-   * 若该重发已执行且仍为空（fallbackAttempted），说明同一请求已两连败，
-   * 本层不再叠加重试——否则最坏会放大成 3×流式 + 3×非流式 = 6 次计费调用。
-   *
-   * 返回 'hard-error' 哨兵 = 流程内已 emit 过具体错误，调用方只终止、不重报
-   * （与「重试耗尽」的 null 区分开，避免错误气泡被泛化的 noData 覆盖）。
-   */
-  private async streamOnceWithRetry(
-    messages: ChatMessage[],
-    tools: ReturnType<typeof this.ctx.tools.schemas>,
+  /** 单步 LLM 流：转发增量，返回结束块（中止时可能没有） */
+  private async streamStep(
+    options: GenerateOptions,
     signal: AbortSignal,
-  ): Promise<StepStreamResult | 'hard-error' | null> {
-    for (let attempt = 0; attempt <= MAX_EMPTY_STREAM_RETRIES; attempt++) {
-      if (signal.aborted) return null
-      if (attempt > 0) {
-        // 指数退避：500ms / 1000ms；abort 时立即唤醒，不等退避睡完
-        // （否则被中断的旧 turn 会比新 turn 活得更久，收尾事件互相干扰）
-        if (signal.aborted) return null
-        await new Promise<void>((resolve) => {
-          const timer = setTimeout(resolve, 500 * attempt)
-          signal.addEventListener(
-            'abort',
-            () => {
-              clearTimeout(timer)
-              resolve()
-            },
-            { once: true },
-          )
-        })
-        if (signal.aborted) return null
-      }
-      const res = await this.streamOnce(messages, tools, signal)
-      if (signal.aborted) return null
-      // 明确错误已自行 emit，终止整个 turn
-      if (res.hardError) return 'hard-error'
-      // 收到实质内容 → 成功（无论是否截断）
-      if (res.receivedContent) return res
-      // 适配器的非流式重发已两连败：放弃重试，交由 noData 报错
-      if (res.fallbackAttempted) return null
-      // 空流 → 还有重试次数就再来一次
-    }
-    return null
-  }
-
-  /**
-   * 单步 LLM 流的最小单元：发一次请求、消费完整流、汇总结果。
-   * 不在此处做重试与空流判定（见 streamOnceWithRetry）。
-   */
-  private async streamOnce(
-    messages: ChatMessage[],
-    tools: ReturnType<typeof this.ctx.tools.schemas>,
-    signal: AbortSignal,
-  ): Promise<StepStreamResult> {
-    const llm = this.ctx.llm
-    let assistantContent = ''
-    let reasoningContent = ''
-    const toolCallMap = new Map<number, ToolCall>()
-    let streamTruncated = false
-    /** finish 上报：本轮是否收到过实质增量（区分真截断与空 data 流） */
-    let finishReceivedContent = false
-    /** finish 上报：适配器的非流式重发已执行且未恢复 */
-    let finishFallbackAttempted = false
-    let hardError = false
-
-    for await (const chunk of llm.stream(
-      {
-        model: '', // 适配器内部已 resolve
-        messages,
-        tools: tools.length > 0 ? tools : undefined,
-      },
-      signal,
-    )) {
+  ): Promise<StepFinish | null> {
+    let finish: StepFinish | null = null
+    for await (const chunk of this.ctx.llm.stream(options, signal)) {
       if (signal.aborted) break
-
       switch (chunk.type) {
         case 'text-delta':
-          assistantContent += chunk.text
           this.ctx.emit('assistant/message-delta', chunk.text)
           break
-
         case 'reasoning-delta':
-          // 思考流：转发给 UI（reasoning-active → 正文开始后停用）
-          reasoningContent += chunk.text
           this.ctx.emit('assistant/reasoning-delta', chunk.text)
           break
-
-        case 'tool-call-delta': {
-          // 合并工具调用 delta
-          let tc = toolCallMap.get(chunk.index)
-          if (!tc) {
-            tc = { id: chunk.id || '', name: chunk.name || '', arguments: '' }
-            toolCallMap.set(chunk.index, tc)
-          }
-          if (chunk.id) tc.id = chunk.id
-          if (chunk.name) tc.name = chunk.name
-          if (chunk.argumentsDelta) tc.arguments += chunk.argumentsDelta
-          break
-        }
-
         case 'finish':
-          if (chunk.reason === 'error') {
-            this.ctx.emit('assistant/error', chunk.error || 'LLM error')
-            hardError = true
-          }
-          if (chunk.truncated) streamTruncated = true
-          finishReceivedContent = chunk.receivedContent ?? false
-          finishFallbackAttempted = chunk.fallbackAttempted ?? false
+          finish = chunk
           break
       }
     }
-
-    return {
-      assistantContent,
-      reasoningContent,
-      toolCallMap,
-      streamTruncated,
-      hardError,
-      fallbackAttempted: finishFallbackAttempted,
-      receivedContent:
-        finishReceivedContent ||
-        assistantContent.length > 0 ||
-        reasoningContent.length > 0 ||
-        toolCallMap.size > 0,
-    }
+    return finish
   }
 
   /** 组装 system prompt：基础 prompt + 静态数据集元数据 + skill catalog + tool list */
@@ -529,10 +406,8 @@ export class AgentLoop extends Service {
    * 无工具 LLM 请求把整段对话压成结构化摘要，替换全部旧历史。
    *
    * 只在 send() 内、新 user 消息入列前调用（turn 边界）：
-   * - 此刻历史里不存在悬空 tool 消息（上一 turn 已完整收口），摘要请求
-   *   不会携带 tool_calls 配对问题；
-   * - 压缩后的新历史以 user 开头（压缩标记），满足「首条必须 user」的
-   *   端点约束。
+   * - 此刻历史里不存在悬空 tool 消息，摘要请求不会携带配对问题；
+   * - 压缩后的新历史以 user 开头（压缩标记），满足「首条必须 user」的约束。
    *
    * 任何失败（abort / 空流 / 异常）都静默返回 false：调用方（send）接着走
    * trimHistory 被动兜底，绝不能因为压缩失败阻断用户消息。
@@ -553,7 +428,7 @@ export class AgentLoop extends Service {
             'The summary below replaces everything before the next user message. ' +
             'Tool results mentioned there are still retrievable via read_archived_result.]',
         },
-        { role: 'assistant', content: summary },
+        { role: 'assistant', parts: [{ type: 'text', text: summary }] },
       ]
       let after = 0
       for (const m of this.history) after += this.historyCost(m)
@@ -566,29 +441,23 @@ export class AgentLoop extends Service {
   /** compact 摘要请求：一次无工具、限长的独立调用（走 ctx.llm 流式管道，
    *  但不 emit message-delta——这是内部压缩，不是面向用户的回复） */
   private async summarizeForCompact(signal: AbortSignal): Promise<string | null> {
-    const summaryMessages: ChatMessage[] = [
-      {
-        role: 'system',
-        content:
-          'You compress conversation histories for an MSI data-analysis assistant. ' +
-          'Summarize the conversation so the assistant can continue seamlessly with ' +
-          'no loss of operational facts. Keep it under 2000 tokens. Structure:\n' +
-          '## Confirmed findings\n(concrete conclusions with numbers/molecule names, and how confident)\n' +
-          '## Tools & data touched\n(which tools were called with what key results; note "archived" ' +
-          'pointers — those can be re-fetched with read_archived_result by id)\n' +
-          '## User intent & open questions\n(what the user wants next, unresolved threads)\n' +
-          'Write in the conversation language. Facts only — no pleasantries.',
-      },
-      { role: 'user', content: this.renderHistoryForSummary() },
-    ]
+    const system =
+      'You compress conversation histories for an MSI data-analysis assistant. ' +
+      'Summarize the conversation so the assistant can continue seamlessly with ' +
+      'no loss of operational facts. Keep it under 2000 tokens. Structure:\n' +
+      '## Confirmed findings\n(concrete conclusions with numbers/molecule names, and how confident)\n' +
+      '## Tools & data touched\n(which tools were called with what key results; note "archived" ' +
+      'pointers — those can be re-fetched with read_archived_result by id)\n' +
+      '## User intent & open questions\n(what the user wants next, unresolved threads)\n' +
+      'Write in the conversation language. Facts only — no pleasantries.'
 
     let summary = ''
     try {
       for await (const chunk of this.ctx.llm.stream(
         {
-          model: '',
-          messages: summaryMessages,
-          // 不带 tools：摘要请求绝不能触发工具调用；maxTokens 限长防摘要膨胀
+          system,
+          messages: [{ role: 'user', content: this.renderHistoryForSummary() }],
+          // 不带 tools：摘要请求绝不能触发工具调用
           maxTokens: COMPACT_SUMMARY_MAX_TOKENS,
         },
         signal,
@@ -612,19 +481,24 @@ export class AgentLoop extends Service {
       switch (m.role) {
         case 'user': {
           const imgs = m.images?.length ? ` [${m.images.length} image(s) attached]` : ''
-          lines.push(`USER: ${m.content ?? ''}${imgs}`)
+          lines.push(`USER: ${m.content}${imgs}`)
           break
         }
         case 'assistant': {
-          const calls = (m.tool_calls ?? [])
-            .map((tc) => `    ${tc.name}(${tc.arguments.slice(0, 120)})`)
+          const calls = m.parts
+            .flatMap((part) =>
+              part.type === 'tool-call'
+                ? [`    ${part.name}(${JSON.stringify(part.input).slice(0, 120)})`]
+                : [],
+            )
             .join('\n')
-          const body = m.content ? `ASSISTANT: ${m.content.slice(0, 1_500)}` : 'ASSISTANT: (tool calls)'
+          const text = assistantText(m)
+          const body = text ? `ASSISTANT: ${text.slice(0, 1_500)}` : 'ASSISTANT: (tool calls)'
           lines.push(calls ? `${body}\n${calls}` : body)
           break
         }
         case 'tool':
-          lines.push(`  -> ${m.name ?? 'tool'}: ${(m.content ?? '').slice(0, 400)}`)
+          lines.push(`  -> ${m.name}: ${m.content.slice(0, 400)}`)
           break
       }
     }
@@ -632,30 +506,13 @@ export class AgentLoop extends Service {
   }
 
   /**
-   * 裁剪历史：条数上限（MAX_HISTORY_MESSAGES）+ 图片只留最近一条 user 消息
-   * （旧图换占位，dataURL 几百 KB 一张，留在历史里每轮全量重传）+ 字符预算
-   * （HISTORY_CHAR_BUDGET，图片计入）。预算从最旧开始吃：超长 tool 结果替换为
-   * 「截断 + OPFS 存档」存根（模型可用 read_archived_result 取回），更早的长
-   * assistant 回复压成前缀。最近 4 条始终完整保留（当前正在推理的上下文）。
+   * 回合边界的被动兜底：图片只留最近一条 user 消息（旧图换占位，dataURL 几百 KB 一张，
+   * 留在历史里每轮全量重传）+ 字符预算（HISTORY_CHAR_BUDGET，图片计入）。预算从最旧
+   * 开始吃：超长 tool 结果替换为「截断 + OPFS 存档」存根（模型可用 read_archived_result
+   * 取回），更早的长 assistant 回复压成前缀。最近 4 条始终完整保留。
+   * 思考块不动：各家端点都要求原样回传。
    */
   private async trimHistory(): Promise<void> {
-    if (this.history.length > MAX_HISTORY_MESSAGES) {
-      let start = this.history.length - MAX_HISTORY_MESSAGES
-      // 窗口起点若是 tool 消息，其父 assistant(tool_calls) 已被裁掉——
-      // 悬空的 tool 消息会让本会话后续所有请求被 OpenAI 兼容端点 400 拒掉
-      //（即 runSteps 里「悬空 tool_calls」注释的镜像情形）。
-      while (start < this.history.length && this.history[start]!.role === 'tool') start++
-      // 两个必须回退到 user 起点的情形（窗口略超条数上限无害，token 上限
-      // 由字符预算兜底）：
-      // 1) 跳过 tool 后窗口以 assistant 开头——部分端点要求首条消息
-      //    必须 user，assistant-first 一律 400 且此后每轮都炸（整会话报废）；
-      // 2) 单步并行工具调用 ≥ MAX_HISTORY_MESSAGES 时 start 会越过尾端，
-      //    slice 出空窗口（两家端点都 400）。
-      if (start >= this.history.length) start = this.history.length - 1
-      while (start > 0 && this.history[start]!.role !== 'user') start--
-      this.history = this.history.slice(start)
-    }
-
     // 图片先剥（无条件，不看预算）：base64 dataURL 单张几百 KB，即使整段历史
     // 文本远低于字符预算，旧图片也会让每轮请求全量重传（体积/延迟/网关 body
     // 上限三重坑）。只保留最近 keepRecent 条消息里最后一条带图 user 消息的
@@ -664,14 +521,15 @@ export class AgentLoop extends Service {
       const keepRecent = 4
       let lastImageIdx = -1
       for (let i = this.history.length - 1; i >= this.history.length - keepRecent && i >= 0; i--) {
-        if (this.history[i]!.role === 'user' && this.history[i]!.images?.length) {
+        const m = this.history[i]!
+        if (m.role === 'user' && m.images?.length) {
           lastImageIdx = i
           break
         }
       }
       for (let i = 0; i < this.history.length; i++) {
         const m = this.history[i]!
-        if (i === lastImageIdx || !(m.role === 'user' && m.images?.length)) continue
+        if (i === lastImageIdx || m.role !== 'user' || !m.images?.length) continue
         const note =
           m.images.length > 1 ? `[${m.images.length} images omitted]` : '[image omitted]'
         m.images = undefined
@@ -679,7 +537,7 @@ export class AgentLoop extends Service {
       }
     }
 
-    // 字符预算（条数裁剪后仍可能超：一批接近截断线的工具结果 + 长回复）
+    // 字符预算（一批接近截断线的工具结果 + 长回复，压缩失败时可能超）
     let total = 0
     for (const m of this.history) total += this.historyCost(m)
     if (total <= HISTORY_CHAR_BUDGET) return
@@ -687,43 +545,53 @@ export class AgentLoop extends Service {
     const keepRecent = 4
     for (let i = 0; i < this.history.length - keepRecent && total > HISTORY_CHAR_BUDGET; i++) {
       const m = this.history[i]!
-      if (!m.content) continue
-      // 已带存档指针的（执行时存过档 / 上一轮已压过）不再二次压缩——
-      // 再压会把指针本身截坏（锚定匹配见 hasArchivePointer）
-      if (this.hasArchivePointer(m.content)) continue
-      if (m.role === 'tool') {
-        // 工具结果 content 上限是 TOOL_RESULT_CHARS，按 >TOOL_RESULT_CHARS
-        // 触发永远不成立（20 × 2000 = 40k 仍可能超 60k 预算）。这里对超过
-        // TOOL_STUB_KEEP 的结果先存档再压成存根；存档失败不压（压了正文
-        // 就永久丢了）。
-        if (m.content.length <= TOOL_STUB_KEEP) continue
-        const archived = await writeArchive(m.tool_call_id ?? '', m.content)
-        if (!archived) continue
-        const stub =
-          `${m.content.slice(0, TOOL_STUB_KEEP)}\n` +
-          `…[truncated for context budget — full result archived, call read_archived_result("${m.tool_call_id}")]`
-        total -= m.content.length - stub.length
-        m.content = stub
-      } else if (m.role === 'assistant') {
-        if (m.content.length <= TOOL_RESULT_CHARS) continue
-        const stub = `${m.content.slice(0, TOOL_RESULT_CHARS)}\n…[earlier reply truncated for context budget]`
-        total -= m.content.length - stub.length
-        m.content = stub
-      }
+      if (m.role === 'tool') total -= await this.stubToolResult(m)
+      else if (m.role === 'assistant') total -= this.shortenReply(m)
     }
   }
 
-  /** 消息占用预算的字符量：正文 + 图片 dataURL（不把图片计入的话每轮全量重传） */
+  /** 超过 TOOL_STUB_KEEP 的工具结果先存档再压成存根，返回省下的字符数。
+   *  存档失败不压（压了正文就永久丢了）；已带存档指针的不再压，否则指针会被截坏。 */
+  private async stubToolResult(m: ToolMessage): Promise<number> {
+    if (m.content.length <= TOOL_STUB_KEEP || this.hasArchivePointer(m.content)) return 0
+    const archived = await writeArchive(m.toolCallId, m.content)
+    if (!archived) return 0
+    const stub =
+      `${m.content.slice(0, TOOL_STUB_KEEP)}\n` +
+      `…[truncated for context budget — full result archived, call read_archived_result("${m.toolCallId}")]`
+    const saved = m.content.length - stub.length
+    m.content = stub
+    return saved
+  }
+
+  /** 长 assistant 回复压成前缀，返回省下的字符数。工具调用和思考块保留 */
+  private shortenReply(m: AssistantMessage): number {
+    const text = assistantText(m)
+    if (text.length <= TOOL_RESULT_CHARS || this.hasArchivePointer(text)) return 0
+    const stub = `${text.slice(0, TOOL_RESULT_CHARS)}\n…[earlier reply truncated for context budget]`
+    let replaced = false
+    m.parts = m.parts.flatMap((part): AssistantPart[] => {
+      if (part.type !== 'text') return [part]
+      if (replaced) return []
+      replaced = true
+      return [{ type: 'text', text: stub }]
+    })
+    return text.length - stub.length
+  }
+
+  /** 消息占用预算的字符量。图片按固定值计：模型按尺寸计费，与 base64 长度无关 */
   private historyCost(m: ChatMessage): number {
-    let cost = m.content?.length ?? 0
-    if (m.images) for (const d of m.images) cost += d.length
+    if (m.role === 'user') return m.content.length + (m.images?.length ?? 0) * IMAGE_HISTORY_COST
+    if (m.role === 'tool') return m.content.length
+    let cost = 0
+    for (const part of m.parts) if (part.type !== 'tool-call') cost += part.text.length
     return cost
   }
 }
 
 // ---- 基础 system prompt ----
 
-const BASE_SYSTEM_PROMPT = `You are a Mass Spectrometry Imaging (MSI) data analysis assistant for the SpatialXomics platform.
+const BASE_SYSTEM_PROMPT = `You are SXO-Harness, a Mass Spectrometry Imaging (MSI) data analysis assistant for the SpatialXomics platform.
 
 ## Your Role
 Help researchers analyze MSI datasets by:
@@ -755,12 +623,12 @@ when in doubt, call \`get_page_state\` again.`
 // ---- 插件入口 ----
 
 export const agentLoopProvider = (ctx: Context) => {
-  // 依赖声明：AgentLoop 内部访问 ctx.llm / ctx.tools / ctx.skills（兄弟服务）。
+  // 依赖声明：AgentLoop 内部访问 ctx.connection / ctx.llm / ctx.tools / ctx.skills（兄弟服务）。
   // cordis 4 的属性解析要求在自身 fiber 里声明过 inject 才能拿到兄弟服务，
   // 否则抛 "cannot get property X without inject"（见 __tests__/agentLoop.test.ts）。
-  // inject 回调会等依赖就绪才执行——bootstrap 的加载顺序（llm → tools → skills
+  // inject 回调会等依赖就绪才执行——bootstrap 的加载顺序（connection → llm → tools → skills
   // → … → agentLoop）下立即满足。
-  ctx.inject(['llm', 'tools', 'skills'], (ctx2) => {
+  ctx.inject(['connection', 'llm', 'tools', 'skills'], (ctx2) => {
     new AgentLoop(ctx2)
   })
 }

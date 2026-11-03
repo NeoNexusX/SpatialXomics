@@ -79,7 +79,6 @@
       "loadFailed": "Load failed, click to retry",
       "remove": "Remove channel m/z {mz}",
       "add": "Add m/z {mz}",
-      "empty": "Add the current m/z to start overlaying.",
       "full": "Maximum of {max} channels reached.",
       "enableFirst": "Enable overlay mode first",
       "colorsInUse": "All channel colors are in use",

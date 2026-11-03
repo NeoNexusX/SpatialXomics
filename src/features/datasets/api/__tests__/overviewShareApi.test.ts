@@ -30,7 +30,7 @@ describe('getShareOverviewMetadata（分享内容需要登录态）', () => {
     getTokenMock.mockReturnValue('token-1')
     authGet.mockResolvedValue({ data: {} })
 
-    const result = await getShareOverviewMetadata({ kind: 'publicId', value: PID })
+    const result = await getShareOverviewMetadata(PID)
 
     expect(authGet).toHaveBeenCalledWith(`/files/${PID}/metadata`, {})
     expect(anonGet).not.toHaveBeenCalled()
@@ -41,7 +41,7 @@ describe('getShareOverviewMetadata（分享内容需要登录态）', () => {
     getTokenMock.mockReturnValue(null)
     anonGet.mockResolvedValue({ data: {} })
 
-    await getShareOverviewMetadata({ kind: 'publicId', value: PID })
+    await getShareOverviewMetadata(PID)
 
     // skipAuthRedirect 挡掉全局 401 跳转，页面才能就地渲染登录/注册引导
     expect(anonGet).toHaveBeenCalledWith(
@@ -49,13 +49,5 @@ describe('getShareOverviewMetadata（分享内容需要登录态）', () => {
       expect.objectContaining({ skipAuthRedirect: true }),
     )
     expect(authGet).not.toHaveBeenCalled()
-  })
-
-  it('rejects legacy tokens without any request — 兑换接口已下线，按死链处理', async () => {
-    await expect(getShareOverviewMetadata({ kind: 'legacyId', value: '42' })).rejects.toThrow(
-      'legacy share link is no longer supported',
-    )
-    expect(authGet).not.toHaveBeenCalled()
-    expect(anonGet).not.toHaveBeenCalled()
   })
 })

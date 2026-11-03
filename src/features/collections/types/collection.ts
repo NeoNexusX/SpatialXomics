@@ -1,5 +1,3 @@
-import type { FilePublicResponse } from '@/features/datasets/types/dataset'
-
 /**
  * Collection（文件集合）：把公开 imzML 文件组织成带学术元数据的策展容器。
  * 集合不复制文件，只是"文件指针 + 顺序"；member_count / total_size 实时聚合。
@@ -146,5 +144,3 @@ export interface CollectionListMeta {
   total_records: number
 }
 
-/** FilePublic 原始响应的别名：API 层返回前由 mapper 转成 CollectionMember */
-export type FilePublic = FilePublicResponse

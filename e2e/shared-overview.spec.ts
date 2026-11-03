@@ -4,9 +4,7 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
  * 公开 Overview 分享链接 E2E — 真实后端
  * ====================================
  * 路由 /s/:token（router/index.ts 的 SharedDatasetOverview）。
- * token 是 16 位 public_id 明文（buildOverviewShareUrl 产出的新链接格式；
- * 历史 Base64 数字 id 链接前端仍可解析，但列表接口已不返回数字 id，
- * 无法在测试里构造有效的 legacy 链接）。
+ * token 是 16 位 public_id 明文（buildOverviewShareUrl 产出的链接格式）。
  *
  * 后端契约：分享内容也需要登录态——匿名访问 401，页面就地渲染
  * 「登录 / 注册」引导（useDatasetDetail.requiresAuth），不再直接出内容。

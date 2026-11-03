@@ -132,7 +132,6 @@ export function useCollectionsPage() {
     pagination,
     canEdit,
     isMine,
-    fetchPage,
     handleSearch,
     clearSearch,
     applyFilters,

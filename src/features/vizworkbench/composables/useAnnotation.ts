@@ -884,7 +884,7 @@ export function useAnnotation(opts: {
     },
   )
 
-  // ---- AI 助手 -------------------------------------------------------------
+  // ---- SXO-Harness -------------------------------------------------------------
   function toAssistantRow(ion: IonAnnotation): AnnotationRow {
     const m = molecules.value.get(ion.moleculeId)
     return {

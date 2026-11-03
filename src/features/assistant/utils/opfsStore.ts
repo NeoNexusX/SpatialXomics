@@ -22,8 +22,6 @@ const ARCHIVE_DIR = 'assistant-archive'
 const MAX_SESSION_FILES = 10
 
 /** OPFS 是否可用（能力探测缓存，避免重复 await） */
-let availablePromise: Promise<boolean> | null = null
-
 async function rootDir(): Promise<FileSystemDirectoryHandle | null> {
   try {
     const nav = navigator as Navigator & {
@@ -34,11 +32,6 @@ async function rootDir(): Promise<FileSystemDirectoryHandle | null> {
   } catch {
     return null
   }
-}
-
-export function opfsAvailable(): Promise<boolean> {
-  availablePromise ??= rootDir().then((d) => d != null)
-  return availablePromise
 }
 
 async function subdir(
@@ -181,11 +174,6 @@ export function rotateSessionId(): void {
 /** 会话文件名（jsonl） */
 function sessionFile(id: string): string {
   return `${id}.jsonl`
-}
-
-/** 追加一条消息（一行 JSON + '\n'）；返回是否写入成功 */
-export async function appendHistoryLine(item: unknown): Promise<boolean> {
-  return appendHistoryLines([item])
 }
 
 /** 批量追加多条消息（一次定位写，替代逐条并发写）。turn 结束时整批调用。

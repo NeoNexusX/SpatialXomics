@@ -12,7 +12,6 @@ import {
   addMembers,
   createCollection,
   deleteCollection,
-  getCollection,
   getPublicCollection,
   listAllCollections,
   listCollections,
@@ -124,14 +123,6 @@ describe('collectionApi', () => {
     expect(res.meta.total_records).toBe(1)
   })
 
-  it('getCollection maps the detail response', async () => {
-    authGet.mockResolvedValueOnce({ data: detailBody })
-    const d = await getCollection(CID)
-    expect(authGet).toHaveBeenCalledWith(`/collections/${CID}`)
-    expect(d.publicId).toBe(CID)
-    expect(d.members).toEqual([{ publicId: 'qW3rT5yU7iO9pA1s', imagePath: 'images/file_42/', filename: 'a.imzML', size: 0, status: '', isPublic: false, experimentType: null }])
-  })
-
   it('createCollection posts payload and returns mapped detail', async () => {
     authPost.mockResolvedValueOnce({ data: detailBody })
     const d = await createCollection({
@@ -197,11 +188,11 @@ describe('collectionApi', () => {
   })
 
   it('wraps axios errors into CollectionApiError with status and backend detail', async () => {
-    authGet.mockRejectedValueOnce({
+    authDelete.mockRejectedValueOnce({
       response: { status: 409, data: { detail: 'invalid collection members' } },
       message: 'Request failed with status code 409',
     })
-    const err = await getCollection(CID).catch((e) => e)
+    const err = await deleteCollection(CID).catch((e) => e)
     expect(err.status).toBe(409)
     expect(err.backendMessage).toBe('invalid collection members')
     expect(err.message).toBe('invalid collection members')

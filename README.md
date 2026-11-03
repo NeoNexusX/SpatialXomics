@@ -26,7 +26,7 @@ SpatialXomics 是一个面向质谱成像（MSI）的 Web 数据管理与分析�
 | MSI/Zarr | 自研 Zarr v3 分块读取器、zstddec、`@zip.js/zip.js`、hash-wasm、ml-kmeans |
 | 网络与存储 | Axios、ali-oss（STS 临时凭证） |
 | 网络与存储 | Axios、ali-oss（STS 临时凭证） |
-| AI 助手 | cordis、@tdesign-vue-next/chat |
+| SXO-Harness | @deepseek-ai/cordis、AI SDK（@ai-sdk/anthropic）、shadcn-vue AI Elements |
 | 测试 | Vitest、Playwright |
 | 文档 | VitePress（中英文） |
 
@@ -39,7 +39,7 @@ src/
 ├── app/                         # 应用外壳、导航与全局入口组件
 ├── assets/                      # 样式和主题资源
 ├── features/                    # 按业务领域组织的功能
-│   ├── assistant/               # AI 助手：悬浮窗聊天 + BYOK（对已登录用户默认开启）
+│   ├── assistant/               # SXO-Harness：悬浮面板聊天 + 连接设置（对已登录用户默认开启）
 │   ├── auth/                    # 登录、注册、找回密码表单逻辑
 │   ├── collections/             # 带学术元数据的数据集合
 │   ├── datasets/                # 数据集列表、详情、分享、下载

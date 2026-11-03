@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { ref } from 'vue'
 import { useROI, type DraftROI } from '../useROI'
 
 const rect = (x0: number, y0: number, x1: number, y1: number): DraftROI => ({
@@ -9,7 +8,7 @@ const rect = (x0: number, y0: number, x1: number, y1: number): DraftROI => ({
 })
 
 function setup(w = 4, h = 4) {
-  const roi = useROI(ref(w), ref(h))
+  const roi = useROI()
   const matrix = new Float32Array(w * h).fill(1)
   const add = (d: DraftROI) => roi.confirmROI(matrix, w, h, d)!
   return { roi, add }

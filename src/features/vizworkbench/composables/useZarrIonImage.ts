@@ -610,7 +610,6 @@ export function useZarrIonImage() {
 
     // Continuous mode
     onSpectrumClickByIndex,
-    loadForMzIndex,
     loadNormalization,
     clearNormalization,
     normalizationFactors,

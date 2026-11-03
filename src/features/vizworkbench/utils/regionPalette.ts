@@ -102,11 +102,6 @@ export const COMPARISON_B_RGB: RGB = { r: 234, g: 88, b: 12 } // #ea580c orange-
 export const COMPARISON_A_ALPHA = 0.75
 export const COMPARISON_B_ALPHA = 0.45
 
-/** Same idea for the semi-transparent comparison overlay on the ion image
- *  (alpha on the 0-255 scale used by Uint8ClampedArray). */
-export const COMPARISON_A_OVERLAY_ALPHA = 110
-export const COMPARISON_B_OVERLAY_ALPHA = 65
-
 /** First palette index available to ROIs (kmeans never reaches this far). */
 export const ROI_COLOR_OFFSET = KMEANS_COLOR_COUNT
 
@@ -129,12 +124,6 @@ export function roiColorAt(index: number): RGB {
  *  including hex+alpha-suffix concatenation ("...40") in the ROI panel. */
 export function rgbCss(c: RGB): string {
   return `rgb(${c.r},${c.g},${c.b})`
-}
-
-/** "#rrggbb" hex string. */
-export function rgbHex(c: RGB): string {
-  const h = (v: number) => v.toString(16).padStart(2, '0')
-  return `#${h(c.r)}${h(c.g)}${h(c.b)}`
 }
 
 /** Parse a hex or CSS rgb(...) color string back to RGB. */

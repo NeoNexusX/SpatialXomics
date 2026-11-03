@@ -91,7 +91,6 @@ describe('useDatabaseList', () => {
   it('fetches the first page on mount (default page size 50) and fills the meta', async () => {
     const api = await freshApi()
     await flushPromises()
-    expect(api.loggedIn.value).toBe(true)
     expect(api.pageSize.value).toBe(50)
     expect(api.pageSizeOptions).toEqual([50, 100])
     expect(api.rows.value).toHaveLength(25)
@@ -104,7 +103,6 @@ describe('useDatabaseList', () => {
     authStorage.clearAuthData()
     const api = await freshApi()
     await flushPromises()
-    expect(api.loggedIn.value).toBe(false)
     expect(api.rows.value).toHaveLength(0)
     expect(api.loading.value).toBe(false)
     expect(dataset.calls).toBe(0)

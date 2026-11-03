@@ -32,10 +32,7 @@ npm run dev
 | Other | `i18n-iso-countries` for country/region data |
 | Docs and tests | VitePress, Vitest, Playwright |
 | Quality | ESLint 9 flat config, Prettier |
-
-<!-- AI assistant temporarily hidden from users; restore this row into the table above when re-enabling:
-| AI assistant | `cordis` agent runtime (tool loop, skills, SSE adapter); chat view built on `@tdesign-vue-next/chat` |
--->
+| SXO-Harness | `@deepseek-ai/cordis` plugin runtime (tool loop, skills, connection and model management); model access: AI SDK (`ai`, `@ai-sdk/anthropic`) over `/v1/messages`, using only models that pass a multimodal test; UI: shadcn-vue AI Elements (`reka-ui`, `@comark/vue`, `shiki`; formulas load `katex` on demand) |
 
 The project does not use `zarrita` or `crypto-js`. Password form values are sent over HTTPS; access-token storage and session state live under `src/shared/auth` and use `localStorage`.
 
@@ -47,7 +44,7 @@ Use root `package.json` and `package-lock.json` for exact versions.
 src/
 ├── app/                  # Application shell and global entry components
 ├── assets/               # Theme and global styles
-├── features/             # Business modules: auth, collections, datasets, home, upload, users, vizworkbench, workspace
+├── features/             # Business modules: assistant, auth, collections, datasets, home, upload, users, vizworkbench, workspace
 ├── i18n/                 # vue-i18n instance, type definitions, and locales/{locale}/{ns}.json message files
 ├── router/               # Routes and guards
 ├── services/             # Cross-module Zarr (with OSS client), clustering, and PubChem services
@@ -55,8 +52,6 @@ src/
 ├── views/                # Route pages that compose features
 └── workers/              # Upload ZIP/MD5 worker
 ```
-
-<!-- The `assistant` (AI assistant) module still exists in the source; it is temporarily hidden from users and therefore omitted from the list above. Restore it when re-enabling. -->
 
 The vizworkbench feature also owns the annotation CSV and KMeans workers under `src/features/vizworkbench/utils/`. Feature-specific workers stay close to their owner rather than all living under root `workers/`.
 
@@ -81,7 +76,7 @@ The vizworkbench feature also owns the annotation CSV and KMeans workers under `
 ## Configuration and Deployment
 
 - Vite environment files live under `env/`. Use `env/.env.development.local` for local overrides. Runtime business configuration comes from `public/config.json` and is loaded before the app mounts.
-- `config.json` controls app-wide settings: application name, navigation and floating action button, pagination, verification, and Zarr read tuning. <!-- AI assistant temporarily hidden from users; restore by removing this comment: The AI assistant has no dedicated switch: its floating-button `toggle-ai` entry follows the regular `active` / `requireAuth` flags and is currently enabled for signed-in users. Chat needs either deployment LLM credentials (`VITE_LLM_PROXY_URL` / `VITE_LLM_API_KEY`) or a user-supplied BYOK configuration; with neither, the assistant panel opens straight into its settings. -->
+- `config.json` controls app-wide settings: application name, navigation and floating action button, pagination, verification, and Zarr read tuning. SXO-Harness has no dedicated switch: its floating-button `toggle-ai` entry follows the regular `active` / `requireAuth` flags and is currently enabled for signed-in users. Chat needs an endpoint that offers `/v1/messages`: either the deployment default (`VITE_LLM_PROXY_URL` / `VITE_LLM_API_KEY` / `VITE_LLM_MODEL`), or an address and key entered in the connection settings plus a model that passes the multimodal test. With neither, the panel opens straight into its connection settings. `VITE_LLM_API_KEY` is compiled into the frontend bundle, so only put a relay sub-key there, never an official API key.
 - Home page content (hero copy, feature showcase, timeline, team, contact details, commit heatmap) lives in `public/content.json`. The `/` route fetches it in parallel with the home chunk, so its size never sits on the app-wide startup path. If it cannot be loaded the home page simply omits those sections; other routes are unaffected.
 - Upload form vocabularies and ion-source requirement rules are no longer JSON. They are compiled into the bundle (`datasetMetadata.ts` / `ionSourceRules.ts`), ship inside long-cached route chunks, and require a rebuild to change.
 - The `test`-branch workflow runs `npm run check`, the docs build, and Chromium/Firefox/WebKit E2E.

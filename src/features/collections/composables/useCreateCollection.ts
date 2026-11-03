@@ -203,7 +203,6 @@ export function useCreateCollection() {
     /** 与识别值不一致（用户手改）的字段键，驱动「恢复为自动识别值」提示 */
     editedKeys,
     resetDerivedField,
-    isDirty,
     canCreate,
     // 动作
     submit,

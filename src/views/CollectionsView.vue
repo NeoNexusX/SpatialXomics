@@ -105,7 +105,6 @@ const {
   search,
   pagination,
   canEdit,
-  isMine,
   handleSearch,
   clearSearch,
   applyFilters,

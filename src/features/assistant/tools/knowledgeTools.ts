@@ -21,7 +21,7 @@
  * - 无 key、无写操作；网络/上游错误抛 Error → ToolRuntime 转 isError 结果回喂模型，不中断 turn。
  */
 
-import type { Context, Plugin } from 'cordis'
+import type { Context, Plugin } from '@deepseek-ai/cordis'
 import { defineTool, renderBatch } from './defineTool'
 import { getJson, take, createLazyJsonLoader } from './httpJson'
 import { adductShiftTable } from '@/shared/chem/adducts'

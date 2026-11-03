@@ -6,7 +6,7 @@
  * - providers/analysisContext 的实例级 provider 注册表（selectedIon / kmeans / annotations）
  */
 
-import type { Context, Plugin } from 'cordis'
+import type { Context, Plugin } from '@deepseek-ai/cordis'
 import { defineTool, renderBatch } from './defineTool'
 import {
   buildDatasetOverview,

@@ -36,7 +36,6 @@ function setup(importedMasks: ImportedMask[]) {
       ionRows: ref(2),
       dataMode: ref(null),
       onSelectMzIndex: () => {},
-      setComparisonOverlay: () => {},
     })
   })
   return api
@@ -79,7 +78,6 @@ describe('useRegionComparison · imported masks', () => {
         ionRows: ref(2),
         dataMode: ref(null),
         onSelectMzIndex: () => {},
-        setComparisonOverlay: () => {},
       })
     })
 

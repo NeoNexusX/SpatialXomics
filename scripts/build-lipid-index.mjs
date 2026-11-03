@@ -1,7 +1,7 @@
 /**
  * 从 LIPID MAPS 官方 LMSD SDF 构建前端本地脂质索引（public/data/lipidmaps-index.json）。
  *
- * 用途：AI 助手 lipidmaps_* 工具的离线数据源（LIPID MAPS REST API 不带 CORS 头，
+ * 用途：SXO-Harness lipidmaps_* 工具的离线数据源（LIPID MAPS REST API 不带 CORS 头，
  * 浏览器无法直连；改为打包成同源静态资源，fetch 无跨域问题且完全离线可用）。
  *
  * 数据来源与许可：LIPID MAPS Structure Database (LMSD)，LIPID MAPS / UCSD-Babraham-

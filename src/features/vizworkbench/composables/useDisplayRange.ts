@@ -149,7 +149,7 @@ export function useDisplayRange(
     else displayMax.value = clickedValue
   }
 
-  const startStripDrag = (which: 'min' | 'max', event: MouseEvent) => {
+  const startStripDrag = (which: 'min' | 'max') => {
     const element = stripRef.value
     if (!element) return
     stripDragDir = which

@@ -106,12 +106,6 @@ export async function listAllCollections(
   return { meta: toListMeta(body?.meta), data: normalizeList(body).map(mapCollectionSummary) }
 }
 
-// GET /collections/{public_id} — 详情 + 有序成员
-export async function getCollection(publicId: string): Promise<CollectionDetail> {
-  const body = await unwrap(() => auth_api.get(`/collections/${publicId}`))
-  return mapCollectionDetail(body)
-}
-
 // POST /collections — 创建；file_public_ids 顺序 = position，响应为完整 CollectionDetail
 export async function createCollection(
   payload: CollectionCreatePayload,

@@ -206,12 +206,6 @@ function parsePixelSize(params: ImzMLParam[]): { pixelSizeX?: number; pixelSizeY
 }
 
 /* helpers */
-function extractFirstNumber(p: ImzMLParam): string | undefined {
-  const s = (p.value || p.name || '').toString()
-  const m = s.match(/(\d+(?:\.\d+)?)/)
-  return m ? m[1] : undefined
-}
-
 function parseSpectrumMode(text: string): 'profile' | 'centroid' | undefined {
   if (text.includes('MS:1000127')) return 'centroid'
   if (text.includes('MS:1000128')) return 'profile'

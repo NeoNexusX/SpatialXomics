@@ -18,8 +18,6 @@ const {
   meta,
   stats,
   pageRange,
-  from,
-  to,
   fetchUsers,
   resetFilters,
   handleSearch,
@@ -82,8 +80,6 @@ const {
         :page-size="pageSize"
         :total-pages="meta.total_pages"
         :total-items="meta.total_records"
-        :from="from"
-        :to="to"
         :page-range="pageRange"
         @search="handleSearch"
         @reset-filters="resetFilters"

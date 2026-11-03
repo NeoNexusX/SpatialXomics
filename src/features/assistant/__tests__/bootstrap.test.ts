@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Context } from 'cordis'
+import { Context } from '@deepseek-ai/cordis'
+import { connectionProvider } from '../providers/connection'
 import { llmProvider } from '../providers/llm'
 import { toolsProvider } from '../providers/tools'
 import { skillsProvider } from '../providers/skills'
@@ -9,6 +10,7 @@ import { knowledgeTools } from '../tools/knowledgeTools'
 import { bioTools } from '../tools/bioTools'
 import { literatureTools } from '../tools/literatureTools'
 import { archiveTools } from '../tools/archiveTools'
+import { getAssistantContext, whenAssistantReady } from '../plugins'
 
 /**
  * 生产接线回归测试：完整复刻 plugins/index.ts 的加载方式（不 await，
@@ -20,8 +22,30 @@ import { archiveTools } from '../tools/archiveTools'
  * 检测不到这条路径；工具插件曾因此全员失效而测试全绿。
  */
 describe('assistant bootstrap (production wiring)', () => {
+  it('wires the connection, the adapter plugin and the agent loop through the real entry point', async () => {
+    localStorage.setItem(
+      'assistant_connection',
+      JSON.stringify({ endpoint: 'anthropic', baseUrl: 'https://llm.test', apiKey: 'k', model: 'm' }),
+    )
+    getAssistantContext()
+    const ctx = await whenAssistantReady()
+
+    expect(ctx.connection.current()?.model).toBe('m')
+    expect(typeof ctx.agent.send).toBe('function')
+    expect(ctx.models.snapshot().models).toEqual([])
+    // 适配器插件真的注册上了：请求能路由到它（这里只让它撞上桩掉的 fetch）
+    const fetchStub = vi.fn(async () => new Response('{"data":[{"id":"k3"}]}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchStub)
+    await expect(ctx.llm.listModels(ctx.connection.current()!)).resolves.toEqual(['k3'])
+    expect(fetchStub).toHaveBeenCalledOnce()
+
+    vi.unstubAllGlobals()
+    localStorage.removeItem('assistant_connection')
+  })
+
   it('registers all tools when plugins load the way the browser loads them', async () => {
     const ctx = new Context()
+    ctx.plugin(connectionProvider)
     ctx.plugin(llmProvider)
     ctx.plugin(toolsProvider)
     ctx.plugin(skillsProvider)

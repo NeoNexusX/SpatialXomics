@@ -98,13 +98,6 @@ export interface ToolDefinition<A extends ParameterSchemaSpec = any, V = any> {
   execute(args: InferArgs<A>, exec: ToolRunContext): Promise<V>
 }
 
-// ---- 校验结果 ----
-
-export interface ValidationResult {
-  valid: boolean
-  errors?: { field: string; message: string }[]
-}
-
 // ---- 工厂函数 ----
 
 export function defineTool<A extends ParameterSchemaSpec, V>(

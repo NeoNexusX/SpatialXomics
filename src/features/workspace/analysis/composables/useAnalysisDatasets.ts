@@ -14,7 +14,6 @@ export function useAnalysisDatasets() {
     size: mySize,
     pagination: myPagination,
     goToPage: myGoToPage,
-    changeSize: myChangeSize,
     applyFilters: myApplyFilters,
   } = useDatasetList((filters, page, size) => listUserFiles(filters, page, size))
 
@@ -29,7 +28,6 @@ export function useAnalysisDatasets() {
     size: publicSize,
     pagination: publicPagination,
     goToPage: publicGoToPage,
-    changeSize: publicChangeSize,
     applyFilters: publicApplyFilters,
   } = useDatasetList((filters, page, size) => listFiles(filters, page, size, true))
 
@@ -44,16 +42,11 @@ export function useAnalysisDatasets() {
   const error = computed(() => (activeTab.value === 'public' ? publicError.value : myError.value))
   const meta = computed(() => (activeTab.value === 'public' ? publicMeta : myMeta))
   const page = computed(() => (activeTab.value === 'public' ? publicPage.value : myPage.value))
-  const size = computed(() => (activeTab.value === 'public' ? publicSize.value : mySize.value))
   const pagination = computed(() => (activeTab.value === 'public' ? publicPagination.value : myPagination.value))
 
   const goToPage = (np: number) => {
     if (activeTab.value === 'public') publicGoToPage(np)
     else myGoToPage(np)
-  }
-  const changeSize = (ns: number) => {
-    if (activeTab.value === 'public') publicChangeSize(ns)
-    else myChangeSize(ns)
   }
 
   // Methods
@@ -110,10 +103,8 @@ export function useAnalysisDatasets() {
     error,
     meta,
     page,
-    size,
     pagination,
     goToPage,
-    changeSize,
     selectDataset,
   }
 }

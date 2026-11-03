@@ -224,11 +224,8 @@
         "kind": "action",
         "action": "toggle-ai",
         "icon": "sparkles",
-        "label": {
-          "en": "AI Assistant",
-          "zh-CN": "AI 助手"
-        },
-        "active": false,
+        "label": "SXO-Harness",
+        "active": true,
         "requireAuth": true
       },
       {

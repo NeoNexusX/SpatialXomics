@@ -1,41 +1,71 @@
 /**
  * assistant 模块的核心类型词汇。
  *
- * 消息/工具调用类型与 OpenAI chat/completions 对齐（适配器可直接透传），
- * 同时作为 provider 中立层：后续新增其他 LLM 适配器时复用同一套类型。
+ * 这里是协议中立层：AgentLoop、工具和界面都只认这些类型，
+ * 具体协议的请求与响应格式由各适配器插件（plugins/*Adapter.ts）转换。
  */
+
+// ---- 连接 ----
+
+/** 端点协议，决定请求由哪个适配器发出。支持新协议时在这里加一项并注册对应的适配器插件。 */
+export type EndpointType = 'anthropic'
+
+/** 解析完成的端点：地址和密钥已确定，还没选模型 */
+export interface ResolvedEndpoint {
+  endpoint: EndpointType
+  /** 规范化后的基地址，末尾带版本段，如 https://api.anthropic.com/v1 */
+  baseUrl: string
+  apiKey: string
+  /** 凭据来自用户设置还是部署默认 */
+  source: 'user' | 'deployment'
+}
+
+/** 可以直接发请求的连接 */
+export interface ResolvedConnection extends ResolvedEndpoint {
+  model: string
+}
+
+/**
+ * 多模态探测结果。
+ * - unavailable：端点有回应但测不出结论（配额、下线等），不等于不支持图片
+ * - no-response：没拿到完整响应（断网，或页面离开时请求被浏览器取消），不算测过
+ */
+export type VisionProbeResult = 'vision' | 'no-vision' | 'unavailable' | 'no-response'
 
 // ---- LLM 消息与流式协议 ----
 
-/** 一次工具调用（assistant 消息携带；arguments 为未解析的 JSON 文本）。
- *  项目内部统一用扁平形态；OpenAI wire 的嵌套形态
- *  （{id, type:"function", function:{name, arguments}}）由 openaiAdapter
- *  的 toWireMessages 序列化——端点流式响应与本类型互转均在适配器收口。 */
-export interface ToolCall {
-  id: string
-  name: string
-  /** JSON 文本（未解析）；解析与校验由 tools 注册表负责 */
-  arguments: string
+/** assistant 消息的内容块，顺序与模型返回的一致，回传时不能打乱 */
+export type AssistantPart =
+  | { type: 'text'; text: string }
+  | {
+      type: 'reasoning'
+      text: string
+      /** 适配器私有的回放数据（如思考块签名），上层只负责原样保存 */
+      replay?: Record<string, unknown>
+    }
+  | { type: 'tool-call'; id: string; name: string; input: unknown }
+
+export interface UserMessage {
+  role: 'user'
+  content: string
+  /** 附带的图片（多模态）：base64 dataURL（`data:image/png;base64,…`） */
+  images?: string[]
 }
 
-export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool'
-  content: string | null
-  /**
-   * user 消息附带的图片（多模态）：base64 dataURL（`data:image/png;base64,…`）。
-   * 仅 user 消息使用；wire 序列化时转成 OpenAI content-parts（text + image_url）。
-   * 不随 tool/system/assistant 上 wire（这些角色不支持图片）。
-   */
-  images?: string[]
-  /** assistant 消息：本轮要调用的工具 */
-  tool_calls?: ToolCall[]
-  /** tool 消息：对应的调用 id */
-  tool_call_id?: string
-  /** tool 消息：工具名（便于调试与渲染） */
-  name?: string
-  /** assistant 消息：推理模型的思考过程（reasoning_content）。不回传给 API（OpenAI 兼容端点普遍不收），仅 UI 展示 */
-  reasoning?: string
+export interface AssistantMessage {
+  role: 'assistant'
+  parts: AssistantPart[]
 }
+
+export interface ToolMessage {
+  role: 'tool'
+  toolCallId: string
+  name: string
+  content: string
+  isError?: boolean
+}
+
+export type ChatMessage = UserMessage | AssistantMessage | ToolMessage
 
 /** 供 LLM function calling 的 JSON Schema 参数描述 */
 export interface JsonSchemaObject {
@@ -51,51 +81,43 @@ export interface ToolSchema {
   parameters: JsonSchemaObject
 }
 
-/** LLM 流式输出的统一分块（适配器产出，agent loop 消费） */
+/**
+ * 一次模型调用的结束原因。
+ * length = 达到输出上限；refusal = 模型或安全策略拒绝回答。
+ */
+export type FinishReason = 'stop' | 'tool-calls' | 'length' | 'refusal' | 'error' | 'aborted'
+
+/** LLM 流式输出的统一分块（适配器产出，AgentLoop 消费） */
 export type StreamChunk =
   | { type: 'text-delta'; text: string }
   | { type: 'reasoning-delta'; text: string }
   | {
-      type: 'tool-call-delta'
-      /** 同一轮内多个工具调用的分片序号 */
-      index: number
-      id?: string
-      name?: string
-      argumentsDelta?: string
-    }
-  | {
       type: 'finish'
-      reason: 'stop' | 'tool-calls' | 'error' | 'aborted'
+      reason: FinishReason
+      /** 本次调用完整的内容块（error / aborted 时为空），AgentLoop 据此写入历史 */
+      parts: AssistantPart[]
       error?: string
-      truncated?: boolean
-      /**
-       * 本轮是否收到过任何实质增量（text / reasoning / tool-call）。
-       * 用于区分「收到一半正文被掐断」（true，按截断处理）与
-       * 「只收到空 data 行就被掐断」（false，按端点吐空流处理）。
-       */
-      receivedContent?: boolean
-      /**
-       * 适配器已对同一请求做过一次非流式重发（stream:false）且未恢复。
-       * 上层（agent loop）据此停止空流重试，避免「流式重试 × 非流式降级」
-       * 叠加放大计费调用次数。
-       */
-      fallbackAttempted?: boolean
     }
 
 export interface GenerateOptions {
-  model: string
+  system?: string
   messages: ChatMessage[]
   tools?: ToolSchema[]
-  temperature?: number
   maxTokens?: number
-  /** 预留：Phase 2 迁移后端转发时的扩展字段（sessionId 等） */
-  extra?: Record<string, unknown>
 }
 
-/** LLM 适配器接口：一种 provider 一个实现，经 ctx.llm.registerAdapter 注册 */
+/** LLM 适配器：一种端点协议一个实现，由适配器插件经 ctx.llm.registerAdapter 注册 */
 export interface LlmAdapter {
-  readonly provider: string
-  stream(options: GenerateOptions, signal: AbortSignal): AsyncIterable<StreamChunk>
+  readonly endpoint: EndpointType
+  stream(
+    options: GenerateOptions,
+    connection: ResolvedConnection,
+    signal: AbortSignal,
+  ): AsyncIterable<StreamChunk>
+  /** 询问端点公布的模型列表，顺序与端点返回的一致；失败时抛错，错误消息可以直接展示 */
+  listModels(endpoint: ResolvedEndpoint, signal?: AbortSignal): Promise<string[]>
+  /** 发一张小图验证模型能看懂图片 */
+  probeVision(connection: ResolvedConnection, signal?: AbortSignal): Promise<VisionProbeResult>
 }
 
 // ---- 分析上下文（前端运行时数据的统计摘要，不含原始数组） ----
@@ -250,28 +272,35 @@ export interface SkillSummary {
 
 // ---- Agent 状态（composables/UI 层） ----
 
-/** UI 层对话条目（比 ChatMessage 多展示态字段） */
+/** 界面上一条助手消息的内容块，顺序就是实际发生的顺序 */
+export type UiPart =
+  | { type: 'text'; text: string }
+  | { type: 'reasoning'; text: string; active: boolean }
+  | {
+      type: 'tool'
+      id: string
+      name: string
+      input: unknown
+      state: 'running' | 'done' | 'error' | 'stopped'
+      preview: string
+    }
+
+/** UI 层对话条目 */
 export interface UiChatItem {
   id: string
   role: 'user' | 'assistant'
+  /** user 的文字；assistant 所有文字块拼接的结果（复制、持久化、恢复历史都用它） */
   content: string
-  /** user 消息附带的图片缩略（base64 dataURL），气泡内展示 */
+  /** user 消息附带的图片（base64 dataURL） */
   images?: string[]
-  /** 推理模型（如 mimo/deepseek-r1）的思考过程；思考中或思考完均可有值 */
-  reasoning?: string
-  /** 思考进行中（reasoning 仍在增长，content 未开始） */
-  reasoningActive?: boolean
+  /** assistant 的内容块 */
+  parts?: UiPart[]
   /** 流式进行中 */
   pending?: boolean
   /** 被用户中断 */
   interrupted?: boolean
-  /** 连接中途断开：内容已保留但可能不完整 */
-  truncated?: boolean
-  /** 系统 compact 提示条（非模型产出；渲染为居中灰色提示而非气泡，
-   *  历史恢复注入时被过滤，不会回灌模型） */
+  /** 系统 compact 提示条：渲染为居中分隔行，恢复历史时不回灌模型 */
   compacted?: boolean
   /** 错误态（可重试） */
   error?: string
-  /** 本条目产生期间发生的工具调用记录（折叠卡展示） */
-  toolCalls?: { name: string; isError: boolean; preview: string }[]
 }

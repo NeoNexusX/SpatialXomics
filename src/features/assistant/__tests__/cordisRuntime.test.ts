@@ -1,19 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Context, Service } from 'cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 
 // 测试专用的合成事件：显式声明进 Events（全项目事件强类型后不再有宽索引签名）
-declare module 'cordis' {
+declare module '@deepseek-ai/cordis' {
   interface Events {
     'test/event'(v: string): void
   }
 }
 
 /**
- * vendored cordis 运行时的接线冒烟测试：
- * 验证 Vite alias 解析、Context 实例化、插件加载、事件派发与服务注册
+ * cordis 运行时的接线冒烟测试：
+ * 验证 Context 实例化、插件加载、事件派发与服务注册
  * 在本项目环境（jsdom + 浏览器目标）下可用。
  */
-describe('vendored cordis runtime', () => {
+describe('cordis runtime', () => {
   it('creates a root context', () => {
     const ctx = new Context()
     expect(Context.is(ctx)).toBe(true)

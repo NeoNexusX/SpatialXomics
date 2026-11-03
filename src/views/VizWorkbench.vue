@@ -149,7 +149,7 @@ watch(hasTic, (v) => {
 // init() 期间发生 disposeZarrState() 或重新 init() 时，旧的 init 会自行
 // dispose 孤儿 store 并放弃写入模块状态。
 
-// AI 助手桥：数据集切换时清空助手对话。不能在此静态 import useAssistant——
+// SXO-Harness桥：数据集切换时清空助手对话。不能在此静态 import useAssistant——
 // 那会把整个 agent 栈（双适配器、工具模块、skills glob）拉进本路由 chunk，
 // 违反 plugins/index.ts 记录的懒加载契约（助手首次打开才经动态 import 加载，
 // 独立 chunk）。改为写一个待清空标志，由 useAssistant 消费（模块初始化、
@@ -363,7 +363,6 @@ const {
   kmeansComputing,
   selectedKmeansIds,
   getKmeansLabels,
-  setComparisonOverlay,
   exportUmapPng,
   exportKmeansPng,
   toggleOverlay,
@@ -387,7 +386,6 @@ const {
   comparing: cmpComparing,
   progress: cmpProgress,
   error: cmpError,
-  results: cmpResults,
   categorizedResults: cmpCategorizedResults,
   filterStats: cmpFilterStats,
   availableRegions: cmpAvailableRegions,
@@ -411,7 +409,6 @@ const {
   ionRows,
   dataMode,
   onSelectMzIndex: handleSelectMzIndex,
-  setComparisonOverlay,
 })
 
 const cmpThumbnail = computed(() => cmpBuildThumbnailRegions())
@@ -452,7 +449,7 @@ function handleRemoveImportedMask(id: string) {
   removeImportedMaskEntry(id)
 }
 
-// ---- AI 助手上下文注册（selectedIon + kmeans） ----
+// ---- SXO-Harness上下文注册（selectedIon + kmeans） ----
 // 把实例级数据以惰性 getter 形式注册给 assistant 的分析上下文采集器；
 // 页面卸载时成对注销（采集器对缺失 provider 优雅降级）。
 registerContextProviders({

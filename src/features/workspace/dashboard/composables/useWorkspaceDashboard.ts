@@ -145,10 +145,7 @@ export function useWorkspaceDashboard() {
   }
 
   // ── Delete ──────────────────────────────────────────────────────
-  const deletingId = ref<string | null>(null)
-
   async function deleteResult(id: string) {
-    deletingId.value = id
     try {
       await deleteProcess(id)
       // 从服务端刷新当前页，保持 meta 一致
@@ -161,8 +158,6 @@ export function useWorkspaceDashboard() {
     } catch (e) {
       console.error('Failed to delete process:', e)
       throw e
-    } finally {
-      deletingId.value = null
     }
   }
 
@@ -176,7 +171,6 @@ export function useWorkspaceDashboard() {
     loading,
     recentResults,
     summary,
-    deletingId,
     page,
     size,
     meta,

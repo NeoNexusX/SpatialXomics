@@ -31,7 +31,6 @@ const profileFormProps = computed(() => ({
   researchFieldOptions: registerForm.researchFieldOptions,
   validateField: registerForm.validateField,
   clearError: registerForm.clearError,
-  register: registerForm.register,
 }))
 </script>
 

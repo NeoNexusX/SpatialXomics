@@ -5,7 +5,7 @@
  * axios 错误（含 401 未登录）转 isError:true 结果回喂模型，不中断 turn。
  */
 
-import type { Context, Plugin } from 'cordis'
+import type { Context, Plugin } from '@deepseek-ai/cordis'
 import { defineTool } from './defineTool'
 import {
   listFiles,
@@ -16,14 +16,6 @@ import {
 import { getUserQuota } from '@/shared/api/quotaApi'
 
 /** 列表项摘要化：只保留模型需要的字段 */
-interface FileItemSummary {
-  id: number | string
-  filename?: string
-  size?: number
-  created_at?: string
-  status?: string
-}
-
 function summarizeFileList(body: any): string {
   // 后端返回 { data: [...], meta: {...} }
   const items: any[] = Array.isArray(body?.data) ? body.data : Array.isArray(body) ? body : []

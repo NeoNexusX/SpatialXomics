@@ -4,10 +4,7 @@ import type { File } from '@/features/datasets/types/dataset'
 import { useToast } from '@/shared/composables/useToast'
 import { useCopyToClipboard } from '@/shared/composables/useCopyToClipboard'
 import { t } from '@/i18n'
-import {
-  buildOverviewShareUrl,
-  resolveShareToken,
-} from '@/features/datasets/utils/overviewShareLink'
+import { buildOverviewShareUrl, isValidPublicId } from '@/features/datasets/utils/overviewShareLink'
 
 /** Route parsing, link creation, and clipboard state for public Overview sharing. */
 export function useOverviewShare(dataset: Ref<File | null>) {
@@ -17,11 +14,11 @@ export function useOverviewShare(dataset: Ref<File | null>) {
   const { copy } = useCopyToClipboard()
 
   const isShareView = computed(() => route.name === 'SharedDatasetOverview')
-  // token 判别：16 位 publicId（有效链接）或 Base64 数字 id（历史链接，兑换接口
-  // 已下线 → 由 useDatasetDetail.isInvalidShare 按死链处理）
-  const sharedToken = computed(() =>
-    isShareView.value ? resolveShareToken(String(route.params.shareToken ?? '')) : null,
-  )
+  // 16 位 publicId 才是有效链接，其余由 useDatasetDetail.isInvalidShare 按死链处理
+  const sharedToken = computed(() => {
+    const token = isShareView.value ? route.params.shareToken : null
+    return isValidPublicId(token) ? token : null
+  })
   const isShareCopied = ref(false)
 
   // 分享不再要求文件公开：私有/公开统一凭 public_id 生成 /s/{public_id} 链接，

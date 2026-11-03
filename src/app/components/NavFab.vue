@@ -53,6 +53,7 @@
         <span v-else-if="item.action === 'toggle-locale'" class="locale-short">{{
           nextLocale.short
         }}</span>
+        <SxoLogo v-else-if="item.action === 'toggle-ai'" class="h-[0.62em] w-auto" />
         <SvgIcon v-else :type="(item.icon as IconType)" />
       </button>
     </template>
@@ -64,6 +65,7 @@ import { computed } from 'vue'
 import type { User } from '@/shared/auth/types'
 import type { IconType } from '@/shared/components/svgIcons'
 import { getConfig, isNavVisible } from '@/shared/config/runtimeConfig'
+import SxoLogo from '@/features/assistant/components/brand/SxoLogo.vue'
 import { localized } from '@/shared/config/localizedText'
 import { useLocale } from '@/shared/composables/useLocale'
 import type { FabActionKind, FabItem, NavVisibility } from '@/shared/config/runtimeConfig'

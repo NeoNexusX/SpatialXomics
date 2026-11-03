@@ -1,7 +1,7 @@
 /**
  * 从 KEGG REST 构建化合物→代谢通路离线索引（public/data/kegg-pathway-index.json）。
  *
- * 用途：AI 助手 kegg_pathway_lookup 工具（bioTools.ts）的离线数据源。
+ * 用途：SXO-Harness kegg_pathway_lookup 工具（bioTools.ts）的离线数据源。
  * rest.kegg.jp 无 CORS 头（浏览器无法直连），故构建期由 Node 拉取、
  * 打包为同源静态资源。
  *

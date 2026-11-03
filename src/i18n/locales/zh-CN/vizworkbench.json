@@ -79,7 +79,6 @@
       "loadFailed": "加载失败，点击重试",
       "remove": "移除通道 m/z {mz}",
       "add": "添加 m/z {mz}",
-      "empty": "添加当前 m/z 开始叠加。",
       "full": "已达到 {max} 个通道的上限。",
       "enableFirst": "请先开启叠加模式",
       "colorsInUse": "所有通道颜色都已占用",

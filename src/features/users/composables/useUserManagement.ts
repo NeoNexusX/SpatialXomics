@@ -29,8 +29,6 @@ export function useUserManagement() {
     buildPageList(meta.current_page, meta.total_pages),
   )
 
-  const from = computed(() => (meta.total_records ? (currentPage.value - 1) * pageSize.value + 1 : 0))
-  const to = computed(() => Math.min(currentPage.value * pageSize.value, meta.total_records))
 
   // State
   const users = ref<AdminUser[]>([])
@@ -45,7 +43,6 @@ export function useUserManagement() {
     region: '',
   })
 
-  const isDrawerOpen = ref(false)
   const selectedUser = ref<AdminUser | null>(null)
 
   // Quota state
@@ -126,7 +123,6 @@ export function useUserManagement() {
 
   const openDrawer = (user: AdminUser) => {
     selectedUser.value = user
-    isDrawerOpen.value = true
     quotaLimits.value = {
       max_total_file_size: user.max_total_file_size ?? 0,
       max_file_count: user.max_file_count ?? 0,
@@ -136,7 +132,6 @@ export function useUserManagement() {
   }
 
   const closeDrawer = () => {
-    isDrawerOpen.value = false
     selectedUser.value = null
   }
 
@@ -223,7 +218,6 @@ export function useUserManagement() {
     authStore,
     isConfirmOpen,
     filters,
-    isDrawerOpen,
     selectedUser,
     stats,
     currentPage,
@@ -231,8 +225,6 @@ export function useUserManagement() {
     pageSizeOptions,
     meta,
     pageRange,
-    from,
-    to,
     fetchUsers,
     resetFilters,
     handleSearch,

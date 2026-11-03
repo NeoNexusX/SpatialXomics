@@ -24,7 +24,7 @@ const STATUS_MAP: Record<string, { label: () => string; cls: string }> = {
   inactive: { label: () => t('common.status.inactive'), cls: 'badge-neutral badge-soft bg-base-200 text-base-content/60 border-base-300' },
 }
 
-const props = defineProps<{ status: string; compact?: boolean }>()
+const props = defineProps<{ status: string }>()
 
 const entry = computed(() => STATUS_MAP[props.status.toLowerCase()])
 const label = computed(() => entry.value?.label() ?? props.status)

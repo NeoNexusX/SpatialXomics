@@ -1,4 +1,4 @@
-import { computed, onMounted, reactive, ref, watch, type Ref } from 'vue'
+import { computed, reactive, ref, watch, type Ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   usePreprocessingMethods,
@@ -9,7 +9,6 @@ import {
 import { createProcess } from '@/features/datasets/api/datasetApi'
 import { extractBackendError } from '@/shared/api/httpClient'
 import { useToast } from '@/shared/composables/useToast'
-import { useUserQuota } from '@/shared/composables/useUserQuota'
 import { buildProcessPayload } from '@/features/workspace/analysis/services/buildProcessPayload'
 import { vocabLabel } from '@/features/datasets/constants/vocabLabels'
 import { t } from '@/i18n'
@@ -49,8 +48,6 @@ export function useAnalysisBuilder(
     pixelSize: false,
   })
 
-  // 配额状态复用共享的 useUserQuota（取数逻辑一致）
-  const { quotaData: quota, loading: quotaLoading, fetchQuota } = useUserQuota()
   const submitting = ref(false)
 
   allMethodGroups.forEach((group) => {
@@ -275,16 +272,10 @@ export function useAnalysisBuilder(
     tryAutoFill()
   })
 
-  // Lifecycle
-  onMounted(fetchQuota)
-
   return {
-    allMethodGroups,
     availableMethods,
     modeNotice,
     methodParams,
-    quota,
-    quotaLoading,
     submitting,
     canSubmit,
     pipelineSummary,

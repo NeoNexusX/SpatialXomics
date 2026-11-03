@@ -100,8 +100,8 @@ beforeEach(() => {
 describe('opfsStore', () => {
   it('appends and reads back history lines (jsonl, order preserved)', async () => {
     const store = await loadStore()
-    await store.appendHistoryLine({ id: 'a', role: 'user', content: 'hi' })
-    await store.appendHistoryLine({ id: 'b', role: 'assistant', content: 'hello' })
+    await store.appendHistoryLines([{ id: 'a', role: 'user', content: 'hi' }])
+    await store.appendHistoryLines([{ id: 'b', role: 'assistant', content: 'hello' }])
     const lines = (await store.readHistoryLines()) as { id: string }[]
     expect(lines.map((l) => l.id)).toEqual(['a', 'b'])
   })
@@ -136,7 +136,7 @@ describe('opfsStore', () => {
 
   it('skips corrupted lines instead of failing the whole read', async () => {
     const store = await loadStore()
-    await store.appendHistoryLine({ id: 'ok', role: 'user', content: 'x' })
+    await store.appendHistoryLines([{ id: 'ok', role: 'user', content: 'x' }])
     const dir = await root.getDirectoryHandle('assistant-history', { create: true })
     const handle = await dir.getFileHandle(`${store.getSessionId()}.jsonl`, { create: true })
     const w = await handle.createWritable()
@@ -159,7 +159,7 @@ describe('opfsStore', () => {
     const store = await loadStore()
     const id1 = store.getSessionId()
     expect(store.getSessionId()).toBe(id1)
-    await store.appendHistoryLine({ id: 'a', role: 'user', content: 'x' })
+    await store.appendHistoryLines([{ id: 'a', role: 'user', content: 'x' }])
     await store.writeArchive('c1', 'text')
     await store.clearAssistantOpfs()
     expect(await store.readHistoryLines()).toEqual([])
@@ -169,11 +169,11 @@ describe('opfsStore', () => {
   it('rotateSessionId starts a fresh session file (old one left for trimming)', async () => {
     const store = await loadStore()
     const id1 = store.getSessionId()
-    await store.appendHistoryLine({ id: 'a', role: 'user', content: 'x' })
+    await store.appendHistoryLines([{ id: 'a', role: 'user', content: 'x' }])
     store.rotateSessionId()
     const id2 = store.getSessionId()
     expect(id2).not.toBe(id1)
-    await store.appendHistoryLine({ id: 'b', role: 'user', content: 'y' })
+    await store.appendHistoryLines([{ id: 'b', role: 'user', content: 'y' }])
     // 新会话文件只含新行；旧会话文件原样保留（loadEarlier 显式传 id 可读）
     expect(await store.readHistoryLines()).toEqual([{ id: 'b', role: 'user', content: 'y' }])
     expect(await store.readHistoryLines(id1)).toEqual([{ id: 'a', role: 'user', content: 'x' }])
@@ -184,9 +184,8 @@ describe('opfsStore', () => {
     vi.stubGlobal('navigator', {})
     const store = await import('../utils/opfsStore')
     // 不抛，且返回 false 供调用方决定是否标记「已持久化」
-    expect(await store.appendHistoryLine({ id: 'a', role: 'user', content: 'x' })).toBe(false)
+    expect(await store.appendHistoryLines([{ id: 'a', role: 'user', content: 'x' }])).toBe(false)
     expect(await store.readHistoryLines()).toEqual([])
     expect(await store.writeArchive('c', 't')).toBeNull()
-    expect(await store.opfsAvailable()).toBe(false)
   })
 })

@@ -124,6 +124,10 @@ export default defineConfigWithVueTs(
       'src/features/home/components/HeroScene.vue',
       'src/features/home/components/FooterScene.vue',
       'src/features/home/components/FeatureGallery.vue',
+      // shadcn-vue 组件和基于它们的 AI Elements 模式：text-sm 等已在 assistant-scope 内
+      // 接到全局档位（见 features/assistant/assets/shadcn-bridge.css）。
+      'src/features/assistant/components/ui/**/*.vue',
+      'src/features/assistant/components/ai-elements/**/*.vue',
     ],
     rules: {
       'vue/no-restricted-class': 'off',

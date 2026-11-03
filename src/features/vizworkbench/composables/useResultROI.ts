@@ -31,7 +31,7 @@ export function useResultROI(
     confirmROI: roiConfirmDraft,
     deleteROI: roiDelete,
     clearAllROIs,
-  } = useROI(ionCols, ionRows)
+  } = useROI()
 
   // State
   const roiOverlayRef = ref<InstanceType<typeof ROIOverlay> | null>(null)
@@ -171,7 +171,6 @@ export function useResultROI(
     roiTool,
     confirmedROIs,
     selectedRoiIds,
-    isRoiSelected,
     toggleRoiSelection,
     selectAllRois,
     clearRoiSelection,

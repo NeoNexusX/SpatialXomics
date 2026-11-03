@@ -6,7 +6,6 @@ import {
   kmeansColor,
   roiColorAt,
   rgbCss,
-  rgbHex,
   hexToRgb,
 } from '../regionPalette'
 
@@ -51,10 +50,9 @@ describe('regionPalette', () => {
     expect(keys.size).toBe(REGION_PALETTE.length)
   })
 
-  it('rgbCss / rgbHex / hexToRgb round-trip', () => {
+  it('rgbCss / hexToRgb round-trip', () => {
     const c = { r: 31, g: 119, b: 180 }
     expect(rgbCss(c)).toBe('rgb(31,119,180)')
-    expect(rgbHex(c)).toBe('#1f77b4')
     expect(hexToRgb('#1f77b4')).toEqual(c)
     expect(hexToRgb('1f77b4')).toEqual(c)
     expect(hexToRgb('#zzz')).toBeNull()

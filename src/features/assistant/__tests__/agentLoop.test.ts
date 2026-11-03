@@ -1,14 +1,48 @@
-﻿import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Context } from 'cordis'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
+import { connectionProvider } from '../providers/connection'
 import { llmProvider } from '../providers/llm'
 import { toolsProvider } from '../providers/tools'
 import { skillsProvider } from '../providers/skills'
-import { agentLoopProvider } from '../plugins/agentLoop'
+import { agentLoopProvider, assistantText } from '../plugins/agentLoop'
 import { defineTool } from '../tools/defineTool'
+import { COMPACT_SUMMARY_MAX_TOKENS } from '../agentconfig/defaults'
 import { readArchive } from '../utils/opfsStore'
 import { STORAGE_KEYS } from '@/shared/config/storageKeys'
 import { t } from '@/i18n'
-import type { ChatMessage, StreamChunk, GenerateOptions, LlmAdapter } from '../agenttypes/assistant'
+import type {
+  AssistantMessage,
+  AssistantPart,
+  ChatMessage,
+  GenerateOptions,
+  LlmAdapter,
+  StreamChunk,
+  ToolMessage,
+  UserMessage,
+} from '../agenttypes/assistant'
+
+/** 一次只有正文的模型回复 */
+function textReply(text: string): StreamChunk[] {
+  return [
+    { type: 'text-delta', text },
+    { type: 'finish', reason: 'stop', parts: [{ type: 'text', text }] },
+  ]
+}
+
+/** 一次调用工具的模型回复 */
+function toolReply(id: string, name: string, input: unknown = {}): StreamChunk[] {
+  return [{ type: 'finish', reason: 'tool-calls', parts: [{ type: 'tool-call', id, name, input }] }]
+}
+
+const assistant = (text: string): AssistantMessage => ({
+  role: 'assistant',
+  parts: [{ type: 'text', text }],
+})
+
+const toolCalling = (...ids: string[]): AssistantMessage => ({
+  role: 'assistant',
+  parts: ids.map((id) => ({ type: 'tool-call', id, name: 'x', input: {} })),
+})
 
 /** 构造一个可控 LLM 适配器 */
 function mockAdapter(chunks: StreamChunk[][]): {
@@ -18,34 +52,43 @@ function mockAdapter(chunks: StreamChunk[][]): {
   const calls: GenerateOptions[] = []
   let idx = 0
   const adapter: LlmAdapter = {
-    provider: 'mock',
-    async *stream(options: GenerateOptions, _signal: AbortSignal) {
+    endpoint: 'anthropic',
+    async *stream(options) {
       calls.push({ ...options })
-      const batch = chunks[idx++] || []
-      for (const c of batch) {
-        yield c
-      }
+      for (const c of chunks[idx++] || []) yield c
     },
+    listModels: async () => [],
+    probeVision: async () => 'vision',
   }
   return { adapter, calls }
 }
 
-async function setupAgent(mockChunks: StreamChunk[][]) {
+async function setupAgent(mockChunks: StreamChunk[][], customAdapter?: LlmAdapter) {
   const ctx = new Context()
   // 逐个 await 插件 fiber：服务的属性注入在插件启动后才可用，
   // 只 flush 微任务队列（await Promise.resolve()）不够，会报
   // "cannot get property \"tools\" without inject"
+  await ctx.plugin(connectionProvider)
   await ctx.plugin(llmProvider)
   await ctx.plugin(toolsProvider)
   await ctx.plugin(skillsProvider)
   await ctx.plugin(agentLoopProvider)
 
   const { adapter, calls } = mockAdapter(mockChunks)
-  ctx.llm.registerAdapter('mock', adapter)
-  ;(ctx.llm as any).defaultProvider = 'mock'
+  ctx.llm.registerAdapter(customAdapter ?? adapter)
 
   return { ctx, calls }
 }
+
+function userMessage(messages: ChatMessage[], content: string): number {
+  return messages.findIndex((m) => m.role === 'user' && m.content === content)
+}
+
+const agentInternals = (ctx: Context) =>
+  ctx.agent as unknown as {
+    setHistory(m: ChatMessage[]): void
+    trimHistory(): Promise<void>
+  }
 
 // ---- 内存 OPFS（存档链路测试用；与 opfsStore.test.ts 的 Fake 同构） ----
 
@@ -103,10 +146,10 @@ async function setupAgentWithOpfs(mockChunks: StreamChunk[][]) {
 
 describe('AgentLoop', () => {
   beforeEach(() => {
-    // send() 的 BYOK 前置检查需要可用凭据（测试环境无 VITE_LLM_* env，种一份用户配置）
+    // send() 的前置检查需要可用连接（测试环境无 VITE_LLM_* env，种一份用户设置）
     localStorage.setItem(
-      STORAGE_KEYS.assistantLlmConfig,
-      JSON.stringify({ baseUrl: 'https://llm.test', apiKey: 'sk-test', model: '' }),
+      STORAGE_KEYS.assistantConnection,
+      JSON.stringify({ endpoint: 'anthropic', baseUrl: 'https://llm.test', apiKey: 'sk-test', model: 'm' }),
     )
   })
 
@@ -119,7 +162,7 @@ describe('AgentLoop', () => {
       [
         { type: 'text-delta', text: 'Hello' },
         { type: 'text-delta', text: ' world' },
-        { type: 'finish', reason: 'stop' },
+        { type: 'finish', reason: 'stop', parts: [{ type: 'text', text: 'Hello world' }] },
       ],
     ])
 
@@ -141,17 +184,8 @@ describe('AgentLoop', () => {
 
   it('handles tool calls and feeds results back', async () => {
     const { ctx, calls } = await setupAgent([
-      // step 1: tool call
-      [
-        { type: 'tool-call-delta', index: 0, id: 'call_1', name: 'add' },
-        { type: 'tool-call-delta', index: 0, argumentsDelta: '{"a":1,"b":2}' },
-        { type: 'finish', reason: 'tool-calls' },
-      ],
-      // step 2: final text
-      [
-        { type: 'text-delta', text: 'Result: 3' },
-        { type: 'finish', reason: 'stop' },
-      ],
+      toolReply('call_1', 'add', { a: 1, b: 2 }),
+      textReply('Result: 3'),
     ])
 
     // 注册测试工具
@@ -172,31 +206,25 @@ describe('AgentLoop', () => {
 
     const toolCalls: string[] = []
     const toolResults: string[] = []
-    ctx.on('assistant/tool-call', (name: string) => toolCalls.push(name))
-    ctx.on('assistant/tool-result', (name: string, isError: boolean) =>
-      toolResults.push(`${name}:err=${isError}`),
+    ctx.on('assistant/tool-call', (id: string, name: string) => toolCalls.push(`${id}:${name}`))
+    ctx.on('assistant/tool-result', (id: string, isError: boolean) =>
+      toolResults.push(`${id}:err=${isError}`),
     )
 
     await ctx.agent.send('add 1 and 2')
 
-    expect(toolCalls).toEqual(['add'])
-    expect(toolResults).toEqual(['add:err=false'])
+    expect(toolCalls).toEqual(['call_1:add'])
+    expect(toolResults).toEqual(['call_1:err=false'])
     expect(calls.length).toBe(2)
+    const toolMessage = calls[1]!.messages.find((m) => m.role === 'tool') as ToolMessage
+    expect(toolMessage.content).toBe('1 + 2 = 3')
+    expect(toolMessage.toolCallId).toBe('call_1')
   })
 
   it('stops on abort', async () => {
-    const { ctx } = await setupAgent([
-      // 一个永远不结束的流
-      [
-        { type: 'text-delta', text: 'thinking...' },
-        // 没有 finish — 流持续等待
-      ],
-    ])
-
-    // 覆盖 mockAdapter 为永不结束的流
     const adapter: LlmAdapter = {
-      provider: 'mock2',
-      async *stream(_options: GenerateOptions, signal: AbortSignal) {
+      endpoint: 'anthropic',
+      async *stream(_options, _connection, signal) {
         yield { type: 'text-delta', text: 'thinking...' }
         // 等待，直到 abort
         await new Promise<void>((resolve) => {
@@ -207,9 +235,10 @@ describe('AgentLoop', () => {
           signal.addEventListener('abort', onAbort)
         })
       },
+      listModels: async () => [],
+      probeVision: async () => 'vision',
     }
-    ctx.llm.registerAdapter('mock2', adapter)
-    ;(ctx.llm as any).defaultProvider = 'mock2'
+    const { ctx } = await setupAgent([], adapter)
 
     const events: string[] = []
     ctx.on('assistant/turn-end', (aborted: boolean) => events.push(`end:${aborted}`))
@@ -226,7 +255,7 @@ describe('AgentLoop', () => {
   it('does not push a tool message after abort lands during archiving', async () => {
     // 中止落在 writeArchive 窗口内（OPFS 写入挂起期间 stop）：工具结果不得
     // 回列——迟到的 tool 消息会排到下一 turn 的 user 消息之后，而其配对的
-    // tool_calls 在更早处，OpenAI/Anthropic 两种协议都对此 400 且无修复路径。
+    // tool_use 在更早处，端点对此 400 且无修复路径。
     // 回归：旧实现只在工具循环顶部检查 aborted，await writeArchive 之后直推。
     let releaseTool!: () => void
     let releaseWrite!: () => void
@@ -260,23 +289,10 @@ describe('AgentLoop', () => {
     vi.stubGlobal('navigator', { storage: { getDirectory: async () => slowRoot } })
 
     const { ctx, calls } = await setupAgent([
-      [
-        { type: 'tool-call-delta', index: 0, id: 'call_1', name: 'slow' },
-        { type: 'tool-call-delta', index: 0, argumentsDelta: '{}' },
-        { type: 'finish', reason: 'tool-calls' },
-      ],
-      [
-        { type: 'text-delta', text: 'ok' },
-        { type: 'finish', reason: 'stop' },
-      ],
-      [
-        { type: 'text-delta', text: 'ok2' },
-        { type: 'finish', reason: 'stop' },
-      ],
-      [
-        { type: 'text-delta', text: 'ok3' },
-        { type: 'finish', reason: 'stop' },
-      ],
+      toolReply('call_1', 'slow'),
+      textReply('ok'),
+      textReply('ok2'),
+      textReply('ok3'),
     ])
     ctx.tools.register(
       defineTool({
@@ -309,28 +325,18 @@ describe('AgentLoop', () => {
     // 迟到 push 之后的请求快照才能看到乱序（每步 messages 是新数组快照）
     await ctx.agent.send('third question')
 
-    const userIdx = calls[1]!.messages.findIndex(
-      (m) => m.role === 'user' && m.content === 'next question',
-    )
-    expect(userIdx).toBeGreaterThanOrEqual(0)
+    expect(userMessage(calls[1]!.messages, 'next question')).toBeGreaterThanOrEqual(0)
     for (const c of calls.slice(2)) {
-      const idx = c.messages.findIndex(
-        (m) => m.role === 'user' && m.content === 'next question',
-      )
+      const idx = userMessage(c.messages, 'next question')
       expect(idx).toBeGreaterThanOrEqual(0)
-      // user('next question') 之后不得出现任何 role:'tool'（其配对的
-      // tool_calls 在 user 之前——两种协议都对此 400）
+      // user('next question') 之后不得出现任何 tool 消息（其配对的 tool_use 在 user 之前）
       expect(c.messages.slice(idx + 1).filter((m) => m.role === 'tool')).toHaveLength(0)
     }
   })
 
   it('stops at MAX_AGENT_STEPS', async () => {
-    // 构造永远返回 tool_calls 的适配器（死循环模拟）
-    const steps: StreamChunk[][] = Array.from({ length: 10 }, (_, i) => [
-      { type: 'tool-call-delta', index: 0, id: `call_${i}`, name: 'add' },
-      { type: 'tool-call-delta', index: 0, argumentsDelta: '{"a":1,"b":1}' },
-      { type: 'finish', reason: 'tool-calls' },
-    ])
+    // 构造永远返回工具调用的适配器（死循环模拟）
+    const steps = Array.from({ length: 10 }, (_, i) => toolReply(`call_${i}`, 'add', { a: 1, b: 1 }))
 
     const { ctx } = await setupAgent(steps)
 
@@ -350,18 +356,19 @@ describe('AgentLoop', () => {
     )
 
     const doneMessages: string[] = []
-    ctx.on('assistant/message-done', (msg: { content: string | null }) => {
-      doneMessages.push(msg.content || '')
-    })
+    const deltas: string[] = []
+    ctx.on('assistant/message-done', (msg) => doneMessages.push(assistantText(msg)))
+    ctx.on('assistant/message-delta', (d) => deltas.push(d))
 
     await ctx.agent.send('loop')
 
-    const lastMsg = doneMessages[doneMessages.length - 1]!
-    expect(lastMsg).toContain('Maximum steps')
+    expect(doneMessages[doneMessages.length - 1]).toContain('Maximum steps')
+    // 提示要让用户看到，不能只进历史
+    expect(deltas.join('')).toContain('Maximum steps')
   })
 
-  it('blocks send and emits guidance error when no LLM is configured', async () => {
-    localStorage.removeItem(STORAGE_KEYS.assistantLlmConfig)
+  it('blocks send and emits guidance error when no connection is configured', async () => {
+    localStorage.removeItem(STORAGE_KEYS.assistantConnection)
     const { ctx } = await setupAgent([])
 
     const events: string[] = []
@@ -375,129 +382,269 @@ describe('AgentLoop', () => {
 
     await ctx.agent.send('hello')
 
-    // 不发起 LLM 请求，走 turn-start → error → turn-end 事件流供 UI 出错误气泡
+    // 不发起 LLM 请求，走 turn-start → error → turn-end 事件流供 UI 出错误提示
     expect(events).toEqual(['turn-start', 'error', 'turn-end'])
     // 文案走 i18n（测试环境语言包可能未 merge，t() 会原样返回 key，故与 t() 对齐断言）
     expect(errorMessage).toBe(t('common.assistant.noApiConfigured'))
     expect(ctx.agent.getHistory()).toEqual([])
   })
 
-  // ---- trimHistory：窗口必须 user 开头且非空（Anthropic 硬约束） ----
+  // ---- 思考块回放 ----
 
-  /** user + N×(assistant(tool_calls) + tool) + 收尾 assistant 的历史 */
-  function toolHeavyHistory(steps: number, toolPerStep = 1): ChatMessage[] {
-    const hist: ChatMessage[] = [{ role: 'user', content: 'q' }]
-    for (let i = 0; i < steps; i++) {
-      hist.push({
-        role: 'assistant',
-        content: null,
-        tool_calls: Array.from({ length: toolPerStep }, (_, j) => ({
-          id: `c${i}_${j}`,
-          name: 'x',
-          arguments: '{}',
-        })),
-      })
-      for (let j = 0; j < toolPerStep; j++) {
-        hist.push({ role: 'tool', content: 'r', tool_call_id: `c${i}_${j}`, name: 'x' })
-      }
-    }
-    hist.push({ role: 'assistant', content: 'final' })
-    return hist
+  const THINKING: AssistantPart = {
+    type: 'reasoning',
+    text: 'I should call the tool',
+    replay: { signature: 'sig-1' },
   }
 
-  it('trimHistory keeps the window opening with a user message', async () => {
-    const { ctx } = await setupAgent([])
-    const agent = ctx.agent as unknown as {
-      setHistory(m: ChatMessage[]): void
-      trimHistory(): Promise<void>
-    }
-    // 22 条：跳过 tool 后窗口以 assistant(tool_calls) 开头——旧实现原样保留，
-    // Anthropic 端点对 assistant-first 一律 400 且此后每轮都炸
-    agent.setHistory(toolHeavyHistory(10))
-    await agent.trimHistory()
-    const h = ctx.agent.getHistory()
-    expect(h.length).toBeGreaterThan(1)
-    expect(h[0]!.role).toBe('user')
+  it('keeps thinking blocks in order and replays them in later steps and later turns', async () => {
+    const ordered: AssistantPart[] = [
+      THINKING,
+      { type: 'text', text: 'Let me check.' },
+      { type: 'tool-call', id: 'call_1', name: 'noop', input: {} },
+    ]
+    const { ctx, calls } = await setupAgent([
+      [{ type: 'finish', reason: 'tool-calls', parts: ordered }],
+      textReply('done'),
+      textReply('next answer'),
+    ])
+    ctx.tools.register(
+      defineTool({ name: 'noop', description: 'noop', parameters: {}, execute: async () => 'ok' }),
+    )
+
+    await ctx.agent.send('first')
+    await ctx.agent.send('second')
+
+    const replayed = (messages: ChatMessage[]) =>
+      (messages.find((m) => m.role === 'assistant') as AssistantMessage).parts
+    // 同一回合的下一步
+    expect(replayed(calls[1]!.messages)).toEqual(ordered)
+    // 下一回合：带 tools 的请求要求所有历史回合的思考块都回传
+    expect(replayed(calls[2]!.messages)).toEqual(ordered)
   })
 
-  it('trimHistory never produces an empty window (>=20 parallel tool results)', async () => {
-    const { ctx } = await setupAgent([])
-    const agent = ctx.agent as unknown as {
-      setHistory(m: ChatMessage[]): void
-      trimHistory(): Promise<void>
-    }
-    // 22 条且尾部 20 条全是 tool：旧实现的 tool 跳过循环会推进到末尾，
-    // slice 出空数组（两家端点都 400）；新实现回退到 user 起点
-    agent.setHistory(toolHeavyHistory(1, 20))
-    await agent.trimHistory()
-    const h = ctx.agent.getHistory()
-    expect(h.length).toBeGreaterThan(0)
-    expect(h[0]!.role).toBe('user')
+  it('freezes the system prompt within a turn', async () => {
+    const { ctx, calls } = await setupAgent([toolReply('call_1', 'noop'), textReply('done')])
+    ctx.tools.register(
+      defineTool({ name: 'noop', description: 'noop', parameters: {}, execute: async () => 'ok' }),
+    )
+    const assemble = vi.spyOn(ctx.agent as never, 'assembleSystemPrompt' as never)
+
+    await ctx.agent.send('go')
+
+    expect(assemble).toHaveBeenCalledTimes(1)
+    expect(calls[0]!.system).toBe(calls[1]!.system)
   })
+
+  it('does not edit history in the middle of a turn', async () => {
+    const IMG = 'data:image/png;base64,AAAA'
+    const { ctx, calls } = await setupAgent([
+      toolReply('call_1', 'noop'),
+      toolReply('call_2', 'noop'),
+      toolReply('call_3', 'noop'),
+      textReply('done'),
+    ])
+    ctx.tools.register(
+      defineTool({ name: 'noop', description: 'noop', parameters: {}, execute: async () => 'ok' }),
+    )
+
+    await ctx.agent.send('look', [IMG])
+
+    // 工具轮次把带图消息推出了「最近 4 条」窗口，回合内也不能替换它
+    const user = calls[3]!.messages[0] as UserMessage
+    expect(user.images).toEqual([IMG])
+    expect(user.content).toBe('look')
+  })
+
+  // ---- 中断后的历史 ----
+
+  it('answers interrupted tool calls before the next turn', async () => {
+    let releaseTool!: () => void
+    const { ctx, calls } = await setupAgent([
+      [
+        {
+          type: 'finish',
+          reason: 'tool-calls',
+          parts: [
+            { type: 'tool-call', id: 'call_a', name: 'slow', input: {} },
+            { type: 'tool-call', id: 'call_b', name: 'slow', input: {} },
+          ],
+        },
+      ],
+      textReply('recovered'),
+    ])
+    ctx.tools.register(
+      defineTool({
+        name: 'slow',
+        description: 'slow',
+        parameters: {},
+        execute: () => new Promise<string>((r) => (releaseTool = () => r('late'))),
+      }),
+    )
+
+    const first = ctx.agent.send('run')
+    await new Promise((r) => setTimeout(r, 20))
+    ctx.agent.stop()
+    releaseTool()
+    await first
+    await ctx.agent.send('continue')
+
+    const messages = calls[1]!.messages
+    const idx = userMessage(messages, 'continue')
+    const results = messages.slice(0, idx).filter((m): m is ToolMessage => m.role === 'tool')
+    expect(results.map((m) => m.toolCallId).sort()).toEqual(['call_a', 'call_b'])
+    expect(results.every((m) => m.isError)).toBe(true)
+  })
+
+  it('dropLastTurn rewinds to before the last user message', async () => {
+    const { ctx } = await setupAgent([])
+    ctx.agent.setHistory([
+      { role: 'user', content: 'one' },
+      assistant('reply one'),
+      { role: 'user', content: 'two' },
+      toolCalling('c1'),
+      { role: 'tool', toolCallId: 'c1', name: 'x', content: 'r' },
+    ])
+    ctx.agent.dropLastTurn()
+    expect(ctx.agent.getHistory()).toEqual([{ role: 'user', content: 'one' }, assistant('reply one')])
+  })
+
+  // ---- 结束原因 ----
+
+  it('reports errors without writing the partial reply to history', async () => {
+    const { ctx } = await setupAgent([
+      [
+        { type: 'text-delta', text: 'partial' },
+        { type: 'finish', reason: 'error', parts: [], error: 'HTTP 500' },
+      ],
+    ])
+    const errors: string[] = []
+    ctx.on('assistant/error', (m: string) => errors.push(m))
+
+    await ctx.agent.send('q')
+
+    expect(errors).toEqual(['HTTP 500'])
+    expect(ctx.agent.getHistory()).toEqual([{ role: 'user', content: 'q' }])
+  })
+
+  it('reports refusals with a dedicated message', async () => {
+    const { ctx } = await setupAgent([[{ type: 'finish', reason: 'refusal', parts: [] }]])
+    const errors: string[] = []
+    ctx.on('assistant/error', (m: string) => errors.push(m))
+
+    await ctx.agent.send('q')
+
+    expect(errors).toEqual([t('common.assistant.errors.refused')])
+  })
+
+  it('keeps the text but runs no tools when the output limit is hit', async () => {
+    const { ctx, calls } = await setupAgent([
+      [
+        {
+          type: 'finish',
+          reason: 'length',
+          parts: [
+            { type: 'text', text: 'long answer' },
+            { type: 'tool-call', id: 'c1', name: 'noop', input: {} },
+          ],
+        },
+      ],
+    ])
+    const errors: string[] = []
+    ctx.on('assistant/error', (m: string) => errors.push(m))
+
+    await ctx.agent.send('q')
+
+    expect(calls.length).toBe(1)
+    expect(errors).toEqual([t('common.assistant.errors.outputLimit')])
+    expect(ctx.agent.getHistory()[1]).toEqual(assistant('long answer'))
+  })
+
+  it('does not write a thinking-only reply to history', async () => {
+    const { ctx } = await setupAgent([[{ type: 'finish', reason: 'stop', parts: [THINKING] }]])
+    await ctx.agent.send('q')
+    expect(ctx.agent.getHistory()).toEqual([{ role: 'user', content: 'q' }])
+  })
+
+  // ---- trimHistory ----
 
   it('trimHistory archives and stubs oversized tool results under the char budget', async () => {
     const { ctx, root } = await setupAgentWithOpfs([])
-    const agent = ctx.agent as unknown as {
-      setHistory(m: ChatMessage[]): void
-      trimHistory(): Promise<void>
-    }
-    // user + 34×tool(1900) ≈ 64.6k > 60k 预算：条数裁剪回退到 user 后窗口
-    // 含全部 35 条，预算从最旧开始把超 TOOL_STUB_KEEP 的 tool 结果压成
-    // 「前缀 + 存档指针」存根，全文可 readArchive 取回。
-    // 注意 setHistory 存的是同一数组引用，trimHistory 原地改写 content——
-    // 先快照原文再断言。
+    // user + 34×tool(1900) ≈ 64.6k > 60k 预算：预算从最旧开始把超 TOOL_STUB_KEEP 的
+    // tool 结果压成「前缀 + 存档指针」存根，全文可 readArchive 取回。
     const hist: ChatMessage[] = [{ role: 'user', content: 'q' }]
+    const originals: string[] = []
     for (let i = 0; i < 34; i++) {
-      hist.push({ role: 'tool', content: `${i}:` + 'x'.repeat(1890), tool_call_id: `bk_${i}`, name: 'x' })
+      const content = `${i}:` + 'x'.repeat(1890)
+      originals.push(content)
+      hist.push({ role: 'tool', content, toolCallId: `bk_${i}`, name: 'x' })
     }
-    const originalContents = hist.map((m) => m.content)
-    agent.setHistory(hist)
-    await agent.trimHistory()
+    agentInternals(ctx).setHistory(hist)
+    await agentInternals(ctx).trimHistory()
 
-    const h = ctx.agent.getHistory()
-    expect(h.length).toBeGreaterThan(0)
-    expect(h[0]!.role).toBe('user')
-    const stubbed = h.filter((m) => m.role === 'tool' && m.content!.includes('read_archived_result('))
+    const tools = ctx.agent.getHistory().filter((m): m is ToolMessage => m.role === 'tool')
+    const stubbed = tools.filter((m) => m.content.includes('read_archived_result('))
     expect(stubbed.length).toBeGreaterThan(0)
     for (const m of stubbed) {
-      expect(m.content!.length).toBeLessThan(700)
+      expect(m.content.length).toBeLessThan(700)
       expect(m.content).toContain('full result archived')
     }
     // 存根前的全文已在 OPFS 存档（首条验内容逐字一致）
-    expect(await readArchive('bk_0')).toBe(originalContents[1])
-    const lastStub = stubbed[stubbed.length - 1]!
-    expect(await readArchive(lastStub.tool_call_id!)).toMatch(/^(\d+):x+$/)
+    expect(await readArchive('bk_0')).toBe(originals[0])
+    expect(await readArchive(stubbed[stubbed.length - 1]!.toolCallId)).toMatch(/^(\d+):x+$/)
     // 预算达标后停止压缩：较新的 tool 结果保持完整
-    expect(h.some((m) => m.role === 'tool' && !m.content!.includes('read_archived_result('))).toBe(true)
+    expect(tools.some((m) => !m.content.includes('read_archived_result('))).toBe(true)
     expect(root).toBeDefined()
   })
 
   it('trimHistory compresses replies that merely MENTION read_archived_result (anchored stub check)', async () => {
     const { ctx } = await setupAgent([])
-    const agent = ctx.agent as unknown as {
-      setHistory(m: ChatMessage[]): void
-      trimHistory(): Promise<void>
-    }
-    // 旧实现用无锚点 includes('read_archived_result(')：assistant 正文里
-    // 引用过函数名的消息被误判成存根、永远免于压缩，字符预算被架空
+    // 正文中引用函数名 ≠ 存根：该回复仍要被预算压缩
     const mention =
       'I retrieved the full listing via read_archived_result("call_x") and here is my summary. ' +
       'y'.repeat(65000)
-    const hist: ChatMessage[] = [
+    agentInternals(ctx).setHistory([
       { role: 'user', content: 'q' },
-      { role: 'assistant', content: mention },
+      assistant(mention),
       { role: 'user', content: 'thanks' },
-      { role: 'assistant', content: 'done' },
+      assistant('done'),
       { role: 'user', content: 'bye' },
-      { role: 'assistant', content: 'bye' },
-    ]
-    agent.setHistory(hist)
-    await agent.trimHistory()
-    const m = ctx.agent.getHistory().find((x) => x.content?.includes('retrieved the full listing'))
-    // 正文中引用函数名 ≠ 存根：该回复仍要被预算压缩
-    expect(m).toBeDefined()
-    expect(m!.content!.length).toBeLessThanOrEqual(2000 + 100)
-    expect(m!.content).toContain('[earlier reply truncated for context budget]')
+      assistant('bye'),
+    ])
+    await agentInternals(ctx).trimHistory()
+    const text = assistantText(ctx.agent.getHistory()[1] as AssistantMessage)
+    expect(text.length).toBeLessThanOrEqual(2000 + 100)
+    expect(text).toContain('[earlier reply truncated for context budget]')
+  })
+
+  it('trimHistory leaves thinking blocks and tool calls alone when shortening a reply', async () => {
+    const { ctx } = await setupAgent([])
+    const call: AssistantPart = { type: 'tool-call', id: 'c1', name: 'x', input: {} }
+    agentInternals(ctx).setHistory([
+      { role: 'user', content: 'q' },
+      { role: 'assistant', parts: [THINKING, { type: 'text', text: 'y'.repeat(65000) }, call] },
+      { role: 'tool', toolCallId: 'c1', name: 'x', content: 'r' },
+      { role: 'user', content: 'next' },
+      assistant('a'),
+      { role: 'user', content: 'latest' },
+    ])
+    await agentInternals(ctx).trimHistory()
+    const { parts } = ctx.agent.getHistory()[1] as AssistantMessage
+    expect(parts[0]).toEqual(THINKING)
+    expect(parts[2]).toEqual(call)
+    expect((parts[1] as { text: string }).text.length).toBeLessThan(2200)
+  })
+
+  it('does not slide a message-count window over history', async () => {
+    const { ctx } = await setupAgent([])
+    const hist: ChatMessage[] = [{ role: 'user', content: 'q' }]
+    for (let i = 0; i < 30; i++) {
+      hist.push(toolCalling(`c${i}`))
+      hist.push({ role: 'tool', toolCallId: `c${i}`, name: 'x', content: 'r' })
+    }
+    agentInternals(ctx).setHistory(hist)
+    await agentInternals(ctx).trimHistory()
+    expect(ctx.agent.getHistory()).toHaveLength(hist.length)
   })
 
   // ---- 自动 Compact（maybeCompact：阈值触发 → 摘要替换旧历史） ----
@@ -506,23 +653,17 @@ describe('AgentLoop', () => {
   function oversizedHistory(): ChatMessage[] {
     return [
       { role: 'user', content: '分析一下这些数据' },
-      { role: 'assistant', content: 'A'.repeat(30_000) },
+      assistant('A'.repeat(30_000)),
       { role: 'user', content: '继续' },
-      { role: 'assistant', content: 'B'.repeat(20_000) },
+      assistant('B'.repeat(20_000)),
     ] // ≈50k > 40k 触发线
   }
 
   it('auto-compacts oversized history at turn boundary and emits assistant/compacted', async () => {
     // chunk 批次顺序：第 1 批给 compact 摘要请求，第 2 批给正常 turn
     const { ctx, calls } = await setupAgent([
-      [
-        { type: 'text-delta', text: '## Confirmed findings\n- PC 34:1 high confidence' },
-        { type: 'finish', reason: 'stop' },
-      ],
-      [
-        { type: 'text-delta', text: 'OK, continuing.' },
-        { type: 'finish', reason: 'stop' },
-      ],
+      textReply('## Confirmed findings\n- PC 34:1 high confidence'),
+      textReply('OK, continuing.'),
     ])
     ctx.agent.setHistory(oversizedHistory())
 
@@ -534,50 +675,48 @@ describe('AgentLoop', () => {
     // 摘要请求确实发出：2 次调用（compact + turn），compact 请求不带 tools
     expect(calls.length).toBe(2)
     expect(calls[0]!.tools).toBeUndefined()
-    expect(calls[0]!.maxTokens).toBe(2_000)
+    expect(calls[0]!.maxTokens).toBe(COMPACT_SUMMARY_MAX_TOKENS)
 
     // 旧历史被替换为 [压缩标记 user, 摘要 assistant, 新 user, 本 turn 回复]
     const h = ctx.agent.getHistory()
     expect(h.length).toBe(4)
-    expect(h[0]!.role).toBe('user')
-    expect(h[0]!.content).toContain('compacted')
-    expect(h[1]!.role).toBe('assistant')
-    expect(h[1]!.content).toContain('PC 34:1')
-    expect(h[2]!.content).toBe('下一步')
-    expect(h[3]!.content).toBe('OK, continuing.')
+    expect((h[0] as UserMessage).content).toContain('compacted')
+    expect(assistantText(h[1] as AssistantMessage)).toContain('PC 34:1')
+    expect((h[2] as UserMessage).content).toBe('下一步')
+    expect(assistantText(h[3] as AssistantMessage)).toBe('OK, continuing.')
     expect(compacted).not.toBeNull()
     expect(compacted![0]).toBeGreaterThan(40_000)
     expect(compacted![1]).toBeLessThan(1_000)
   })
 
   it('does not compact below the trigger threshold', async () => {
-    const { ctx, calls } = await setupAgent([
-      [
-        { type: 'text-delta', text: 'short answer' },
-        { type: 'finish', reason: 'stop' },
-      ],
-    ])
-    ctx.agent.setHistory([
-      { role: 'user', content: 'q' },
-      { role: 'assistant', content: 'a'.repeat(1_000) },
-    ])
+    const { ctx, calls } = await setupAgent([textReply('short answer')])
+    ctx.agent.setHistory([{ role: 'user', content: 'q' }, assistant('a'.repeat(1_000))])
     await ctx.agent.send('next')
     // 只有正常 turn 一次调用；历史原样 + 新 user + 回复
     expect(calls.length).toBe(1)
     const h = ctx.agent.getHistory()
     expect(h.length).toBe(4)
-    expect(h[2]!.content).toBe('next')
+    expect((h[2] as UserMessage).content).toBe('next')
+  })
+
+  it('counts an image as a flat cost so one screenshot does not trigger compaction', async () => {
+    const { ctx, calls } = await setupAgent([textReply('answer')])
+    ctx.agent.setHistory([
+      { role: 'user', content: 'look', images: ['data:image/png;base64,' + 'x'.repeat(500_000)] },
+      assistant('seen'),
+    ])
+    await ctx.agent.send('tell me more about it')
+    expect(calls.length).toBe(1)
+    expect((ctx.agent.getHistory()[0] as UserMessage).images).toHaveLength(1)
   })
 
   it('compact failure (empty summary) silently falls back — user message still goes through', async () => {
     // 第 1 批 = compact 请求只吐 finish（空流）→ 摘要为空 → 放弃压缩；
     // 第 2 批 = 正常 turn 照常进行
     const { ctx, calls } = await setupAgent([
-      [{ type: 'finish', reason: 'stop' }],
-      [
-        { type: 'text-delta', text: 'recovered' },
-        { type: 'finish', reason: 'stop' },
-      ],
+      [{ type: 'finish', reason: 'stop', parts: [] }],
+      textReply('recovered'),
     ])
     ctx.agent.setHistory(oversizedHistory())
     let compacted = false
@@ -590,27 +729,18 @@ describe('AgentLoop', () => {
     // 但用户消息正常入列、turn 正常完成
     const h = ctx.agent.getHistory()
     expect(h.length).toBe(6)
-    expect(h[4]!.content).toBe('下一步')
+    expect((h[4] as UserMessage).content).toBe('下一步')
     expect(calls.length).toBe(2)
   })
 
   it('compact history after a tool-heavy turn has no dangling tool messages', async () => {
-    const { ctx } = await setupAgent([
-      [
-        { type: 'text-delta', text: 'summary of tool work' },
-        { type: 'finish', reason: 'stop' },
-      ],
-      [
-        { type: 'text-delta', text: 'done' },
-        { type: 'finish', reason: 'stop' },
-      ],
-    ])
-    // 完整工具轮历史（assistant(tool_calls)+tool 配对完整），总量超线
-    const hist = toolHeavyHistory(10)
+    const { ctx } = await setupAgent([textReply('summary of tool work'), textReply('done')])
+    const hist: ChatMessage[] = [{ role: 'user', content: 'q' }]
     for (let i = 0; i < 10; i++) {
-      const t = hist.find((m) => m.role === 'tool' && m.tool_call_id === `c${i}_0`)
-      if (t) t.content = 'r'.repeat(4_500) // ≈45k > 40k
+      hist.push(toolCalling(`c${i}`))
+      hist.push({ role: 'tool', toolCallId: `c${i}`, name: 'x', content: 'r'.repeat(4_500) }) // ≈45k > 40k
     }
+    hist.push(assistant('final'))
     ctx.agent.setHistory(hist)
     await ctx.agent.send('continue')
 
@@ -624,16 +754,7 @@ describe('AgentLoop', () => {
 
   it('archives the full tool result and appends a recovery pointer when truncated', async () => {
     const longText = 'FULL-RESULT-'.repeat(300) // 3600 字符 > TOOL_RESULT_CHARS
-    const { ctx } = await setupAgentWithOpfs([
-      // step 1: tool call
-      [
-        { type: 'tool-call-delta', index: 0, id: 'call_big', name: 'big' },
-        { type: 'tool-call-delta', index: 0, argumentsDelta: '{}' },
-        { type: 'finish', reason: 'tool-calls' },
-      ],
-      // step 2: final text
-      [{ type: 'text-delta', text: 'done' }, { type: 'finish', reason: 'stop' }],
-    ])
+    const { ctx } = await setupAgentWithOpfs([toolReply('call_big', 'big'), textReply('done')])
 
     ctx.tools.register(
       defineTool({
@@ -649,11 +770,9 @@ describe('AgentLoop', () => {
     await ctx.agent.send('run big')
 
     // ToolRuntime 截断到 ≤2000，但完整全文进了 OPFS 存档
-    const toolMsg = ctx.agent
-      .getHistory()
-      .find((m) => m.role === 'tool') as (ChatMessage & { tool_call_id?: string }) | undefined
+    const toolMsg = ctx.agent.getHistory().find((m): m is ToolMessage => m.role === 'tool')
     expect(toolMsg).toBeDefined()
-    expect(toolMsg!.content!.length).toBeLessThan(2100)
+    expect(toolMsg!.content.length).toBeLessThan(2100)
     expect(toolMsg!.content).toContain('read_archived_result("call_big")')
     expect(await readArchive('call_big')).toBe(longText)
   })
@@ -698,84 +817,50 @@ describe('AgentLoop', () => {
     expect(large.fullContent).toHaveLength(2500)
   })
 
-  // ---- 多模态图片：拒图 400 的历史善后 ----
+  // ---- 多模态图片 ----
 
-  it('strips images from persistent history when the adapter reports the model rejected images', async () => {
-    // openaiAdapter 拒图降级（rejectsImages → stripImages 重发）时会回调
-    // setOnImagesRejected：持久 history 里 user 消息的 images 必须被清掉，
-    // 否则带图消息留在历史里，之后每条纯文字提问都重发同一张图 → 会话
-    // 每轮 400 直到手动清空
-    const { ctx } = await setupAgent([[{ type: 'finish', reason: 'stop' }]])
-    const IMG = 'data:image/png;base64,AAAA'
-    await ctx.agent.send('look at this', [IMG])
-    // 模拟适配器拒图回调
-    ctx.agent['stripHistoryImages']()
-    const hist = ctx.agent.getHistory()
-    const userMsg = hist.find((m) => m.role === 'user')!
-    expect(userMsg.images).toBeUndefined()
-    // 轮次结构保留：文字 + 占位提示仍在
-    expect(userMsg.content).toContain('look at this')
-    expect(userMsg.content).toContain('[image omitted]')
-  })
-
-  it('keeps images in history when no rejection is reported', async () => {
-    const { ctx } = await setupAgent([[{ type: 'finish', reason: 'stop' }]])
+  it('keeps images in history for follow-up questions', async () => {
+    const { ctx } = await setupAgent([[{ type: 'finish', reason: 'stop', parts: [] }]])
     const IMG = 'data:image/png;base64,BBBB'
     await ctx.agent.send('check this', [IMG])
-    const userMsg = ctx.agent.getHistory().find((m) => m.role === 'user')!
+    const userMsg = ctx.agent.getHistory().find((m): m is UserMessage => m.role === 'user')!
     expect(userMsg.images).toEqual([IMG])
   })
 
-  it('trimHistory keeps only the latest user message\'s images and stubs older ones', async () => {
+  it("trimHistory keeps only the latest user message's images and stubs older ones", async () => {
     // 旧图留在历史里会让每轮请求全量重传几百 KB 的 dataURL；只保留最近
     // keepRecent 窗口内最后一条带图 user 消息的图片，更早的换占位文字
     const { ctx } = await setupAgent([])
-    const agent = ctx.agent as unknown as {
-      setHistory(m: ChatMessage[]): void
-      trimHistory(): Promise<void>
-    }
     const IMG = 'data:image/png;base64,' + 'x'.repeat(100)
-    const hist: ChatMessage[] = [
+    agentInternals(ctx).setHistory([
       { role: 'user', content: 'first pic', images: [IMG] },
-      { role: 'assistant', content: 'seen it' },
+      assistant('seen it'),
       { role: 'user', content: 'second pic', images: [IMG] },
-      { role: 'assistant', content: 'ok' },
-    ]
-    agent.setHistory(hist)
-    await agent.trimHistory()
-    const h = ctx.agent.getHistory()
+      assistant('ok'),
+    ])
+    await agentInternals(ctx).trimHistory()
+    const [first, , second] = ctx.agent.getHistory() as UserMessage[]
     // 更早的带图消息：图片被剥、正文追加占位
-    const first = h.find((m) => m.content === 'first pic\n[image omitted]')!
-    expect(first).toBeDefined()
-    expect(first.images).toBeUndefined()
+    expect(first!.content).toBe('first pic\n[image omitted]')
+    expect(first!.images).toBeUndefined()
     // 最后一条带图消息保留原样
-    const second = h.find((m) => m.content === 'second pic')!
-    expect(second).toBeDefined()
-    expect(second.images).toEqual([IMG])
+    expect(second!.content).toBe('second pic')
+    expect(second!.images).toEqual([IMG])
   })
 
-  it('trimHistory counts image dataURLs toward the char budget', async () => {
-    // 图片不计入预算 → 预算判断永远低估、旧图永不触发压缩；计费=dataURL 长度
+  it('trimHistory strips an image that has aged out of the recent window', async () => {
     const { ctx } = await setupAgent([])
-    const agent = ctx.agent as unknown as {
-      setHistory(m: ChatMessage[]): void
-      trimHistory(): Promise<void>
-    }
-    const bigImg = 'data:image/png;base64,' + 'y'.repeat(70_000) // 单张即超 60k 预算
-    const hist: ChatMessage[] = [
-      { role: 'user', content: 'q', images: [bigImg] },
-      { role: 'assistant', content: 'a' },
+    agentInternals(ctx).setHistory([
+      { role: 'user', content: 'q', images: ['data:image/png;base64,yyyy'] },
+      assistant('a'),
       { role: 'user', content: 'follow-up' },
-      { role: 'assistant', content: 'b' },
+      assistant('b'),
       { role: 'user', content: 'latest' }, // 把带图消息推出 keepRecent 窗口
-      { role: 'assistant', content: 'c' },
-    ]
-    agent.setHistory(hist)
-    await agent.trimHistory()
-    const h = ctx.agent.getHistory()
-    // 窗口外的带图消息被剥离，正文追加占位
-    const stripped = h.find((m) => m.role === 'user' && m.content?.includes('[image omitted]'))
-    expect(stripped).toBeDefined()
-    expect(h.every((m) => !m.images?.length)).toBe(true)
+      assistant('c'),
+    ])
+    await agentInternals(ctx).trimHistory()
+    const users = ctx.agent.getHistory().filter((m): m is UserMessage => m.role === 'user')
+    expect(users[0]!.content).toContain('[image omitted]')
+    expect(users.every((m) => !m.images?.length)).toBe(true)
   })
 })

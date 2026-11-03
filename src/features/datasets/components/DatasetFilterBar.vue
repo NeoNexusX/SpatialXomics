@@ -27,7 +27,7 @@
         </button>
         <teleport to="body">
           <!-- 面板 z 必须低于 TagInput 词表下拉的 z-[1000]（否则下拉建议被面板盖住），
-               高于页面普通内容；toast(9999)/AI 助手(10000) 仍在面板之上 -->
+               高于页面普通内容；toast(9999)/SXO-Harness(10000) 仍在面板之上 -->
           <div
             v-show="showFilterPanel"
             ref="filterPanelRef"

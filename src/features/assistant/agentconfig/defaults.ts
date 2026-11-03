@@ -16,6 +16,12 @@ export const MAX_UI_MESSAGES = 100
  *  OPFS 存根（read_archived_result 可取回全文） */
 export const HISTORY_CHAR_BUDGET = 60_000
 
+/** 单次模型调用的输出上限。思考也计入这个上限，所以不能给小 */
+export const MAX_OUTPUT_TOKENS = 64_000
+
+/** 一张图片占用的历史字符预算。模型按尺寸而不是 base64 长度计费，单张约几千 token */
+export const IMAGE_HISTORY_COST = 8_000
+
 /** 单 turn 内 LLM step 上限（防工具回环死循环） */
 export const MAX_AGENT_STEPS = 8
 
@@ -27,15 +33,15 @@ export const MAX_AGENT_STEPS = 8
  *  HISTORY_CHAR_BUDGET——compact 成功则永远走不到 trim 的粗暴截断；
  *  compact 失败（网络/空流）则照旧走 trimHistory 兜底。 */
 export const COMPACT_TRIGGER_CHARS = 40_000
-/** compact 摘要的 max_tokens 上限（够装结论/工具线索/未决问题三段结构，
- *  又不至于让摘要本身变成新的大块） */
-export const COMPACT_SUMMARY_MAX_TOKENS = 2_000
-
-/** 单步空流（连接成功但无任何实质增量）的自动重试次数 */
-export const MAX_EMPTY_STREAM_RETRIES = 2
+/** compact 摘要请求的输出上限。摘要本身由提示词限制在 2000 token 内，
+ *  思考也计入这个上限，给小了可能只有思考没有正文 */
+export const COMPACT_SUMMARY_MAX_TOKENS = 8_000
 
 /** 单个工具返回文本的最大字符数（超出截断） */
 export const TOOL_RESULT_CHARS = 2000
+
+/** 界面上展示的工具结果摘要字符数 */
+export const TOOL_PREVIEW_CHARS = 1200
 
 /** read_archived_result 单次返回的窗口字符数（超出经 offset 翻页取回） */
 export const ARCHIVE_WINDOW_CHARS = 8000

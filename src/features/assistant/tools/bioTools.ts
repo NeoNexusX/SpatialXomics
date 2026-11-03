@@ -17,7 +17,7 @@
  * 索引缺失/未构建 → 可读错误（isError 回喂模型）。
  */
 
-import type { Context, Plugin } from 'cordis'
+import type { Context, Plugin } from '@deepseek-ai/cordis'
 import { defineTool, renderBatch } from './defineTool'
 import { createLazyJsonLoader } from './httpJson'
 import { ADDUCTS } from './knowledgeTools'

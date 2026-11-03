@@ -83,3 +83,15 @@ describe('IconSelect selected-value display', () => {
     expect(select.findAll('option').map((o) => o.text())).toEqual(['Select...', 'profile', 'centroid'])
   })
 })
+
+describe('IconSelect focus events', () => {
+  it('forwards focus and blur from the native select', async () => {
+    const wrapper = mountSelect()
+
+    await wrapper.find('select').trigger('focus')
+    await wrapper.find('select').trigger('blur')
+
+    expect(wrapper.emitted('focus')).toHaveLength(1)
+    expect(wrapper.emitted('blur')).toHaveLength(1)
+  })
+})

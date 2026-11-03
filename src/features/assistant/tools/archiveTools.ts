@@ -7,7 +7,7 @@
  * 全文，模型在需要深挖旧数据时自取，不需要时零成本。
  */
 
-import type { Context, Plugin } from 'cordis'
+import type { Context, Plugin } from '@deepseek-ai/cordis'
 import { defineTool } from './defineTool'
 import { readArchive } from '../utils/opfsStore'
 import { ARCHIVE_WINDOW_CHARS } from '../agentconfig/defaults'

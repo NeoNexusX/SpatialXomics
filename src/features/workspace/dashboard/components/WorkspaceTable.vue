@@ -69,7 +69,7 @@
                 </div>
               </td>
               <td class="text-center py-3 px-2">
-                <StatusBadge :status="normalizeStatus(r)" compact class="kawaru-text-81" />
+                <StatusBadge :status="normalizeStatus(r)" class="kawaru-text-81" />
               </td>
               <td class="text-center py-3 px-1">
                 <button
@@ -108,7 +108,7 @@
           <!-- Top: Process name -->
           <div class="flex items-center justify-between gap-2">
             <h3 class="font-semibold kawaru-text-100 truncate flex-1 min-w-0" :title="r.name">{{ r.name }}</h3>
-            <StatusBadge :status="normalizeStatus(r)" compact class="flex-shrink-0 kawaru-text-100" />
+            <StatusBadge :status="normalizeStatus(r)" class="flex-shrink-0 kawaru-text-100" />
           </div>
 
           <!-- Middle: Dataset, Methods, Created, Finished -->
@@ -175,7 +175,6 @@ import { methodLabel } from '@/shared/utils/methodsNormalize'
 import { t } from '@/i18n'
 
 const props = defineProps<{
-  title?: string
   rows: Array<any>
   type?: 'running' | 'results'
   cursor?: string

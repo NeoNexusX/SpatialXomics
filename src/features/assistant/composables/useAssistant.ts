@@ -3,14 +3,14 @@
  *
  * - 懒建 cordis context（getAssistantContext 单例）
  * - 订阅 assistant/* 事件 → 响应式状态（messages / streaming / error）
- * - send / stop / clear / retry / quickPrompt
+ * - send / stop / clear / retry
  * - localStorage 历史持久化（≤ MAX_HISTORY_MESSAGES 条，不含 system/context）
  */
 
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { UiChatItem } from '../agenttypes/assistant'
-import { getAssistantContext } from '../plugins'
+import type { ChatMessage, UiChatItem, UiPart } from '../agenttypes/assistant'
+import { getAssistantContext, whenAssistantReady } from '../plugins'
 import { buildPageState } from '../providers/analysisContext'
 import { MAX_HISTORY_MESSAGES, MAX_UI_MESSAGES } from '../agentconfig/defaults'
 import {
@@ -29,7 +29,7 @@ const streaming = ref(false)
 const error = ref<string | null>(null)
 /** 当前是否有数据集上下文（结果页已加载 zarr 数据时为 true） */
 const hasContext = ref(false)
-/** 技能按钮（排在快捷提问之前）：skills 服务就绪后填充 */
+/** 技能按钮：skills 服务就绪后填充 */
 const skillButtons = ref<{ name: string; text: string }[]>([])
 /** UI 之外还有更早的 OPFS 历史可加载 */
 const earlierAvailable = ref(false)
@@ -52,14 +52,31 @@ function nextId(): string {
   return `msg_${Date.now()}_${++_idCounter}`
 }
 
+function currentAssistant(): UiChatItem | undefined {
+  return messages.value.find((m) => m.id === currentAssistantId)
+}
+
+/** 思考块结束：有新的正文或工具调用，或 turn 结束 */
+function settleReasoning(item: UiChatItem): void {
+  for (const part of item.parts ?? []) {
+    if (part.type === 'reasoning') part.active = false
+  }
+}
+
+/** 定型一条消息的内容块：没跑完的工具记为已停止 */
+function settleParts(parts: UiPart[] | undefined): UiPart[] | undefined {
+  return parts?.map((part): UiPart => {
+    if (part.type === 'reasoning') return { ...part, active: false }
+    if (part.type === 'tool' && part.state === 'running') return { ...part, state: 'stopped' }
+    return part
+  })
+}
+
 // ---- 技能按钮（curated 顺序） ----
 
 /** 按钮展示顺序与集合：只保留最核心的两个技能按钮（其余技能仍可经 `skill` 工具调用，
  *  只是不在欢迎区铺按钮） */
-const SKILL_BUTTON_ORDER = [
-  'annotation-review',
-  'msi-analysis',
-] as const
+const SKILL_BUTTON_ORDER = ['annotation-review', 'msi-analysis'] as const
 
 /** 技能按钮点击后发出的提示词（驱动模型加载 SKILL.md 并按其模板执行） */
 function skillTriggerPrompt(name: string): string {
@@ -68,6 +85,20 @@ function skillTriggerPrompt(name: string): string {
     `output template to analyze the current data, and summarize the key findings with ` +
     `explicit judgment criteria.`
   )
+}
+
+/** 界面消息转成模型历史：只取有内容的条目，跳过错误和系统提示 */
+function restoredHistory(items: UiChatItem[]): ChatMessage[] {
+  return items
+    .filter(
+      (m) => (m.content.length > 0 || (m.images?.length ?? 0) > 0) && !m.error && !m.compacted,
+    )
+    .map((m): ChatMessage => {
+      if (m.role === 'assistant') {
+        return { role: 'assistant', parts: [{ type: 'text', text: m.content }] }
+      }
+      return { role: 'user', content: m.content, ...(m.images?.length ? { images: m.images } : {}) }
+    })
 }
 
 // ---- 事件绑定（懒，首次调用 useAssistant 时） ----
@@ -94,31 +125,10 @@ function bindEvents() {
       .map((s) => ({ name: s.name, text: skillTriggerPrompt(s.name) }))
   })
 
-  // 模型侧历史恢复：agent 服务由异步 fiber 创建，就绪后把 localStorage 恢复的
-  // UI 消息转成干净的 user/assistant 对注入（此前 setHistory 无任何调用方，
-  // 刷新页面后 UI 显示完整对话而模型上下文为空）。只取有内容的条目（正文或
-  // 图片——纯图 user 消息 content 为空串，falsy 判断会把它丢掉，而其后的
-  // assistant 回复留在头部会形成 assistant-first 历史，严格端点每轮 400）、
-  // 跳过错误/截断条目——UI 专用字段无法构成合法的 tool 消息链，严格端点会 400。
+  // 模型侧历史恢复：agent 服务就绪后，把 localStorage 恢复的界面消息注入模型上下文，
+  // 否则刷新后界面显示完整对话而模型上下文为空。
   ctx.inject(['agent'], (ctx2) => {
-    const restored = messages.value
-      .filter(
-        (m) =>
-          ((m.content && m.content.length > 0) || (m.images?.length ?? 0) > 0) &&
-          !m.error &&
-          !m.truncated &&
-          !m.compacted,
-      )
-      .map((m) => {
-        const msg: { role: 'user' | 'assistant'; content: string; images?: string[] } = {
-          role: m.role,
-          content: m.content,
-        }
-        // user 消息的图片一并回灌模型上下文（视觉模型可继续引用）
-        if (m.role === 'user' && m.images && m.images.length > 0) msg.images = m.images
-        return msg
-      })
-    ctx2.agent.setHistory(restored)
+    ctx2.agent.setHistory(restoredHistory(messages.value))
   })
 
   ctx.on('assistant/turn-start', () => {
@@ -133,67 +143,47 @@ function bindEvents() {
       role: 'assistant',
       content: '',
       pending: true,
-      toolCalls: [],
+      parts: [],
     })
   })
 
   ctx.on('assistant/message-delta', (text: string) => {
-    if (!currentAssistantId) return
-    const last = messages.value.find((m) => m.id === currentAssistantId)
-    if (last) {
-      last.content += text
-      // 正文开始 → 思考结束（折叠态保留 reasoning 供查看）
-      last.reasoningActive = false
+    const item = currentAssistant()
+    if (!item) return
+    settleReasoning(item)
+    const parts = (item.parts ??= [])
+    const last = parts[parts.length - 1]
+    if (last?.type === 'text') {
+      last.text += text
+      item.content += text
+    } else {
+      // 工具调用之后的新一段正文，复制时和前面的文字隔开
+      item.content += item.content ? `\n\n${text}` : text
+      parts.push({ type: 'text', text })
     }
   })
 
   ctx.on('assistant/reasoning-delta', (text: string) => {
-    if (!currentAssistantId) return
-    const last = messages.value.find((m) => m.id === currentAssistantId)
-    if (last) {
-      last.reasoning = (last.reasoning ?? '') + text
-      last.reasoningActive = true
-    }
+    const item = currentAssistant()
+    if (!item) return
+    const parts = (item.parts ??= [])
+    const last = parts[parts.length - 1]
+    if (last?.type === 'reasoning' && last.active) last.text += text
+    else parts.push({ type: 'reasoning', text, active: true })
   })
 
-  ctx.on('assistant/stream-truncated', () => {
-    // 中转站断流：保留已有内容并打截断标记（不弹错误）。正文为空（思考阶段
-    // 断流）时把提示语直接放进正文，避免空气泡。
-    if (!currentAssistantId) return
-    const last = messages.value.find((m) => m.id === currentAssistantId)
-    if (last) {
-      if (last.content) {
-        last.truncated = true
-      } else {
-        last.content = t('common.assistant.truncated')
-        // 同样打截断标：该文案是 UI 提示而非模型产出，否则历史恢复注入
-        // 过滤（m.content && !m.error && !m.truncated）会把它当真实助手
-        // 发言回灌模型（换语言后旧 locale 文案还会永久烙进历史）
-        last.truncated = true
-        last.reasoningActive = false
-      }
-    }
+  ctx.on('assistant/tool-call', (id: string, name: string, input: unknown) => {
+    const item = currentAssistant()
+    if (!item) return
+    settleReasoning(item)
+    ;(item.parts ??= []).push({ type: 'tool', id, name, input, state: 'running', preview: '' })
   })
 
-  ctx.on('assistant/tool-call', (name: string) => {
-    if (!currentAssistantId) return
-    const last = messages.value.find((m) => m.id === currentAssistantId)
-    if (last) {
-      last.toolCalls!.push({ name, isError: false, preview: '…' })
-    }
-  })
-
-  ctx.on('assistant/tool-result', (name: string, isError: boolean, preview: string) => {
-    if (!currentAssistantId) return
-    const last = messages.value.find((m) => m.id === currentAssistantId)
-    if (last) {
-      // 更新对应工具条目（最后一条同名记录）
-      const entry = [...last.toolCalls!].reverse().find((t) => t.name === name)
-      if (entry) {
-        entry.isError = isError
-        entry.preview = preview
-      }
-    }
+  ctx.on('assistant/tool-result', (id: string, isError: boolean, preview: string) => {
+    const part = currentAssistant()?.parts?.find((p) => p.type === 'tool' && p.id === id)
+    if (part?.type !== 'tool') return
+    part.state = isError ? 'error' : 'done'
+    part.preview = preview
   })
 
   ctx.on('assistant/turn-end', (aborted: boolean) => {
@@ -201,22 +191,15 @@ function bindEvents() {
     // turn 的，提前定型会把流式中的气泡冻结在半截内容上）
     const id = pendingAssistantIds.shift()
     if (id) {
-      const last = messages.value.find((m) => m.id === id)
-      if (last) {
-        last.pending = false
-        last.reasoningActive = false
-        last.interrupted = aborted
-        if (turnError && !last.error) last.error = turnError
-        // 终极兜底：turn 正常结束（非中断、无错误）但气泡什么内容都没有，
-        // 说明走了某条未覆盖的空路径——填一条可读提示，绝不留死空白。
-        if (
-          !aborted &&
-          !last.error &&
-          !last.content &&
-          !last.reasoning &&
-          (last.toolCalls?.length ?? 0) === 0
-        ) {
-          last.error = t('common.assistant.emptyResponse')
+      const item = messages.value.find((m) => m.id === id)
+      if (item) {
+        item.pending = false
+        item.interrupted = aborted
+        item.parts = settleParts(item.parts)
+        if (turnError && !item.error) item.error = turnError
+        // turn 正常结束却什么内容都没有：填一条可读提示，不留死空白
+        if (!aborted && !item.error && !item.parts?.length) {
+          item.error = t('common.assistant.emptyResponse')
         }
       }
       turnError = null
@@ -236,12 +219,12 @@ function bindEvents() {
     turnError = message
   })
 
-  // 自动 Compact 提示条：agentLoop 在 send 内、turn-start 前压缩模型侧历史
-  // 并发来本事件。UI 上插一条居中灰色提示（compacted 标记渲染为系统提示而
-  // 非气泡，且不回灌模型——见 ChatTDesign 与历史恢复过滤）。
+  // 自动 Compact 提示条：压缩发生在 turn 开始之后、模型回复之前，
+  // 提示条排在本 turn 的回复占位之前，读起来才是发生的顺序。
   ctx.on('assistant/compacted', (before: number, after: number) => {
     const fmt = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n))
-    messages.value.push({
+    const index = messages.value.findIndex((m) => m.id === currentAssistantId)
+    messages.value.splice(index === -1 ? messages.value.length : index, 0, {
       id: nextId(),
       role: 'assistant',
       content: t('common.assistant.compacted', { before: fmt(before), after: fmt(after) }),
@@ -258,12 +241,10 @@ function bindEvents() {
  *  重复追加或漏写（下标基线在这些场景下全部失效）。 */
 const persistedIds = new Set<string>()
 
-/** 把尚未持久化的完整消息（含工具调用/思考/错误标记）整批追加进 OPFS
- *  会话文件。遇到仍在流式输出（pending）的占位即停——它尚未定型，留给
- *  它自己的 turn-end 补写（user 消息永远排在占位之前，因此一定会入档）。
- *  **成功追加后才标记已持久化**：OPFS 写失败（配额/隐私模式/目录被清）时
- *  这些消息保持未标记，下一个 turn 结束会把它们连同新消息整批重试——
- *  先标记后 fire-and-forget 的旧实现会让失败轮次永久静默丢失。 */
+/** 把尚未持久化的完整消息整批追加进 OPFS 会话文件。遇到仍在流式输出（pending）的
+ *  占位即停——它尚未定型，留给它自己的 turn-end 补写（user 消息永远排在占位之前，
+ *  因此一定会入档）。**成功追加后才标记已持久化**：OPFS 写失败（配额/隐私模式/
+ *  目录被清）时这些消息保持未标记，下一个 turn 结束会把它们连同新消息整批重试。 */
 function persistTurnToOpfs(): void {
   const fresh: UiChatItem[] = []
   for (const m of messages.value) {
@@ -332,13 +313,14 @@ function capHistoryImages(items: UiChatItem[]): UiChatItem[] {
   return out
 }
 
+function forStorage(m: UiChatItem): UiChatItem {
+  return { ...m, pending: false, parts: settleParts(m.parts) }
+}
+
 function saveHistory(): void {
   try {
     const capped = capHistoryImages(messages.value)
-    const trimmed = capped.slice(-MAX_HISTORY_MESSAGES).map((m) => ({
-      ...m,
-      pending: false,
-    }))
+    const trimmed = capped.slice(-MAX_HISTORY_MESSAGES).map(forStorage)
     localStorage.setItem(STORAGE_KEYS.assistantHistory, JSON.stringify(trimmed))
   } catch {
     // 配额仍不够（极端：裁图后仍超——理论上不会发生，防御性兜底）：
@@ -346,7 +328,7 @@ function saveHistory(): void {
     try {
       const stripped = messages.value
         .slice(-MAX_HISTORY_MESSAGES)
-        .map((m) => ({ ...m, pending: false, images: undefined }))
+        .map((m) => ({ ...forStorage(m), images: undefined }))
       localStorage.setItem(STORAGE_KEYS.assistantHistory, JSON.stringify(stripped))
     } catch {
       // localStorage 不可用（隐私模式等）时静默跳过
@@ -446,28 +428,22 @@ export function useAssistant() {
     )
   }
 
+  async function runTurn(text: string, images?: string[]): Promise<void> {
+    refreshContext()
+    const { agent } = await whenAssistantReady()
+    await agent.send(text, images)
+  }
+
   async function send(text: string, images?: string[]): Promise<void> {
-    // 面板常开时跨数据集导航不会重挂 ChatTDesign（consumePendingDatasetClear
+    // 面板常开时跨数据集导航不会重挂聊天视图（consumePendingDatasetClear
     // 的另外两个消费点——模块初始化与 useAssistant()——都不会触发）：
     // 发起提问前再消费一次待清空标志，保证模型上下文与系统提示的
     // Dataset Context 同源，而不是拿旧样本的 tool 结果回答新样本的问题
     if (consumePendingDatasetClear()) getAssistantContext().agent?.clearHistory()
-    refreshContext()
     const userItem: UiChatItem = { id: nextId(), role: 'user', content: text }
     if (images && images.length > 0) userItem.images = images
     messages.value.push(userItem)
-    const ctx = getAssistantContext()
-    const agent = ctx.agent
-    if (!agent) {
-      // bootstrap 窗口内 agent 服务尚未注册（异步 fiber）——出可重试的错误气泡，
-      // 不能裸调 ctx.agent.send 抛 TypeError 留下无事件的死状态
-      const msg = t('common.assistant.somethingWrong')
-      messages.value.push({ id: nextId(), role: 'assistant', content: '', error: msg, toolCalls: [] })
-      error.value = msg
-      saveHistory()
-      return
-    }
-    await agent.send(text, images)
+    await runTurn(text, images)
   }
 
   function stop(): void {
@@ -490,19 +466,21 @@ export function useAssistant() {
     saveHistory()
   }
 
-  /** 重试：移除最后的错误回复，重发最后一条 user 消息 */
+  /** 重试：撤销最后一个回合，用同一条 user 消息重新请求 */
   async function retry(): Promise<void> {
-    // 回合进行中不重试：错误气泡的按钮在流式中仍可点，此刻重发会走
-    // agentLoop.send 的 stop+50ms 并发路径（旧 turn 迟到的收尾可能把
-    // tool 消息排到新 user 消息之后——见 agentLoop 工具循环的注释）
+    // 回合进行中不重试：此刻重发会走 agentLoop.send 的 stop+50ms 并发路径
     if (streaming.value) return
-    // 移除末尾的 assistant 错误消息
-    while (messages.value.length > 0 && messages.value[messages.value.length - 1]!.role === 'assistant') {
+    while (
+      messages.value.length > 0 &&
+      messages.value[messages.value.length - 1]!.role === 'assistant'
+    ) {
       messages.value.pop()
     }
-    const lastUser = [...messages.value].reverse().find((m) => m.role === 'user')
+    const lastUser = messages.value[messages.value.length - 1]
     if (!lastUser) return
-    await send(lastUser.content, lastUser.images)
+    const { agent } = await whenAssistantReady()
+    agent.dropLastTurn()
+    await runTurn(lastUser.content, lastUser.images)
   }
 
   return {

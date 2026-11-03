@@ -187,7 +187,7 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, '')
         },
-        // AI 助手 LLM 中转（仅 dev）：浏览器直连外部 LLM 端点会受本机代理/CORS 影响
+        // SXO-Harness LLM 中转（仅 dev）：浏览器直连外部 LLM 端点会受本机代理/CORS 影响
         // （系统代理转发 502、长 SSE 流被掐断），经 vite dev server 服务端转发规避。
         // 生产环境不走这里（同源 nginx 转发或浏览器直连 BYOK 端点）。
         // - /llm-proxy：env 默认端点（VITE_LLM_PROXY_URL）
@@ -264,14 +264,11 @@ export default defineConfig(({ mode }) => {
               // 重型库：仅特定路由用到，保持独立懒加载 chunk
               if (id.includes('node_modules/echarts/') || id.includes('node_modules/zrender/')) return 'vendor-echarts'
               if (id.includes('node_modules/ali-oss/')) return 'vendor-oss'
-              // AI 聊天框架库（TDesign/MateChat/ElementPlusX/DeepChat）不设任何
-              // 特殊规则：它们只被各 Chat* 异步组件引用，Rollup 默认分包会把
-              // 各自的依赖树自然归入对应懒加载 chunk，不会进首屏（此前这里曾维护
-              // 一份 ~40 项的排除正则，但与下方「其余 node_modules 全部交默认分包」
-              // 完全重复——删掉，新增框架/升级依赖不再需要手改构建配置）。
+              // SXO-Harness的依赖（AI SDK、reka-ui、Comark、shiki）不设特殊规则：它们只被助手的
+              // 异步组件引用，Rollup 默认分包会把它们归入懒加载 chunk，不会进首屏。
               // 其余 node_modules：不强制聚合进单一 vendor，交 Rollup 默认分包。
               // 项目通用库会被 Rollup 归入首屏共享 chunk（效果同旧 vendor 但自主分配），
-              // 仅 AI 助手用的大库则自然落到各自懒加载 chunk。
+              // 仅 SXO-Harness用的库则自然落到各自懒加载 chunk。
               return
             }
           },

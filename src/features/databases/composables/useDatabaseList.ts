@@ -20,7 +20,6 @@ import type {
  */
 export function useDatabaseList() {
   const auth = useAuthStore()
-  const loggedIn = computed(() => !!auth.token)
 
   const sources = DATABASE_SOURCES
   const activeId = ref(DATABASE_SOURCES[0]!.id)
@@ -156,7 +155,6 @@ export function useDatabaseList() {
     sources,
     activeId,
     activeSource,
-    loggedIn,
     rows,
     loading,
     error,

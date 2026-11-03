@@ -1,7 +1,7 @@
 /**
  * 从 HMDB 官方 XML 构建代谢物生物学档案离线索引（public/data/hmdb-index.json）。
  *
- * 用途：AI 助手 hmdb_lookup 工具（bioTools.ts）的离线数据源——
+ * 用途：SXO-Harness hmdb_lookup 工具（bioTools.ts）的离线数据源——
  * 代谢物 → 组织定位 / 疾病关联 / 生物功能，MSI 生物学解读的关键语义层。
  *
  * 数据来源与许可：Human Metabolome Database (HMDB)，David Wishart 组，

@@ -95,8 +95,7 @@ const routes = [
     component: view(() => import('../views/DatasetOverviewView.vue'), 'datasets'),
   },
   {
-    // 数据集分享页。token 仅支持 16 位 public_id；旧 Base64 数字链接的兑换接口
-    // 已下线，legacy token 按无效链接处理（判别见 resolveShareToken）。路由本身
+    // 数据集分享页。token 是 16 位 public_id，其余按无效链接处理。路由本身
     // 不加登录守卫：分享内容需登录浏览，匿名落地后由页面就地引导登录
     // （见 getShareOverviewMetadata）。
     path: '/s/:shareToken',
