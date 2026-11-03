@@ -20,9 +20,11 @@ Read `get_annotation_detail(rowIds=[...])` for the rows under scrutiny in one ba
 
 Batch distinct names per relevant source, up to 25 inputs; default pages contain 5 queries, maximum 8. Do not repeat the same lookup per adduct.
 
-Use `library_lookup(queries=[...])` for lipid shorthand or `pubchem_compound_lookup(names=[...])` for general identity; compare formula, exact mass and class. Use `hmdb_lookup(queries=[...])` for tissue/disease context and `chebi_lookup` when an ontology definition helps. Substring search results can be related compounds: verify the returned identity. A missing record means limited coverage, not absence from tissue.
+Use `pubchem_compound_lookup(names=[...])` for named candidate identities; compare formula and exact mass with the annotation detail. Keep lipid shorthand and class evidence from the annotation result, and do not treat a sum composition as a unique structure. Use `hmdb_lookup(queries=[...])` for tissue/disease context and `chebi_lookup` when an ontology definition helps. Substring search results can be related compounds: verify the returned identity. A missing record means limited coverage, not absence from tissue.
 
-For a set-wide review or pathway question, call `pathway_enrichment(topN=...)` once and inspect interesting pathways with `kegg_pathway_lookup`. Report **formula groups**, mapping coverage and alternatives: the rollup collapses isomers as well as adducts and may use any candidate in a group. Counts are descriptive, without a background model, significance test, or measurement of pathway activity. One group gives membership only; several groups give a tentative contextual pattern.
+For a set-wide review or pathway question, call `pathway_enrichment(topN=...)` (live official KEGG REST queries; no local KEGG index) once and inspect interesting pathways with `kegg_pathway_lookup`. Report **formula groups**, mapping coverage and alternatives: the rollup collapses isomers as well as adducts and may use any candidate in a group. Counts are descriptive, without a background model, significance test, or measurement of pathway activity. One group gives membership only; several groups give a tentative contextual pattern.
+
+Report ambiguous KEGG matches and any candidates deferred by the query budget. An API/proxy failure means unavailable evidence, not an unmapped molecule; never request a local KEGG index build.
 
 Retrieve `europepmc_search` evidence for decisive tissue-specific claims or surprising assignments. Cite only findings supported by returned text; a database name or paper title cannot confirm the measured species.
 

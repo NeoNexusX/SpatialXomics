@@ -505,7 +505,7 @@
   },
   {
     "name": "kegg_pathway_lookup",
-    "description": "Map metabolites to KEGG metabolic pathways (offline index): query compound names or C numbers to list pathways (e.g. \"what pathway is palmitic acid in\"), or a pathway name/map id to list member compounds — supports \"which pathways are enriched in this annotation set\". BATCHING: for several compounds at once pass \"queries\" (array) in ONE call instead of one call per molecule. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
+    "description": "Query the official KEGG REST API live for metabolic pathways: query compound names or C numbers to list pathways (e.g. \"what pathway is palmitic acid in\"), or a pathway name/map id to list member compounds. Keyword matches require identity verification. BATCHING: for several compounds at once pass \"queries\" (array) in ONE call instead of one call per molecule. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -532,84 +532,6 @@
         "maxResults": {
           "type": "integer",
           "description": "Max pathways or compounds per query (default 10, max 20)"
-        }
-      }
-    }
-  },
-  {
-    "name": "library_lookup",
-    "description": "Look up compounds in the CURRENT offline annotation library (deployed index: LIPID MAPS LMSD, ~50k lipid entries). Search by lipid shorthand (\"PC 34:1\"), common name, or LM_ID. Returns formula, exact mass, classification, PubChem CID. First call loads the index (~1MB, cached afterwards). Small-molecule libraries (HMDB/KEGG) live in the biology tools. BATCHING: for several compounds pass \"queries\" (array) in ONE call. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "offset": {
-          "type": "integer",
-          "description": "First input query index, default 0. Continue with nextOffset."
-        },
-        "limit": {
-          "type": "integer",
-          "description": "Queries per page. Evidence default 5, max 8."
-        },
-        "query": {
-          "type": "string",
-          "description": "Single shorthand / name / id fragment; for multiple use \"queries\""
-        },
-        "queries": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "maxItems": 25,
-          "description": "Batch form of \"query\": many shorthands / names in one call"
-        },
-        "maxResults": {
-          "type": "integer",
-          "description": "Max entries per query (default 10, max 25)"
-        }
-      }
-    }
-  },
-  {
-    "name": "library_mass_search",
-    "description": "Annotate m/z values against the CURRENT offline annotation library (deployed index: LIPID MAPS LMSD) with adduct-aware matching: give observed m/z and polarity (optionally a specific adduct, else all common ones are scanned). Returns candidate compounds with neutral mass, Δppm, and class. First call loads the index (~1MB, cached). BATCHING: to annotate a peak list pass \"mzs\" (array of m/z) in ONE call instead of one call per peak. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "offset": {
-          "type": "integer",
-          "description": "First input query index, default 0. Continue with nextOffset."
-        },
-        "limit": {
-          "type": "integer",
-          "description": "Queries per page. Evidence default 5, max 8."
-        },
-        "mz": {
-          "type": "number",
-          "description": "Single observed m/z value; for multiple use \"mzs\""
-        },
-        "mzs": {
-          "type": "array",
-          "items": {
-            "type": "number"
-          },
-          "maxItems": 25,
-          "description": "Batch form of \"mz\": many m/z values in one call"
-        },
-        "polarity": {
-          "type": "string",
-          "description": "Ion mode: \"positive\" or \"negative\""
-        },
-        "adduct": {
-          "type": "string",
-          "description": "Specific adduct, e.g. \"[M+H]+\", \"[M+Na]+\", \"[M-H]-\", \"[M+HCOO]-\"; omit to scan all common adducts"
-        },
-        "ppm": {
-          "type": "integer",
-          "description": "Mass tolerance in ppm (default 10, max 50)"
-        },
-        "maxResults": {
-          "type": "integer",
-          "description": "Max candidates per m/z (default 15, max 25)"
         }
       }
     }
@@ -687,7 +609,7 @@
   },
   {
     "name": "pathway_enrichment",
-    "description": "Pathway rollup for the top-ranked annotations: batch-map the top N annotation rows (folded by formula, so the adduct ions of one molecule count once) onto KEGG pathways and rank pathways by how many annotated formula groups they contain. Use AFTER get_annotation_top to answer \"are these annotations concentrated on one pathway\" — several high-score annotations on ONE pathway is a candidate descriptive finding; it does not establish pathway activity. Descriptive counts, not a statistical enrichment test. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
+    "description": "Query the official KEGG REST API live for a pathway rollup: batch-map the top N annotation rows (folded into formula groups; adducts and unresolved isomers share a count) onto KEGG pathways and rank pathways by how many annotated formula groups they contain. Use AFTER get_annotation_top to answer \"are these annotations concentrated on one pathway\" — several high-score annotations on ONE pathway is a candidate descriptive finding; it does not establish pathway activity. Uses exact compound/synonym matches or KEGG C ids; reports ambiguous matches and candidates deferred beyond the 50-query budget. Descriptive counts, not a statistical enrichment test. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
     "parameters": {
       "type": "object",
       "properties": {

@@ -14,6 +14,7 @@
     "test:unit": "vitest",
     "test:unit:run": "vitest run --coverage --passWithNoTests",
     "test:e2e": "playwright test",
+    "test:e2e:offline": "playwright test --project=\"offline-*\"",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
     "docs:dev": "vitepress dev docs --port 5174",

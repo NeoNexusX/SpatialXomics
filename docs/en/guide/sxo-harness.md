@@ -67,7 +67,7 @@ You can also chat on pages without a dataset context, such as Home. In that case
 | --- | --- |
 | Page and data | Read the current page state and selection, dataset overview, one or many ion images (up to 9 m/z values, returned separately or as a montage), ion images for annotation rows, ion-intensity statistics, top mean-spectrum peaks, a pixel spectrum, KMeans/UMAP summaries, and the annotation list or details |
 | Files and account | List public/personal files, read file metadata, list processing tasks, and check user quota |
-| Compounds and pathways | PubChem compound and formula lookup, ChEBI, HMDB, KEGG pathways, pathway enrichment, and local annotation libraries |
+| Compounds and pathways | PubChem compound and formula lookup, ChEBI, HMDB, KEGG pathways and pathway rollups; read lipid candidates generated in the annotation panel |
 | Literature and web | PubMed, Europe PMC, OpenAlex, and Exa web search |
 | Conversation | Read archived tool results that were shortened, and load skill instructions on demand |
 

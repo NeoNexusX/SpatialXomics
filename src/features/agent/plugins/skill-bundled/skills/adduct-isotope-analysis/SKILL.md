@@ -13,7 +13,7 @@ A plausible fit plus consistent mass differences and spatially correlated siblin
 
 Use `get_annotation_images(rowIds=[...])` to inspect suspicious sibling patterns. The platform has no isotope-envelope fitting or in-browser MS/MS search; do not claim either from top peaks or an image correlation. If the question needs those data, explain the specific missing measurement.
 
-Check formula/class with `library_lookup` or `pubchem_compound_lookup` when candidate identity is uncertain. Query `hmdb_lookup`, `kegg_pathway_lookup` or literature only when tissue biology is relevant. Batch distinct candidate names, follow `nextOffset` only for needed evidence, and avoid repeating queries for multiple adducts of the same formula.
+Check formula and identifiers with `pubchem_compound_lookup` when candidate identity is uncertain; retain lipid class and shorthand evidence from the annotation detail. A sum composition is not a unique molecular structure. Query `hmdb_lookup`, `kegg_pathway_lookup` or literature only when tissue biology is relevant. Batch distinct candidate names, follow `nextOffset` only for needed evidence, and avoid repeating queries for multiple adducts of the same formula.
 
 Return the rowId, candidate/adduct, observed mass and sibling evidence, acquisition fit, competing assignments, and a calibrated verdict. Keep the annotation putative unless independent resolving evidence is supplied; state what MS/MS, standard, or isotope data would settle the uncertainty.
 

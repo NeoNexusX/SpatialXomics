@@ -1,6 +1,6 @@
 # Tech Stack
 
-This page records the technologies, layout, and scripts used by the current frontend. See [Frontend Architecture](./frontend-architecture) for module boundaries.
+This page records the technologies, layout, and scripts used by the current frontend. See [Frontend Architecture](./frontend-architecture) for module boundaries, [Agent Architecture](./agent-architecture) for the assistant, and [Testing and E2E](./testing) for verification.
 
 ## Requirements
 
@@ -44,7 +44,7 @@ Use root `package.json` and `package-lock.json` for exact versions.
 src/
 ├── app/                  # Application shell and global entry components
 ├── assets/               # Theme and global styles
-├── features/             # Business modules: agent, auth, collections, datasets, home, upload, users, vizworkbench, workspace
+├── features/             # Business modules: agent, auth, collections, databases, datasets, home, upload, users, vizworkbench, workspace
 ├── i18n/                 # vue-i18n instance, type definitions, and locales/{locale}/{ns}.json message files
 ├── router/               # Routes and guards
 ├── services/             # Cross-module Zarr (with OSS client), clustering, and PubChem services
@@ -67,7 +67,8 @@ The vizworkbench feature also owns the annotation CSV and KMeans workers under `
 | `npm run lint` / `lint:check` | ESLint with fixes / check only |
 | `npm run format` / `format:check` | Format/check `src/` only |
 | `npm run test:unit` / `test:unit:run` | Vitest watch / one-shot run |
-| `npm run test:e2e` | Playwright E2E |
+| `npm run test:e2e` | All Playwright projects; live projects require an account |
+| `npm run test:e2e:offline` | Fixed-response regression in three browsers without backend credentials |
 | `npm run check` | Type check, lint, and unit tests in parallel |
 | `npm run icons:bundle` | Regenerate the offline icon bundle |
 | `npm run docs:dev` / `docs:build` / `docs:preview` | Develop, build, or preview docs |
@@ -79,7 +80,7 @@ The vizworkbench feature also owns the annotation CSV and KMeans workers under `
 - `config.json` controls app-wide settings: application name, navigation and floating action button, pagination, verification, and Zarr read tuning. SXO-Harness has no dedicated switch: its floating-button `toggle-ai` entry follows the regular `active` / `requireAuth` flags and is currently enabled for signed-in users. Chat needs an endpoint that offers `/v1/messages`: either the deployment default (`VITE_LLM_PROXY_URL` / `VITE_LLM_API_KEY` / `VITE_LLM_MODEL`), or an address and key entered in the connection settings plus a model that passes the multimodal test. With neither, the panel opens straight into its connection settings. Web search uses Exa's hosted MCP; the optional `VITE_EXA_API_KEY` raises its allowance, and an empty value falls back to the anonymous tier. Both `VITE_LLM_API_KEY` and `VITE_EXA_API_KEY` are compiled into the frontend bundle, so only put restricted sub-keys there, never official master keys.
 - Home page content (hero copy, feature showcase, timeline, team, contact details, commit heatmap) lives in `public/content.json`. The `/` route fetches it in parallel with the home chunk, so its size never sits on the app-wide startup path. If it cannot be loaded the home page simply omits those sections; other routes are unaffected.
 - Upload form vocabularies and ion-source requirement rules are no longer JSON. They are compiled into the bundle (`datasetMetadata.ts` / `ionSourceRules.ts`), ship inside long-cached route chunks, and require a rebuild to change.
-- The `test`-branch workflow runs `npm run check`, the docs build, and Chromium/Firefox/WebKit E2E.
+- The `test`-branch workflow runs `npm run check` and builds docs, then runs independent jobs for secret-free three-browser regression and account-based live integration plus Chinese smoke coverage.
 - Pushes to `dev` and `main` trigger their deployment workflows. The multi-stage Docker build creates both `dist/` and `dist-docs/`; Nginx serves the docs at `/docs/`.
 
 Whether configuration values are committed is a repository-policy choice. Anything exposed through frontend `VITE_*` variables, `public/config.json`, or `public/content.json` is delivered to the browser and is not a server-side secret.

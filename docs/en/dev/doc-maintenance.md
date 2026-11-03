@@ -72,7 +72,7 @@ npm run docs:preview     # preview the production build
 
 ## CI and Deployment
 
-- The `test`-branch workflow runs `npm run check` and `npm run docs:build`, then builds the SPA and runs three-browser E2E in a separate job.
+- The `test`-branch workflow runs `npm run check` and builds docs, then runs independent jobs for secret-free three-browser regression and account-based live integration plus Chinese smoke. See [Testing and E2E](./testing) for coverage boundaries.
 - `docker/Dockerfile` builds both the SPA and docs again, then copies `dist-docs/` to Nginx's `/docs` directory.
 - `base: '/docs/'` must remain aligned with the route in `docker/nginx.conf.template`.
 - `.dockerignore` excludes root `*.md` files by default but explicitly includes `docs/**`, so maintained documentation belongs under `docs/`.

@@ -79,8 +79,6 @@ polarity: positive
 - get_user_quota (files)
 - hmdb_lookup (biology)
 - kegg_pathway_lookup (biology)
-- library_lookup (chemistry)
-- library_mass_search (chemistry)
 - list_files (files)
 - list_my_files (files)
 - list_my_processes (files)

@@ -14,19 +14,18 @@ import { test as setup } from '@playwright/test'
  *
  * 账号密码不硬编码，从环境变量读取：
  *   - CI：由 GitHub Secrets（E2E_USERNAME / E2E_PASSWORD）注入
- *   - 本地：在 .env.local（已 gitignore）中设置，或直接 export
+ *   - 本地：运行 Playwright 前 export（Vite 的 env/ 文件不会注入测试进程）
  */
-const username = process.env.E2E_USERNAME
-const password = process.env.E2E_PASSWORD
-if (!username || !password) {
-  throw new Error('缺少 E2E_USERNAME / E2E_PASSWORD 环境变量，请在 CI secrets 或本地 .env.local 中配置')
-}
-
 setup('authenticate', async ({ page }) => {
+  const username = process.env.E2E_USERNAME
+  const password = process.env.E2E_PASSWORD
+  if (!username || !password) {
+    throw new Error('缺少 E2E_USERNAME / E2E_PASSWORD，请在 CI secrets 或当前 shell 中 export；离线回归可运行 npm run test:e2e:offline')
+  }
   await page.goto('/login')
 
-  await page.fill('input[placeholder="Username"]', process.env.E2E_USERNAME!)
-  await page.fill('input[placeholder="Password"]', process.env.E2E_PASSWORD!)
+  await page.fill('input[placeholder="Username"]', username)
+  await page.fill('input[placeholder="Password"]', password)
 
   await page.click('button:has-text("Sign In")')
 

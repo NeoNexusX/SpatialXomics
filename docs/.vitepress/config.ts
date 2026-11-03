@@ -46,6 +46,8 @@ const en = {
         items: [
           { text: 'Tech Stack', link: '/dev/tech-stack' },
           { text: 'Frontend Architecture', link: '/dev/frontend-architecture' },
+          { text: 'Agent Architecture', link: '/dev/agent-architecture' },
+          { text: 'Testing and E2E', link: '/dev/testing' },
           { text: 'Icon Guidelines', link: '/dev/icon-guidelines' },
           { text: 'Documentation Maintenance', link: '/dev/doc-maintenance' },
         ],
@@ -92,6 +94,8 @@ const zh = {
         items: [
           { text: '技术栈', link: '/zh/dev/tech-stack' },
           { text: '前端架构边界', link: '/zh/dev/frontend-architecture' },
+          { text: 'Agent 架构', link: '/zh/dev/agent-architecture' },
+          { text: '测试与 E2E', link: '/zh/dev/testing' },
           { text: '图标使用规范', link: '/zh/dev/icon-guidelines' },
           { text: '文档维护', link: '/zh/dev/doc-maintenance' },
         ],

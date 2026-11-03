@@ -1,6 +1,6 @@
 # 技术栈
 
-本页记录当前前端仓库实际使用的技术、目录和脚本。模块边界见 [前端架构边界](./frontend-architecture)。
+本页记录当前前端仓库实际使用的技术、目录和脚本。模块边界见 [前端架构边界](./frontend-architecture)，助手实现见 [Agent 架构](./agent-architecture)，验证流程见 [测试与 E2E](./testing)。
 
 ## 环境要求
 
@@ -44,7 +44,7 @@ npm run dev
 src/
 ├── app/                  # App 外壳和全局入口组件
 ├── assets/               # 主题与全局样式
-├── features/             # 业务模块：agent、auth、collections、datasets、home、upload、users、vizworkbench、workspace
+├── features/             # 业务模块：agent、auth、collections、databases、datasets、home、upload、users、vizworkbench、workspace
 ├── i18n/                 # vue-i18n 实例、类型定义和 locales/{locale}/{ns}.json 语言包
 ├── router/               # 路由与守卫
 ├── services/             # Zarr（含 OSS client）、聚类和 PubChem 等跨模块服务
@@ -67,7 +67,8 @@ src/
 | `npm run lint` / `lint:check` | ESLint 自动修复 / 只检查 |
 | `npm run format` / `format:check` | 仅格式化/检查 `src/` |
 | `npm run test:unit` / `test:unit:run` | Vitest watch / 单次运行 |
-| `npm run test:e2e` | Playwright E2E |
+| `npm run test:e2e` | 全部 Playwright 项目，真实后端组需要账号 |
+| `npm run test:e2e:offline` | 三浏览器固定响应回归，无需后端与密钥 |
 | `npm run check` | 并行执行类型检查、lint 和单元测试 |
 | `npm run icons:bundle` | 重新生成离线图标 bundle |
 | `npm run docs:dev` / `docs:build` / `docs:preview` | 开发、构建、预览文档站 |
@@ -79,7 +80,7 @@ src/
 - `config.json` 可配置站点名称、导航与悬浮按钮、分页、验证码、Zarr 读取参数等全站设置。SXO-Harness 没有独立开关：悬浮按钮的 `toggle-ai` 入口走通用 `active` / `requireAuth` 规则，当前对已登录用户开启。对话需要提供 `/v1/messages` 的端点：可以是部署级默认（`VITE_LLM_PROXY_URL` / `VITE_LLM_API_KEY` / `VITE_LLM_MODEL`），也可以由用户在连接设置里填写地址和密钥，再选一个通过多模态测试的模型。两者皆无时，面板会直接落在连接设置。联网搜索使用 Exa 托管的 MCP，可用 `VITE_EXA_API_KEY` 提高额度，留空走匿名额度。`VITE_LLM_API_KEY` 和 `VITE_EXA_API_KEY` 都会打进前端包，只能放受限的子 key，不要放官方主 key。
 - 首页展示内容（Hero 文案、功能展示、时间线、团队、联系信息、提交热力图）拆在 `public/content.json`，由 `/` 路由在进入首页时加载，与首页 chunk 并行；这样它的体积不会压在全站启动的关键路径上。取不到时首页降级为不显示这些区块，不影响其他页面。
 - 上传表单的下拉选项与 ion source 必填规则不再走 JSON，已编译进代码（`datasetMetadata.ts` / `ionSourceRules.ts`），随路由 chunk 长缓存，修改后需重新构建。
-- `test` 分支的 workflow 运行 `npm run check`、文档构建和 Chromium/Firefox/WebKit E2E。
+- `test` 分支先执行 `npm run check` 和文档构建，再分别运行无需 secrets 的三浏览器离线回归，以及需要账号的真实后端三浏览器测试和中文冒烟。
 - 推送 `dev` 或 `main` 会分别触发对应部署 workflow。Docker 多阶段构建同时生成 `dist/` 和 `dist-docs/`，Nginx 在 `/docs/` 提供文档站。
 
 私有配置值是否提交由仓库策略决定；前端 `VITE_*`、`public/config.json` 和 `public/content.json` 最终都会进入浏览器，不能作为真正的服务端秘密。

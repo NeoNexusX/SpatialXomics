@@ -37,11 +37,40 @@ jobs:
       # type-check + lint + unit test（与 package.json 中 check 脚本一致）
       - run: npm run check
 
-      # 文档站构建：死链、frontmatter 语法、主题文件类型错误会在此暴露
+      - run: npm run docs:type-check
+
+      # 文档站构建：验证死链、frontmatter 与静态页面生成
       # 与部署阶段 docker build 内的 `RUN npm run docs:build` 行为一致，提前到 PR 阶段拦截
       - run: npm run docs:build
 
-  # ---- Job 2: 构建 + e2e 测试（依赖 check 通过）----
+  # 固定 HTTP 响应的浏览器回归独立运行，不依赖账号和 LLM secrets。
+  e2e-offline:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps
+      - run: npm run build
+        env:
+          VITE_API_BASE: /api
+      - run: npm run test:e2e:offline
+        env:
+          CI: 'true'
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: playwright-offline-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  # ---- 真实后端 E2E（依赖 check 通过）----
   e2e:
     needs: check
     runs-on: ubuntu-latest
@@ -63,9 +92,9 @@ jobs:
         env:
           VITE_API_BASE: /api
 
-      # e2e 测试（CI 模式：headless + retry + workers 自动调整）
+      # 真实后端组（CI 模式：headless + retry + 单 worker）；离线组由独立 job 执行
       # 登录账号密码从 GitHub Secrets 注入，避免硬编码（见 e2e/auth.setup.ts）
-      - run: npm run test:e2e
+      - run: npm run test:e2e -- --project=chromium --project=firefox --project=webkit --project=chromium-zh
         env:
           CI: 'true'
           E2E_USERNAME: ${{ secrets.E2E_USERNAME }}
@@ -76,6 +105,8 @@ jobs:
         if: always()
         with:
           name: playwright-report
-          path: playwright-report/
+          path: |
+            playwright-report/
+            test-results/
           retention-days: 7
 

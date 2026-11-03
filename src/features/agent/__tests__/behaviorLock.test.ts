@@ -131,7 +131,7 @@ describe('system prompt and tool catalog', () => {
     await expect(JSON.stringify(h.calls[0]!.tools, null, 2) + '\n').toMatchFileSnapshot(
       './__snapshots__/behaviorLock/tool-schemas.json',
     )
-    expect(h.calls[0]!.tools).toHaveLength(31)
+    expect(h.calls[0]!.tools).toHaveLength(29)
   })
 })
 

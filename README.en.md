@@ -109,11 +109,20 @@ npm run build             # type-check + SPA build to dist/
 npm run check             # type-check + ESLint + unit tests
 npm run test:unit:run     # one-shot unit tests
 npm run test:e2e          # Playwright E2E
+npm run test:e2e:offline  # Three-browser regression without account, backend, or LLM key
 npm run docs:build        # docs build to dist-docs/
 npm run icons:bundle      # regenerate the offline icon subset
 ```
 
 `npm run format` formats `src/` only; Markdown files are maintained separately.
+
+### Live KEGG Queries
+
+`kegg_pathway_lookup` and `pathway_enrichment` query the official KEGG REST API at runtime. They require no local KEGG index or downloaded dataset. Browser requests use same-origin `/kegg-rest/`, forwarded to `https://rest.kegg.jp/` by Vite (development) or nginx (Docker). Custom hosting must provide this proxy too; `vite preview` inherits Vite's proxy configuration. Restart the development server after changing Vite configuration; production needs the updated frontend and nginx configuration deployed together.
+
+Tools schedule at most three requests per second; nginx also limits aggregate upstream traffic across clients. Rollups accept exact compound names/synonyms or KEGG C IDs and report mapping coverage, ambiguous matches and candidates deferred by the query budget. Counts are descriptive, not statistical enrichment. Network, upstream and proxy failures are reported as errors rather than absence of pathway membership.
+
+Prepare the HMDB tool's offline index using the instructions in `scripts/build-hmdb-index.mjs`; KEGG pathway tools do not depend on it. Generate lipid candidates in the visualization annotation panel; the agent reads those existing annotation results.
 
 ## Runtime Configuration
 
@@ -130,3 +139,5 @@ Form dropdown vocabularies and ion-source requirement rules are no longer JSON â
 - The `test` branch runs checks, the docs build, and three-browser Playwright tests. `dev` and `main` trigger their respective deployments.
 
 See [docs/en/dev/doc-maintenance.md](docs/en/dev/doc-maintenance.md) for the documentation workflow.
+
+Contributor references: [Frontend Architecture](docs/en/dev/frontend-architecture.md), [Agent Architecture](docs/en/dev/agent-architecture.md), and [Testing and E2E](docs/en/dev/testing.md). Live backend tests require `E2E_USERNAME` / `E2E_PASSWORD`; offline regression skips authentication setup. Use `E2E_PORT=5193 npm run test:e2e:offline` for a dedicated server port.

@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import {
-  searchHmdbIndex,
-  massSearchHmdbIndex,
-  pathwayEnrichment,
-  type HmdbRow,
-  type KeggIndex,
-} from '../index'
-import { ADDUCTS } from '../../tool-knowledge'
+import { ADDUCTS, searchHmdbIndex, massSearchHmdbIndex, type HmdbRow } from '../index'
 import { ToolRuntime } from '../../tools'
 import { SystemPrompt } from '../../system-prompt'
 import { SkillsRegistry } from '../../skill'
@@ -68,6 +61,21 @@ describe('searchHmdbIndex', () => {
 })
 
 describe('massSearchHmdbIndex', () => {
+  it('covers the annotation panel adducts in HMDB mass searches', () => {
+    // HMDB 检索也应覆盖面板使用的锂和双去质子化加合物，避免漏掉这些离子候选。
+    // 数值来自共享加合物表（shared/chem/adducts.ts）。
+    expect(ADDUCTS.positive['[M+Li]+']).toBeCloseTo(7.015455, 5)
+    expect(ADDUCTS.negative['[M-2H+Na]-']).toBeCloseTo(20.974666, 5)
+    expect(ADDUCTS.negative['[M-2H+K]-']).toBeCloseTo(36.948606, 5)
+    // 面板规则表的每个键都必须在对应极性可检索（防未来再漂移）
+    for (const key of ['M+H', 'M+Na', 'M+K', 'M+NH4', 'M+Li']) {
+      expect(ADDUCTS.positive[`[${key}]+`]).toBeDefined()
+    }
+    for (const key of ['M-H', 'M+Cl', 'M+HCOO', 'M+CH3COO', 'M-2H+Na', 'M-2H+K']) {
+      expect(ADDUCTS.negative[`[${key}]-`]).toBeDefined()
+    }
+  })
+
   it('finds [M-H]- of malic acid within ppm and sorts by |Δppm|', () => {
     const neutral = HMDB[0]![3]!
     // 检索表语义：neutral = mz − shift → 离子 m/z = neutral + shift
@@ -78,85 +86,6 @@ describe('massSearchHmdbIndex', () => {
     expect(hits[0]!.row[0]).toBe('HMDB00165')
     expect(hits[0]!.adduct).toBe('[M-H]-')
     expect(Math.abs(hits[0]!.ppm)).toBeLessThan(1)
-  })
-})
-
-describe('pathwayEnrichment', () => {
-  const HMDB_IDX: HmdbRow[] = [
-    ['HMDB0000122', 'D-Glucose', 'C6H12O6', 180.063388, 'C00031', [], [], null],
-    ['HMDB0000064', 'L-Glutamine', 'C5H10N2O3', 146.069142, 'C00064', [], [], null],
-    ['HMDB0000908', 'PC 34:1', 'C42H82NO8P', 759.5778, null, [], [], null], // 无 KEGG id
-  ]
-  const KEGG_IDX: KeggIndex = {
-    pathways: {
-      '00010': 'Glycolysis / Gluconeogenesis',
-      '00250': 'Alanine, aspartate and glutamate metabolism',
-    },
-    compounds: {
-      c00031: ['C00031', 'D-Glucose'],
-      c00064: ['C00064', 'L-Glutamine'],
-    },
-    links: {
-      c00031: ['00010'],
-      c00064: ['00250'],
-    },
-  }
-  const mkRow = (rank: number, name: string, formula: string): AnnotationRow => ({
-    id: rank,
-    rank,
-    name,
-    origin: 'endogenous',
-    candidates: [{ id: '', name, origin: 'endogenous' }],
-    formula,
-    adduct: '[M+H]+',
-    theoMz: 100,
-    obsMz: 100,
-    errPpm: 0,
-    intensity: 1,
-    massScore: 1,
-    adductFit: 1,
-    chaos: null,
-    coloc: null,
-    spatialScore: null,
-    totalScore: 1,
-    q: 0.01,
-    siblings: [],
-    samePeak: [],
-    missingAdducts: [],
-  })
-
-  it('folds adduct ions of one formula into a single molecule and ranks pathways by count', () => {
-    const rows: AnnotationRow[] = [
-      mkRow(1, 'D-Glucose', 'C6H12O6'),
-      { ...mkRow(2, 'D-Glucose', 'C6H12O6'), adduct: '[M+Na]+' }, // 同分子另一加合物 → 折叠
-      mkRow(3, 'L-Glutamine', 'C5H10N2O3'),
-      mkRow(4, 'PC 34:1', 'C42H82NO8P'), // 无通路
-    ]
-    const r = pathwayEnrichment(rows, HMDB_IDX, KEGG_IDX, 20)
-    expect(r.totalFormulas).toBe(3) // 折叠后 3 个分子
-    expect(r.mappedFormulas).toBe(2) // glucose + glutamine 有通路
-    const names = r.hits.map((h) => h.name)
-    expect(names).toContain('Glycolysis / Gluconeogenesis')
-    expect(names).toContain('Alanine, aspartate and glutamate metabolism')
-    expect(r.unmapped).toContain('PC 34:1')
-  })
-
-  it('reports the shared pathway as the strongest signal when ≥2 molecules map to it', () => {
-    const rows: AnnotationRow[] = [
-      mkRow(1, 'D-Glucose', 'C6H12O6'),
-      mkRow(2, 'D-Glucose', 'C6H12O6'), // 同名不同式不会出现，这里凑同通路
-    ]
-    const r = pathwayEnrichment(rows, HMDB_IDX, KEGG_IDX, 20)
-    // 同分子式折叠 → 实际只 1 个分子 1 条通路
-    expect(r.hits).toHaveLength(1)
-    expect(r.hits[0]!.mapId).toBe('00010')
-  })
-
-  it('returns empty hits when nothing maps', () => {
-    const rows: AnnotationRow[] = [mkRow(1, 'PC 34:1', 'C42H82NO8P')]
-    const r = pathwayEnrichment(rows, HMDB_IDX, KEGG_IDX, 20)
-    expect(r.hits).toHaveLength(0)
-    expect(r.mappedFormulas).toBe(0)
   })
 })
 

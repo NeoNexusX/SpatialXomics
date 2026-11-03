@@ -1,20 +1,7 @@
 /**
- * 生物信息工具集（离线索引，只读）：HMDB 代谢物档案 + KEGG 通路 + 通路富集。
- *
- * 数据源（均由 scripts/build-*-index.mjs 预构建为同源静态资源）：
- * - HMDB（hmdb.ca）：组织定位/疾病关联/生物功能是 MSI 生物学解读的关键
- *   语义层。hmdb.ca 对程序化下载返回 403，索引脚本消费**手动下载**的
- *   `hmdb_metabolites.xml`（或按体液的子集 XML）生成
- *   public/data/hmdb-index.json。未构建时工具返回可读指引而不是报错。
- * - KEGG REST（rest.kegg.jp，Node 侧可直连但无 CORS 头）：
- *   list/compound + link/pathway/compound + list/pathway/hsa →
- *   public/data/kegg-pathway-index.json（化合物 → 参考通路）。
- *
- * pathway_enrichment 把两者接起来：HMDB 名称 → KEGG C-id → 通路，对 top 注释
- * 批量聚合出富集表（描述性计数，支撑"多个高分注释同属一条通路"的新发现）。
- *
- * 设计约束同 tool-knowledge：懒加载 + 模块级缓存；结果摘要化；
- * 索引缺失/未构建 → 可读错误（isError 回喂模型）。
+ * Biological tools: HMDB profiles and live KEGG REST pathway queries.
+ * KEGG requests go through /kegg-rest/ (Vite/nginx → rest.kegg.jp).
+ * No KEGG files or HMDB index are required for pathway queries.
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -30,10 +17,17 @@ import {
   MAX_TOP_N,
   MAX_BATCH_QUERIES,
 } from '../tools'
+import { KeggClient, normalizeKeggName, compoundLink, pathwayLink, keggSource } from './kegg'
 import { lowerBoundBy } from '@/shared/utils/bisect'
-import { ADDUCTS } from '../tool-knowledge'
+import { adductShiftTable } from '@/shared/chem/adducts'
 import type { AnnotationRow } from '../../bridge/analysisTypes'
 import { getAnnotationRows, resolveMassPolarity } from '../../bridge/analysisContext'
+
+/** HMDB 质量检索使用的加合物位移，数值由共享元素/加合物质量表计算。 */
+export const ADDUCTS: Record<'positive' | 'negative', Record<string, number>> = {
+  positive: adductShiftTable(['M+H', 'M+Na', 'M+K', 'M+NH4', 'M+Li']),
+  negative: adductShiftTable(['M-H', 'M+Cl', 'M+HCOO', 'M+CH3COO', 'M-2H+Na', 'M-2H+K']),
+}
 
 /** HMDB 索引行：[accession, name, formula, monoMass, keggId, tissues[], diseases[], biofunction] */
 export type HmdbRow = [
@@ -47,27 +41,9 @@ export type HmdbRow = [
   string | null,
 ]
 
-/** KEGG 索引（build-kegg-index.mjs 生成）：id/名称 归一小写 */
-export interface KeggIndex {
-  /** map 编号 → 通路名 */
-  pathways: Record<string, string>
-  /** 小写归一 C-id → [C-id, ...names] */
-  compounds: Record<string, string[]>
-  /** 小写 C-id → [map 编号, ...] */
-  links: Record<string, string[]>
-}
-
-// ---- 懒加载（共享工厂，见 httpJson.createLazyJsonLoader） ----
-
 const loadHmdbIndex = createLazyJsonLoader<HmdbRow[]>(
   'hmdb-index.json',
   () => 'HMDB offline index not found in this deployment (needs public/data/hmdb-index.json).',
-)
-
-const loadKeggIndex = createLazyJsonLoader<KeggIndex>(
-  'kegg-pathway-index.json',
-  () =>
-    'KEGG offline index not found in this deployment (needs public/data/kegg-pathway-index.json).',
 )
 
 /** 索引缺失时的统一指引文案（拼接在 loadJson 的错误信息后） */
@@ -86,7 +62,6 @@ const hmdbSearchCache = new WeakMap<
   {
     names: string[]
     ids: string[]
-    keggIds: Map<string, string>
   }
 >()
 const hmdbMassCache = new WeakMap<HmdbRow[], HmdbRow[]>()
@@ -95,60 +70,21 @@ function hmdbSearchIndex(rows: HmdbRow[]) {
   let cached = hmdbSearchCache.get(rows)
   if (!cached) {
     const names = rows.map((row) => norm(row[1]))
-    const keggIds = new Map<string, string>()
-    rows.forEach((row, i) => {
-      if (row[4] && !keggIds.has(names[i]!)) keggIds.set(names[i]!, row[4])
-    })
     cached = {
       names,
       ids: rows.map((row) => row[0].toLowerCase()),
-      keggIds,
     }
     hmdbSearchCache.set(rows, cached)
   }
   return cached
 }
 
-/** 在 HMDB 里找名称完全归一相等的行，取其 KEGG C-id（注释名 → 通路的桥） */
-function keggIdByExactName(hmdbIndex: HmdbRow[], name: string): string | null {
-  return hmdbSearchIndex(hmdbIndex).keggIds.get(norm(name)) ?? null
-}
-
-/** 名称 → 规范 C-id 的倒排索引（按 KeggIndex 对象缓存）。
- *  keggIdByKeggName 的热路径：pathway_enrichment 一次调用要查几十个候选名，
- *  脂质缩写必然 miss——线性全扫 19k 化合物 × 5.3 万别名逐个 norm() 是
- *  数百万次正则操作，主线程卡死秒级。建一次 Map 后单次查询 O(1)。 */
-const keggNameIndexCache = new WeakMap<KeggIndex, Map<string, string>>()
-
-function buildKeggNameIndex(kegg: KeggIndex): Map<string, string> {
-  const map = new Map<string, string>()
-  for (const [key, names] of Object.entries(kegg.compounds)) {
-    const canonical = names[0] ?? key.toUpperCase()
-    // key 是归一小写 C-id（norm 对 "c00031" 原样）；names[1..] 是名称别名
-    map.set(key, canonical)
-    for (let i = 1; i < names.length; i++) {
-      const n = norm(names[i] ?? '')
-      if (n && !map.has(n)) map.set(n, canonical)
-    }
-  }
-  return map
-}
-
-/** 在 KEGG 索引里按名称反查 C-id（compounds 的 names 数组含常用名，可无 HMDB 独立工作） */
-function keggIdByKeggName(kegg: KeggIndex, name: string): string | null {
-  const q = norm(name)
-  if (!q) return null
-  let index = keggNameIndexCache.get(kegg)
-  if (!index) {
-    index = buildKeggNameIndex(kegg)
-    keggNameIndexCache.set(kegg, index)
-  }
-  return index.get(q) ?? null
-}
-
 /** 一条注释的可用名（候选按来源排过序，内源在前；跳过外源候选——它们通常不进代谢通路；过滤空名） */
 function annotationRowNames(row: AnnotationRow): string[] {
-  const raw = row.candidates.length > 0 ? row.candidates.map((c) => c.name ?? '') : [row.name ?? '']
+  const raw =
+    row.candidates.length > 0
+      ? row.candidates.map((c) => (/^(?:cpd:)?C\d{5}$/i.test(c.id) ? c.id : (c.name ?? '')))
+      : [row.name ?? '']
   const keep = raw.filter((n, i) => {
     if (!n || !n.trim()) return false
     const o = row.candidates[i]?.origin
@@ -161,63 +97,99 @@ function annotationRowNames(row: AnnotationRow): string[] {
 export interface PathwayHit {
   mapId: string
   name: string
-  /** 命中分子式（同分子式的多个加合离子折叠为一个分子） */
+  /** 命中分子式组（折叠加合离子，保留异构体不确定性） */
   formulas: string[]
 }
 
-/**
- * 通路富集（描述性计数，非统计检验）：把 top 注释行按分子式折叠后，
- * 经 KEGG 索引自反查（必要时再用 HMDB 补 KEGG id），聚合到通路。
- * 返回按命中数降序的通路表 + 未能映射到任何通路的分子名（供模型如实说明覆盖面）。
- *
- * hmdbIndex 可选：部署未构建 HMDB 索引时传 null，富集仍可用 KEGG 索引独立完成。
- */
-export function pathwayEnrichment(
-  rows: AnnotationRow[],
-  hmdbIndex: HmdbRow[] | null,
-  kegg: KeggIndex,
-  topN: number,
-): { hits: PathwayHit[]; mappedFormulas: number; totalFormulas: number; unmapped: string[] } {
-  // 1) 按分子式折叠（同分子的 [M+H]+/[M+Na]+ 是同一个分子，只计一次），保留最高排名
-  const byFormula = new Map<string, AnnotationRow>()
-  for (const r of [...rows].sort((a, b) => a.rank - b.rank).slice(0, topN)) {
-    if (!byFormula.has(r.formula)) byFormula.set(r.formula, r)
-  }
+export interface PathwayRollup {
+  hits: PathwayHit[]
+  mappedFormulas: number
+  totalFormulas: number
+  unmapped: string[]
+  ambiguous: { query: string; ids: string[] }[]
+  deferred: string[]
+}
 
-  // 2) 每个分子式 → 一组 KEGG 通路 map 编号
-  const unmapped: string[] = []
-  const pathwayToFormulas = new Map<string, Set<string>>()
-  let mapped = 0
-  for (const [formula, row] of byFormula) {
-    const mapIds = new Set<string>()
-    for (const name of annotationRowNames(row)) {
-      // 先 KEGG 自反查；查不到且 HMDB 可用时再用 HMDB 取 KEGG id
-      const cid =
-        keggIdByKeggName(kegg, name) ?? (hmdbIndex ? keggIdByExactName(hmdbIndex, name) : null)
-      if (!cid) continue
-      for (const m of kegg.links[cid.toLowerCase()] ?? []) mapIds.add(m)
+/** Query exact compound identities, then batch official compound→pathway links. */
+export async function pathwayEnrichment(
+  rows: AnnotationRow[],
+  topN: number,
+  signal?: AbortSignal,
+): Promise<PathwayRollup> {
+  const byFormula = new Map<string, AnnotationRow>()
+  for (const row of [...rows].sort((a, b) => a.rank - b.rank).slice(0, topN)) {
+    if (!byFormula.has(row.formula)) byFormula.set(row.formula, row)
+  }
+  const groups = [...byFormula.values()].map((row) => ({ row, queries: annotationRowNames(row) }))
+  // Give each formula's leading candidate a turn before querying further alternatives.
+  const unique = new Map<string, string>()
+  const depth = Math.max(0, ...groups.map((group) => group.queries.length))
+  for (let i = 0; i < depth; i++) {
+    for (const group of groups) {
+      const query = group.queries[i]
+      if (query && !unique.has(normalizeKeggName(query)))
+        unique.set(normalizeKeggName(query), query)
     }
-    if (mapIds.size === 0) {
-      unmapped.push(row.name)
+  }
+  const queries = [...unique.values()]
+  const selected = queries.slice(0, 50)
+  const deferred = queries.slice(50)
+  const client = new KeggClient(signal)
+  const matches = new Map<string, string[]>()
+  const ambiguous: PathwayRollup['ambiguous'] = []
+  await Promise.all(
+    selected.map(async (query) => {
+      const compounds = await client.findCompounds(query)
+      const directId = query.trim().replace(/^cpd:/i, '').toUpperCase()
+      // Do not turn broad search hits (e.g. glucose phosphates) into an identity match.
+      const ids = compounds
+        .filter(
+          (compound) =>
+            compound.id === directId ||
+            compound.names.some((name) => normalizeKeggName(name) === normalizeKeggName(query)),
+        )
+        .map((compound) => compound.id)
+      matches.set(normalizeKeggName(query), ids)
+      if (ids.length > 1) ambiguous.push({ query, ids })
+    }),
+  )
+  const links = await client.compoundPathways([...matches.values()].flat())
+  const pathwayToFormulas = new Map<string, Set<string>>()
+  const unmapped: string[] = []
+  let mapped = 0
+  for (const { row, queries } of groups) {
+    const paths = new Set(
+      queries.flatMap((query) =>
+        (matches.get(normalizeKeggName(query)) ?? []).flatMap((id) => links.get(id) ?? []),
+      ),
+    )
+    if (!paths.size) {
+      unmapped.push(row.name || row.formula)
       continue
     }
     mapped++
-    for (const m of mapIds) {
-      if (!pathwayToFormulas.has(m)) pathwayToFormulas.set(m, new Set())
-      pathwayToFormulas.get(m)!.add(formula)
+    for (const id of paths) {
+      if (!pathwayToFormulas.has(id)) pathwayToFormulas.set(id, new Set())
+      pathwayToFormulas.get(id)!.add(row.formula)
     }
   }
-
-  // 3) 聚合成通路表（命中数降序，再按通路名稳定排序）
-  const hits: PathwayHit[] = [...pathwayToFormulas.entries()]
+  const names = new Map(await client.list([...pathwayToFormulas.keys()]))
+  const hits = [...pathwayToFormulas]
     .map(([mapId, formulas]) => ({
       mapId,
-      name: kegg.pathways[mapId] ?? '(reference pathway)',
+      name: names.get(mapId) ?? '(name not returned by KEGG)',
       formulas: [...formulas],
     }))
     .sort((a, b) => b.formulas.length - a.formulas.length || a.name.localeCompare(b.name))
-
-  return { hits, mappedFormulas: mapped, totalFormulas: byFormula.size, unmapped }
+  ambiguous.sort((a, b) => a.query.localeCompare(b.query))
+  return {
+    hits,
+    mappedFormulas: mapped,
+    totalFormulas: byFormula.size,
+    unmapped,
+    ambiguous,
+    deferred,
+  }
 }
 
 /** 名称/HMDB id 子串检索 */
@@ -242,7 +214,7 @@ export function searchHmdbIndex(index: HmdbRow[], query: string, max: number): H
   return out
 }
 
-/** m/z ± 加合物质量检索（与 library_mass_search 同表） */
+/** HMDB m/z 检索：按极性扫描常见加合物，返回质量窗口内的候选。 */
 export function massSearchHmdbIndex(
   index: HmdbRow[],
   mz: number,
@@ -326,62 +298,54 @@ export async function hmdbLookup(
   return lines.join('\n')
 }
 
-/** 化合物/通路名 → KEGG 通路（正反向） */
+/** Live compound/pathway lookup, including reverse pathway membership. */
 export async function keggLookup(
   query: string,
   max: number,
   signal?: AbortSignal,
 ): Promise<string> {
   if (!norm(query)) throw new Error('Provide a nonempty KEGG query')
-  let index: KeggIndex
-  try {
-    index = await loadKeggIndex(signal)
-  } catch (err) {
-    throw new Error(`${(err as Error).message}${notBuiltHint('build-kegg-index.mjs')}`)
-  }
-
-  const q = norm(query)
+  const client = new KeggClient(signal)
+  const q = query.trim()
+  const isCompound = /^(?:cpd:)?C\d{5}$/i.test(q)
+  const isPathway = /^(?:path:)?[a-z]{2,4}\d{5}$/i.test(q) && !isCompound
+  const [compounds, pathways] = await Promise.all([
+    isPathway ? [] : client.findCompounds(q),
+    isCompound ? [] : client.findPathways(q),
+  ])
   const lines: string[] = []
-
-  // 1) 通路名/编号查询 → 通路下的化合物
-  const pathwayIds = Object.entries(index.pathways)
-    .filter(([id, name]) => norm(name).includes(q) || id.includes(q.replace(/^path:/, '')))
-    .slice(0, 3)
-  for (const [pid, pname] of pathwayIds) {
-    const comps = Object.entries(index.links)
-      .filter(([, maps]) => maps.includes(pid))
-      .slice(0, max)
-      .map(([cid]) => (index.compounds[cid]?.[0] ?? cid) + ' ' + (index.compounds[cid]?.[1] ?? ''))
-    lines.push(`pathway ${pid} ${pname}`)
+  for (const [id, name] of pathways.slice(0, 3)) {
+    const members = await client.pathwayCompounds(id)
+    const names = await client.list(members.slice(0, max))
+    lines.push(`pathway ${pathwayLink(id, name)}`)
     lines.push(
-      `  compounds (${comps.length >= max ? `${max}+` : comps.length}): ${comps.join('; ')}`,
+      `  compounds (showing ${names.length} of ${members.length}): ${names.map(([cid, label]) => compoundLink(cid, label.split(';')[0]!.trim())).join('; ')}`,
     )
   }
-
-  // 2) 化合物名/C-id 查询 → 所属通路
-  const cidMatches = Object.entries(index.compounds)
-    .filter(([key, names]) => key === q || names.some((n) => norm(n).includes(q)))
-    .slice(0, 5)
-  for (const [key, names] of cidMatches) {
-    const cid = names[0]
-    const maps = index.links[key] ?? []
-    if (maps.length === 0) {
-      lines.push(`- ${names.slice(1, 3).join(' / ')} (${cid}): no pathway links`)
-      continue
-    }
-    lines.push(`- ${names.slice(1, 3).join(' / ')} (${cid}) — ${maps.length} pathway(s):`)
-    for (const m of maps.slice(0, max)) {
-      lines.push(`  ${m} ${index.pathways[m] ?? '(reference pathway)'}`)
-    }
-  }
-
-  if (lines.length === 0) {
-    return (
-      `No KEGG entries match "${query}". Try a compound name ("glucose", "palmitic acid"), ` +
-      `a C number ("C00031"), or a pathway ("glycolysis", "map00010").`
+  const ranked = [...compounds].sort(
+    (a, b) =>
+      Number(b.names.some((n) => normalizeKeggName(n) === normalizeKeggName(q))) -
+      Number(a.names.some((n) => normalizeKeggName(n) === normalizeKeggName(q))),
+  )
+  const selected = ranked.slice(0, 5)
+  const links = await client.compoundPathways(selected.map((compound) => compound.id))
+  const names = new Map(await client.list([...new Set([...links.values()].flat())]))
+  for (const compound of selected) {
+    const maps = links.get(compound.id) ?? []
+    const exact =
+      isCompound || compound.names.some((n) => normalizeKeggName(n) === normalizeKeggName(q))
+    lines.push(
+      `- ${compoundLink(compound.id, compound.names.slice(0, 2).join(' / '))} (${compound.id}; ${exact ? 'exact identity/synonym match' : 'keyword match only; verify identity'}) — ${maps.length} reference pathway(s)`,
     )
+    for (const id of maps.slice(0, max))
+      lines.push(`  ${pathwayLink(id, names.get(id) ?? 'KEGG pathway')}`)
+    if (!maps.length) lines.push('  No reference pathway links returned by KEGG.')
   }
-  lines.push('source: KEGG (local offline index; https://www.kegg.jp, Kanehisa et al. NAR)')
+  if (!lines.length)
+    lines.push(
+      `No KEGG entries matched "${query}". This is a database search miss, not biological absence.`,
+    )
+  lines.push(keggSource())
   return lines.join('\n')
 }
 
@@ -466,11 +430,13 @@ export function apply(ctx: Context) {
   ctx.tools.register(
     defineTool({
       name: 'kegg_pathway_lookup',
+      timeoutMs: 120_000,
+      maxResultChars: TOOL_RESULT_CHARS_EVIDENCE,
       category: 'biology',
       description:
-        'Map metabolites to KEGG metabolic pathways (offline index): query compound names or ' +
+        'Query the official KEGG REST API live for metabolic pathways: query compound names or ' +
         'C numbers to list pathways (e.g. "what pathway is palmitic acid in"), or a pathway name/map ' +
-        'id to list member compounds — supports "which pathways are enriched in this annotation set". ' +
+        'id to list member compounds. Keyword matches require identity verification. ' +
         'BATCHING: for several compounds at once pass "queries" (array) in ONE call instead of one ' +
         'call per molecule.',
       parameters: {
@@ -499,7 +465,7 @@ export function apply(ctx: Context) {
           queries,
           (q) => q,
           (q) => keggLookup(q, max, exec.signal),
-          { ...args, session: exec.session, signal: exec.signal },
+          { ...args, ...EVIDENCE_BATCH_BUDGET, session: exec.session, signal: exec.signal },
         )
       },
     }),
@@ -508,14 +474,16 @@ export function apply(ctx: Context) {
   ctx.tools.register(
     defineTool({
       name: 'pathway_enrichment',
+      timeoutMs: 120_000,
       maxResultChars: TOOL_RESULT_CHARS_EVIDENCE,
       category: 'biology',
       description:
-        'Pathway rollup for the top-ranked annotations: batch-map the top N annotation rows ' +
-        '(folded by formula, so the adduct ions of one molecule count once) onto KEGG pathways and ' +
+        'Query the official KEGG REST API live for a pathway rollup: batch-map the top N annotation rows ' +
+        '(folded into formula groups; adducts and unresolved isomers share a count) onto KEGG pathways and ' +
         'rank pathways by how many annotated formula groups they contain. Use AFTER get_annotation_top ' +
         'to answer "are these annotations concentrated on one pathway" — several high-score ' +
         'annotations on ONE pathway is a candidate descriptive finding; it does not establish pathway activity. ' +
+        'Uses exact compound/synonym matches or KEGG C ids; reports ambiguous matches and candidates deferred beyond the 50-query budget. ' +
         'Descriptive counts, not a statistical enrichment test.',
       parameters: {
         topN: {
@@ -530,21 +498,7 @@ export function apply(ctx: Context) {
           return 'No annotations in the current page context. Run the annotation panel first (import a DB and start annotation), then call get_annotation_top before this.'
         }
         const n = Math.min(Math.max(args.topN ?? DEFAULT_TOP_N, 1), MAX_TOP_N)
-        // KEGG 索引必需（富集的本体）；HMDB 可选——缺失时用 KEGG 索引自反查名称即可
-        let kegg: KeggIndex
-        try {
-          kegg = await loadKeggIndex(signal)
-        } catch (err) {
-          throw new Error(`${(err as Error).message}${notBuiltHint('build-kegg-index.mjs')}`)
-        }
-        let hmdb: HmdbRow[] | null = null
-        try {
-          hmdb = await loadHmdbIndex(signal)
-        } catch {
-          signal.throwIfAborted()
-          hmdb = null // 无 HMDB 也能跑：KEGG compounds 的 names 已含常用名可反查
-        }
-        const r = pathwayEnrichment(rows, hmdb, kegg, n)
+        const r = await pathwayEnrichment(rows, n, signal)
         const lines = [
           `Pathway rollup over the top ${n} annotation rows (${r.totalFormulas} formula groups after folding adduct ions; isomers remain unresolved; ${r.mappedFormulas} mapped to at least one KEGG pathway).`,
           'Counts are descriptive, not a statistical enrichment test.',
@@ -552,14 +506,14 @@ export function apply(ctx: Context) {
         ]
         if (r.hits.length === 0) {
           lines.push(
-            'No KEGG pathway could be assigned to any annotated molecule (names may be lipid shorthand, which KEGG reference pathways do not cover; try interpreting per-molecule with kegg_pathway_lookup).',
+            'No reference pathway links were returned for the exact candidate identities queried. Names without an exact KEGG match remain unresolved; inspect them with kegg_pathway_lookup.',
           )
         } else {
-          lines.push('| Pathway | Molecules | Annotated formulas |')
+          lines.push('| Pathway | Formula groups | Annotated formulas |')
           lines.push('|---|---|---|')
           for (const h of r.hits) {
             lines.push(
-              `| ${h.name} (${h.mapId}) | ${h.formulas.length} | ${h.formulas.join(', ')} |`,
+              `| ${pathwayLink(h.mapId, h.name)} | ${h.formulas.length} | ${h.formulas.join(', ')} |`,
             )
           }
           const top = r.hits[0]!
@@ -573,14 +527,20 @@ export function apply(ctx: Context) {
         if (r.unmapped.length > 0) {
           lines.push('')
           lines.push(
-            `Unmapped (no KEGG pathway): ${r.unmapped.slice(0, 15).join(', ')}${r.unmapped.length > 15 ? ` … +${r.unmapped.length - 15} more` : ''}`,
+            `Unmapped in queried candidates: ${r.unmapped.slice(0, 15).join(', ')}${r.unmapped.length > 15 ? ` … +${r.unmapped.length - 15} more` : ''}`,
           )
         }
-        lines.push(
-          hmdb
-            ? 'source: KEGG + HMDB (local offline indexes)'
-            : 'source: KEGG (local offline index; HMDB index not built, names resolved via KEGG)',
-        )
+        if (r.ambiguous.length) {
+          lines.push(
+            `Ambiguous exact KEGG matches (all retained as alternatives): ${r.ambiguous.map((hit) => `${hit.query}: ${hit.ids.map((id) => compoundLink(id)).join(', ')}`).join('; ')}`,
+          )
+        }
+        if (r.deferred.length) {
+          lines.push(
+            `Incomplete candidate coverage: ${r.deferred.length} alternative names were not queried after the 50-query budget: ${r.deferred.join('; ')}. Unmapped groups may include unqueried alternatives.`,
+          )
+        }
+        lines.push(keggSource())
         return lines.join('\n')
       },
     }),

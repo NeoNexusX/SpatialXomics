@@ -9,6 +9,9 @@
 #   3. Vue Router history 模式 SPA fallback
 # ============================================================
 
+# 所有浏览器共享这一上游配额，避免同一服务器 IP 超过 KEGG 的 3 次/秒限制。
+limit_req_zone $server_name zone=kegg_rest:1m rate=3r/s;
+
 server {
     listen 80;
     server_name _;
@@ -39,6 +42,19 @@ server {
     location /assets/ {
         expires 1y;
         add_header Cache-Control "public, immutable";
+    }
+
+    # KEGG 官方 API 的固定同源转发；浏览器不下载离线索引。
+    location /kegg-rest/ {
+        limit_req zone=kegg_rest burst=10;
+        limit_req_status 429;
+        proxy_pass https://rest.kegg.jp/;
+        proxy_set_header Host rest.kegg.jp;
+        proxy_ssl_server_name on;
+        proxy_ssl_name rest.kegg.jp;
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 25s;
+        limit_except GET { deny all; }
     }
 
     # API 代理 → 后端服务

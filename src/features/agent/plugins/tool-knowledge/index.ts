@@ -1,42 +1,19 @@
 /**
- * 化学信息只读工具集：PubChem（在线）+ 离线注释库检索（当前为 LIPID MAPS
- * LMSD 索引，多源可扩展）+ ChEBI 生物角色（在线，经 EBI OLS4）。
- *
- * - PubChem PUG REST  https://pubchem.ncbi.nlm.nih.gov/rest/pug/（无鉴权，CORS 友好）
- * - 离线库：LIPID MAPS LMSD 的 REST API 不带 CORS 头，浏览器无法直连，故
- *   离线化——由 scripts/build-lipid-index.mjs 从官方 SDF 生成
- *   public/data/lipidmaps-index.json（~5 万条，gzip 后 <1MB），首次调用时
- *   同源 fetch 拉取缓存，之后纯本地检索。数据 © LIPID MAPS（Conroy et al.,
- *   NAR 2024, doi:10.1093/nar/gkad896）。
- *   工具名刻意叫 library_*（"当前库"）而非 lipidmaps_*：索引按库打包，
- *   后续 HMDB/ChEBI 等多源小分子库可挂进同一命名。
- * - ChEBI：OLS4 搜索接口 https://www.ebi.ac.uk/ols4/api（CORS ✓）。
- *
- * （文献类工具 pubmed/europepmc/openalex 见 tool-literature；
- *   生物信息 hmdb/kegg 见 tool-bio。碎片证据/MS/MS 谱库检索已整体移除：
- *   平台无浏览器可用谱库，需确认时建议 on-tissue MS/MS 或标准品。）
- *
- * 设计约束：
- * - 结果按预算分页摘要，超长证据可从会话存档取回；
- * - 无 key、无写操作；网络/上游错误抛 Error → ToolRuntime 转 isError 结果回喂模型，不中断 turn。
+ * 化学信息只读工具集：PubChem 化合物/分子式查询与 ChEBI 本体检索。
+ * 文献工具见 tool-literature；HMDB 与 KEGG 通路工具见 tool-bio。
+ * 结果按预算分页，完整证据可从会话存档取回；上游错误由 ToolRuntime 回喂模型。
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import {
   defineTool,
   batchInput,
-  EVIDENCE_BATCH_BUDGET,
   renderBatch,
   batchPageParameters,
-  TOOL_RESULT_CHARS_EVIDENCE,
   getJson,
   take,
-  createLazyJsonLoader,
   MAX_BATCH_QUERIES,
 } from '../tools'
-import { adductShiftTable } from '@/shared/chem/adducts'
-import { lowerBoundBy } from '@/shared/utils/bisect'
-import { resolveMassPolarity } from '../../bridge/analysisContext'
 
 const PUBCHEM_BASE = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug'
 const OLS4_BASE = 'https://www.ebi.ac.uk/ols4/api'
@@ -129,192 +106,6 @@ export async function chebiLookup(
     return parts.join(' ')
   })
   lines.push('source: ChEBI via EBI OLS4 (https://www.ebi.ac.uk/chebi, Hastings et al. NAR)')
-  return lines.join('\n')
-}
-
-// ---- LIPID MAPS 本地索引 ----
-
-/** 「当前注释库」清单：library_* 工具的部署身份（单一事实源）。
- *  工具描述、无匹配文案、来源引用行、索引文件名全部由此组合——换部署
- *  索引或增补第二个库时改这里，不再散落多处各写一份 "LIPID MAPS LMSD"
- *  导致描述与实际索引脱节。 */
-export interface LibraryManifest {
-  /** 对模型展示的库名 */
-  label: string
-  /** 库内容描述（规模/种类） */
-  about: string
-  /** 支持的查询写法（无匹配建议 + 工具描述共用） */
-  queryKinds: string
-  /** 索引静态资源文件名（public/data/ 下） */
-  indexFile: string
-  /** 结果尾部的来源引用行 */
-  sourceLine: string
-}
-
-/** 当前部署的离线注释库（scripts/build-lipid-index.mjs 产出的 LMSD 索引） */
-export const CURRENT_LIBRARY: LibraryManifest = {
-  label: 'LIPID MAPS LMSD',
-  about: '~50k lipid entries',
-  queryKinds: 'lipid shorthand ("PC 34:1"), common name, or LM_ID',
-  indexFile: 'lipidmaps-index.json',
-  sourceLine:
-    'source: LIPID MAPS LMSD (local offline index; https://www.lipidmaps.org, doi:10.1093/nar/gkad896)',
-}
-
-/** LMSD 索引行（scripts/build-lipid-index.mjs 生成，按精确质量升序）：
- * [lmId, abbreviation, name, formula, exactMass, category, mainClass, pubchemCid]
- */
-export type LipidRow = [
-  string | null,
-  string | null,
-  string | null,
-  string,
-  number,
-  string | null,
-  string | null,
-  number | null,
-]
-
-/** 常见加合物的单同位素离子质量位移（Da）：neutral = m/z − shift。
- *  数值来自共享加合物表（shared/chem/adducts.ts，按元素质量现算、含电子质量），注释面板
- *  用的是同一张表；这里列出助手检索要扫的子集。tool-bio 的 HMDB 质量检索复用同一张表。 */
-export const ADDUCTS: Record<'positive' | 'negative', Record<string, number>> = {
-  positive: adductShiftTable(['M+H', 'M+Na', 'M+K', 'M+NH4', 'M+Li']),
-  negative: adductShiftTable(['M-H', 'M+Cl', 'M+HCOO', 'M+CH3COO', 'M-2H+Na', 'M-2H+K']),
-}
-
-/** 懒加载 LMSD 索引（同源静态资源，模块级缓存；首次 ~940KB gzip） */
-export const loadLipidIndex = createLazyJsonLoader<LipidRow[]>(
-  CURRENT_LIBRARY.indexFile,
-  (status) => `Failed to load ${CURRENT_LIBRARY.label} index (HTTP ${status})`,
-)
-
-/** 脂质速记名归一化：去掉括号/空格/下划线/斜杠并小写，"PC(34:1)" ≡ "pc 34:1" ≡ "PC34:1" */
-export function normalizeLipidQuery(s: string): string {
-  return s.toLowerCase().replace(/[()\s_/]/g, '')
-}
-
-/** 按名称/缩写/LM_ID 子串检索（归一化匹配），返回前 max 条 */
-export function searchLipidIndex(index: LipidRow[], query: string, max: number): LipidRow[] {
-  const q = normalizeLipidQuery(query)
-  if (!q) return []
-  const out: LipidRow[] = []
-  for (const row of index) {
-    if (
-      (row[0] && row[0].toLowerCase().includes(q)) ||
-      (row[1] && normalizeLipidQuery(row[1]).includes(q)) ||
-      (row[2] && normalizeLipidQuery(row[2]).includes(q))
-    ) {
-      out.push(row)
-      if (out.length >= max) break
-    }
-  }
-  return out
-}
-
-/** 质量匹配结果：索引行 + [adduct, Δppm] */
-export type LipidMassMatch = [...LipidRow, adduct: string, ppm: number]
-
-/**
- * 按观察 m/z 做加合物感知的脂质质量匹配。
- * adducts 传入 null 时扫描该极性全部常见加合物（[M-H]- / [M+H]+ / [M+Na]+ …）。
- */
-export function massSearchLipidIndex(
-  index: LipidRow[],
-  mz: number,
-  polarity: 'positive' | 'negative',
-  adducts: Record<string, number> | null,
-  ppm: number,
-  max: number,
-): LipidMassMatch[] {
-  const table = adducts ?? ADDUCTS[polarity]
-  const out: LipidMassMatch[] = []
-  for (const [name, shift] of Object.entries(table)) {
-    const neutral = mz - shift
-    const window = (mz * ppm) / 1e6
-    for (let i = lowerBoundBy(index, (row) => row[4], neutral - window); i < index.length; i++) {
-      const row = index[i]!
-      if (row[4] > neutral + window) break
-      out.push([...row, name, ((row[4] - neutral) / mz) * 1e6] as LipidMassMatch)
-    }
-  }
-  // 按质量误差绝对值排序，截断
-  out.sort((a, b) => Math.abs(a[9]) - Math.abs(b[9]))
-  return out.slice(0, max)
-}
-
-function formatLipidRow(r: LipidRow): string {
-  const parts = [`- ${r[1] ?? r[2] ?? r[0]}`]
-  if (r[1] && r[2] && r[1] !== r[2]) parts.push(`(${r[2]})`)
-  parts.push(`| ${r[3]} | M ${r[4]} | ${r[0]}`)
-  if (r[6]) parts.push(`| ${r[6]}`)
-  if (r[7] != null) parts.push(`| PubChem CID ${r[7]}`)
-  return parts.join(' ')
-}
-
-/** 名称/缩写检索结果摘要（library_lookup 工具的实现体） */
-export async function libraryLookup(
-  query: string,
-  max: number,
-  signal?: AbortSignal,
-): Promise<string> {
-  if (!normalizeLipidQuery(query)) throw new Error('Provide a nonempty library query')
-  const index = await loadLipidIndex(signal)
-  const hits = searchLipidIndex(index, query, max)
-  if (hits.length === 0) {
-    return (
-      `No entries in the current offline library (${CURRENT_LIBRARY.label}) match "${query}". ` +
-      `Try ${CURRENT_LIBRARY.queryKinds}.`
-    )
-  }
-  const lines = hits.map(formatLipidRow)
-  lines.push(CURRENT_LIBRARY.sourceLine)
-  return lines.join('\n')
-}
-
-/** m/z + 极性（+ 可选加合物）的库注释匹配（library_mass_search 的实现体） */
-export async function libraryMassSearch(
-  mz: number,
-  polarity: 'positive' | 'negative',
-  adduct: string | null,
-  ppm: number,
-  max: number,
-  signal?: AbortSignal,
-): Promise<string> {
-  if (!Number.isFinite(mz) || mz <= 0) throw new Error('m/z must be positive')
-  const index = await loadLipidIndex(signal)
-
-  // 单加合物：在对应极性表里找位移；找不到给出可用列表
-  let adducts: Record<string, number> | null = null
-  if (adduct) {
-    const shift = ADDUCTS[polarity][adduct]
-    if (shift == null) {
-      throw new Error(
-        `Unknown adduct "${adduct}" for ${polarity} mode. Available: ${Object.keys(ADDUCTS[polarity]).join(', ')}`,
-      )
-    }
-    adducts = { [adduct]: shift }
-  }
-
-  const hits = massSearchLipidIndex(index, mz, polarity, adducts, ppm, max)
-  if (hits.length === 0) {
-    return (
-      `No matches in the current offline library (${CURRENT_LIBRARY.label}) for m/z ${mz} within ` +
-      `${ppm} ppm (${adduct ?? `scanned adducts: ${Object.keys(ADDUCTS[polarity]).join(', ')}`}). ` +
-      `Consider widening ppm or checking the adduct/isotope.`
-    )
-  }
-
-  const lines = [
-    `m/z ${mz} (${polarity}, ${ppm} ppm window) — top ${CURRENT_LIBRARY.label} matches:`,
-  ]
-  for (const h of hits) {
-    lines.push(
-      `- ${h[8]} → ${h[1] ?? h[2] ?? h[0]}${h[1] && h[2] && h[1] !== h[2] ? ` (${h[2]})` : ''}` +
-        ` | ${h[3]} | neutral M ${h[4]} | Δ${h[9].toFixed(1)} ppm | ${h[0]}${h[6] ? ` | ${h[6]}` : ''}`,
-    )
-  }
-  lines.push(CURRENT_LIBRARY.sourceLine)
   return lines.join('\n')
 }
 
@@ -426,98 +217,6 @@ export function apply(ctx: Context) {
           (q) => q,
           (q) => chebiLookup(q, max, exec.signal),
           { ...args, session: exec.session, signal: exec.signal },
-        )
-      },
-    }),
-  )
-
-  ctx.tools.register(
-    defineTool({
-      name: 'library_lookup',
-      category: 'chemistry',
-      description:
-        'Look up compounds in the CURRENT offline annotation library (deployed index: ' +
-        `${CURRENT_LIBRARY.label}, ${CURRENT_LIBRARY.about}). Search by ${CURRENT_LIBRARY.queryKinds}. ` +
-        'Returns formula, exact mass, classification, PubChem CID. First call loads the index ' +
-        '(~1MB, cached afterwards). Small-molecule libraries (HMDB/KEGG) live in the biology tools. ' +
-        'BATCHING: for several compounds pass "queries" (array) in ONE call.',
-      parameters: {
-        ...batchPageParameters,
-        query: {
-          type: 'string',
-          description: 'Single shorthand / name / id fragment; for multiple use "queries"',
-        },
-        queries: {
-          type: 'array',
-          items: 'string',
-          maxItems: MAX_BATCH_QUERIES,
-          description: 'Batch form of "query": many shorthands / names in one call',
-        },
-        maxResults: { type: 'integer', description: 'Max entries per query (default 10, max 25)' },
-      },
-      async execute(args, exec) {
-        const queries = batchInput<string>(args.queries, args.query)
-        if (queries.length === 0) throw new Error('Provide "query" or "queries"')
-        const max = Math.min(Math.max(args.maxResults ?? 10, 1), 25)
-        return renderBatch(
-          queries,
-          (q) => q,
-          (q) => libraryLookup(q, max, exec.signal),
-          { ...args, session: exec.session, signal: exec.signal },
-        )
-      },
-    }),
-  )
-
-  ctx.tools.register(
-    defineTool({
-      name: 'library_mass_search',
-      category: 'chemistry',
-      description:
-        'Annotate m/z values against the CURRENT offline annotation library (deployed index: ' +
-        `${CURRENT_LIBRARY.label}) with adduct-aware matching: give observed m/z and polarity ` +
-        '(optionally a specific adduct, else all common ones are scanned). Returns candidate ' +
-        'compounds with neutral mass, Δppm, and class. First call loads the index (~1MB, cached). ' +
-        'BATCHING: to annotate a peak list pass "mzs" (array of m/z) in ONE call instead of one ' +
-        'call per peak.',
-      maxResultChars: TOOL_RESULT_CHARS_EVIDENCE,
-      parameters: {
-        ...batchPageParameters,
-        mz: { type: 'number', description: 'Single observed m/z value; for multiple use "mzs"' },
-        mzs: {
-          type: 'array',
-          items: 'number',
-          maxItems: MAX_BATCH_QUERIES,
-          description: 'Batch form of "mz": many m/z values in one call',
-        },
-        polarity: {
-          type: 'string',
-          description: 'Ion mode: "positive" or "negative"',
-        },
-        adduct: {
-          type: 'string',
-          description:
-            'Specific adduct, e.g. "[M+H]+", "[M+Na]+", "[M-H]-", "[M+HCOO]-"; omit to scan all common adducts',
-        },
-        ppm: { type: 'integer', description: 'Mass tolerance in ppm (default 10, max 50)' },
-        maxResults: { type: 'integer', description: 'Max candidates per m/z (default 15, max 25)' },
-      },
-      async execute(args, exec) {
-        const polarity = resolveMassPolarity(args.polarity)
-        const mzs = batchInput<number>(args.mzs, args.mz)
-        if (mzs.length === 0) throw new Error('Provide "mz" or "mzs"')
-        const ppm = Math.min(Math.max(args.ppm ?? 10, 1), 50)
-        const max = Math.min(Math.max(args.maxResults ?? 15, 1), 25)
-        return renderBatch(
-          mzs,
-          (mz) => `m/z ${mz}`,
-          (mz) => libraryMassSearch(mz, polarity, args.adduct ?? null, ppm, max, exec.signal),
-          {
-            ...args,
-            ...EVIDENCE_BATCH_BUDGET,
-            session: exec.session,
-            signal: exec.signal,
-          },
         )
       },
     }),

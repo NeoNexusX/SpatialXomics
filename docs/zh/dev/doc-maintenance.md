@@ -72,7 +72,7 @@ npm run docs:preview     # 预览生产构建
 
 ## CI 和部署
 
-- `test` 分支的 workflow 会运行 `npm run check` 和 `npm run docs:build`，随后在另一个 job 构建 SPA 并执行三个浏览器的 E2E。
+- `test` 分支先运行 `npm run check` 和文档构建，随后由独立 job 执行无需 secrets 的三浏览器离线回归，以及需要账号的真实后端三浏览器 E2E 和中文冒烟；入口与覆盖边界见 [测试与 E2E](./testing)。
 - `docker/Dockerfile` 会在镜像构建中再次构建 SPA 和文档，并把 `dist-docs/` 复制到 Nginx 的 `/docs` 目录。
 - `base: '/docs/'` 必须和 `docker/nginx.conf.template` 的路由保持一致。
 - `.dockerignore` 默认排除根目录 `*.md`，但显式保留 `docs/**`，所以正式文档必须放在 `docs/` 内。

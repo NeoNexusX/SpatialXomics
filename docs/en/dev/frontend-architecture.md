@@ -38,54 +38,17 @@ These are maintenance conventions, not fully enforced import laws. The current E
 
 ## SXO-Harness Plugin Structure
 
-`src/features/agent` is a `@deepseek-ai/cordis` plugin application. Each capability is a plugin, and one composition table assembles them:
+`src/features/agent` is a browser-side plugin application assembled by `@deepseek-ai/cordis`. See [Agent Architecture](./agent-architecture) for execution flow, event contracts, and recovery semantics.
 
-- `bundles/base.ts`: the production composition table. Row order has no load semantics: a plugin starts once the services it `inject`s are ready. Adding or removing a plugin only changes this table.
-- `bootstrap.ts`: creates the root context and assembles the table. `whenAgentReady()` waits for every plugin to start and names any plugin that failed.
-- `plugins/<name>/`: one folder per plugin, exposed only through `index.ts`. A plugin that provides a service is a `class extends Service` with `static inject`; the others are modules exporting `name`, `inject`, and `apply`.
-- `bridge/`: light modules that analysis pages import statically (page state, dataset binding). They must not import cordis or plugins, or the runtime would land in the first screen.
-- `components/`, `composables/`: the UI, which depends only on services such as `ctx.agent`.
+- `bundles/base.ts` is the production composition; plugins declare service dependencies through `inject`. `bootstrap.ts` exposes `whenAgentReady()` to await every plugin.
+- `bridge/` is the lightweight static page boundary for dataset identity, loading generation, and analysis selection. It must not import Cordis or plugins.
+- `plugins/agent` provides the UI-facing `ctx.agent` facade for admission, session transitions, and snapshots. `plugins/agent-loop` registers the driver for turns, steps, attempts, and tool dispatch. Compaction, retries, binding, and result archives attach through events.
+- `plugins/session` persists event batches before publishing facts. `session-projection` manages consistent read models; `session-transcript`, `token-meter`, and `agent-instructions` own transcript, statistics, and instruction projections. Streaming is an overlay; failed attempt output never enters model message history.
+- `session-persistence` is the contract, and OPFS is its production implementation. Dataset-scoped conversations support recovery, cross-tab read-only access, temporary fallback, and ZIP migration with images. The log, model-visible surface, and UI message array represent different views.
+- `connection` resolves address/key pairs, `llm` defines protocol-independent contracts, `llm-anthropic` isolates SDK dependencies, and `model-catalog` probes actual vision support. Registries supply domain tools and bundled skills.
+- `FloatingAgent.vue` loads the workspace asynchronously and prefetches it during idle time. Closing the panel retains the module-level runtime; stopping a turn requires an explicit action.
 
-The loop (`plugins/agent-loop`) only handles turns, steps, attempts, and tool dispatch. Every other policy listens to the events it emits:
-
-| Event | Mode | When | Listeners |
-| --- | --- | --- | --- |
-| `agent/guard` | bail; throwing ends the turn | Turn start, each step start, before and after each tool | `analysis-binding` |
-| `agent/pre-turn` | waterfall | Before the turn's opening events are committed | `analysis-binding` appends the context message |
-| `agent/pre-request` | serial | After `request/context` is committed, before the request is sent | `compaction` |
-| `agent/request-error` | waterfall | After a failed attempt is committed | `compaction` (context overflow), `llm-retry` |
-| `agent/tool-result` | waterfall | Before a tool result enters the history | `tool-archive` |
-| `tools/pre-execute`, `tools/post-execute`, `tools/result` | serial, waterfall, emit | Around tool execution | No production listeners yet |
-
-Context compaction (`plugins/compaction`) does one thing: it replaces the oldest span of the conversation with one structured checkpoint. It does not trim images or tool results on their own.
-
-- Triggers: a request is preceded by compaction when the input estimate reaches `min(0.8W, W − O − min(65536, W/4))`; a context overflow confirmed by the endpoint is compacted and retried once per turn; manual compaction ignores the threshold. W is the context window and O is the output reserve.
-- Selection: keeps the most recent `0.16 × (W − O)`, never touches the current turn, and never separates a tool call from its results. Manual compaction and overflow recovery keep only the last complete unit.
-- Summary request: replays the original system prompt, tools, and these messages, then appends the compaction instruction. It is a prefix of the previous request, so the endpoint's prompt cache can be reused; do not change the order or content of these messages.
-- Log: `compaction/start`, `compaction/summary`, the replacement message, `compaction/end`. The original messages and attachments stay in the log and the UI still shows the full conversation, but from then on the model only sees the summary.
-- Failure: the history stays as it was, the turn continues, and the endpoint decides whether the request fits.
-
-Truncating and archiving tool results when they enter the history (`plugins/tool-archive`) is separate: the full result is written to session storage and the model can read it back with `read_archived_result`.
-
-Connections and models are split across three plugins: `plugins/connection` stores the endpoint, key, and model entered by the user (the key stays in local `localStorage`; without it the runtime falls back to the `VITE_LLM_*` deployment defaults); `plugins/llm-anthropic` is the only protocol adapter and requests the normalized `{baseUrl}{requestPath}`, by default `https://api.anthropic.com/v1/messages`; `plugins/model-catalog` lists models and sends each a small image to probe multimodal support, and only models that pass can be saved. An imported `AGENTS.md` (up to 64 KiB) is copied verbatim into the system prompt by `plugins/agent-instructions`.
-
-Sessions are scoped to a dataset. `plugins/session` owns turns and the event log, while `plugins/session-persistence-opfs` writes each conversation as checksummed batch files plus image artifacts: if OPFS is unavailable it degrades to a temporary session, the same conversation opened in another tab is read-only, and each dataset keeps at most three conversations. `plugins/session-archive` packs a conversation and its artifacts into a ZIP and validates log continuity and image references in memory before import; `fflate` loads on demand. `plugins/attachments` stores chat and tool images as artifacts so messages keep only references, and `plugins/token-meter` estimates their size before hydration.
-
-Tools are split by domain: `tool-backend-api` (files, processes, quota), `tool-page-context` (live visualization page state and statistics), `tool-ion-image` (single/batch ion images and annotation-row images, returning 1–4 images that the adapter places in one `tool_result`), `tool-knowledge` (PubChem, ChEBI, local annotation libraries), `tool-bio` (HMDB, KEGG, enrichment), `tool-literature` (PubMed, Europe PMC, OpenAlex), `tool-web-search`, and `tool-skill`. Domain instructions live in `plugins/skill-bundled/skills/*/SKILL.md` and are loaded through the `plugins/skill` registry.
-
-Web search (`plugins/tool-web-search`) gives the model one `web_search` tool that calls Exa's hosted MCP endpoint `https://mcp.exa.ai/mcp` directly, using the anonymous allowance by default. The optional `VITE_EXA_API_KEY` is sent only to that endpoint in the `x-api-key` header. It ends up in the browser bundle, so use a restricted subkey.
-
-The citation format for external evidence lives in `citations/index.ts`: the model writes `[source title](URL "optional excerpt")`, and `MarkdownLink.vue` renders HTTP(S) links as `InlineCitation.vue` source cards. The schemas of chemistry, biology, literature, and web tools carry this contract automatically.
-
-Common changes:
-
-- Add a tool: create `plugins/tool-<name>/`, call `ctx.tools.register()` in `apply`, and add a row to the table.
-- Support a new protocol: create an adapter plugin that calls `ctx.llm.registerAdapter()`, add an entry to `ENDPOINT_PROFILES`, and add a row to the table. The loop and the UI stay unchanged.
-- Add system prompt content: call `ctx.systemPrompt.section()` from the plugin responsible for it. The same input must render the same bytes, or the endpoint's prompt cache is invalidated.
-
-`npm run lint:check` enforces these boundaries: plugins import each other only through `index.ts`; plugins do not import the UI; `ai` and `@ai-sdk/*` appear only in `plugins/llm-anthropic`; `bridge/` does not import cordis or plugins.
-
-`__tests__/behaviorLock.test.ts` runs every branch of the agent end to end and compares, byte for byte, the events written to storage, the requests sent to the model, the UI states, and the system prompt (snapshots live in `__tests__/__snapshots__/behaviorLock/`). A refactor must not change these snapshots. When you change behavior on purpose, review the diff and update them with `npx vitest run src/features/agent/__tests__/behaviorLock.test.ts -u`.
+ESLint restricts inter-plugin imports to `index.ts`, prohibits plugin-to-UI imports, isolates AI SDK use to `llm-anthropic`, and keeps the bridge runtime-free. Assign new capabilities to the facade, driver, policy, or read-model boundary before implementation.
 
 ## Automated Checks
 
@@ -94,6 +57,7 @@ Common changes:
 - `npm run test:unit:run`: one-shot unit test run.
 - `npm run check`: runs those three commands in parallel.
 - `npm run format:check`: checks Prettier for `src/` only and is not part of `check`.
-- `npm run docs:build`: separately validates the docs build and most internal links.
+- `npm run test:e2e:offline`: fixed-response regression in three browsers without an account; see [Testing and E2E](./testing) for live integration boundaries.
+- `npm run docs:type-check` / `npm run docs:build`: separately validate documentation types, production output, and most internal links.
 
 When adding code, follow the responsibilities of the current neighboring implementation. If documentation and code disagree, confirm runtime behavior and update both.

@@ -46,7 +46,7 @@ public/AI Agent 架构总结.md
 public/AI-Agent-BYOK配置方案.md
 public/AI-Agent代码目录结构说明.md
 
-# 谱图/通路离线索引（体积大不入库，由 scripts/build-*-index.mjs 本地生成）
+# HMDB / LIPID MAPS 离线索引（由 scripts/build-*-index.mjs 本地生成）
 public/data/
 
 # 用户自己的注释数据库（保留在发布目录外，不入库、不分发）

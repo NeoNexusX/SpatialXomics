@@ -18,7 +18,7 @@ For comparisons use `get_ion_images(mzs=[...], normalize="shared")`: at most 4 s
 
 ## Identity and biology
 
-If annotations exist, read the relevant `get_annotation_detail(rowIds=[...])`; use exact row ids from `get_annotation_top` to retain competing assignments. If de novo matching is needed, query `library_mass_search` for lipids or `hmdb_lookup(mzs=[...])` for metabolites with the actual polarity. `pubchem_formula_search` needs a molecular formula, not m/z. A mass window or lipid shorthand cannot identify a unique isomer.
+If annotations exist, read the relevant `get_annotation_detail(rowIds=[...])`; use exact row ids from `get_annotation_top` to retain competing assignments. For de novo lipid matching, ask the user to run the annotation panel against an appropriate database. `hmdb_lookup(mzs=[...])` can supply metabolite candidates when its index is deployed and the actual polarity is known. `pubchem_formula_search` needs a molecular formula, not m/z. A mass window or lipid shorthand cannot identify a unique isomer.
 
 Use targeted identity/context lookups and `europepmc_search(query="molecule tissue mass spectrometry imaging", maxResults=3)` for biological claims. Batch names per relevant source and follow page/archive pointers only when necessary. Database presence, pathway membership and literature about a candidate do not prove the measured ion's identity or pathway activity.
 

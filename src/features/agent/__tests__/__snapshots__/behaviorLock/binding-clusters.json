@@ -79,8 +79,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 1f676f49>",
-      "tools": "<tools 3d581695>",
+      "system": "<prompt 9d0625ac>",
+      "tools": "<tools e89801c1>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -106,8 +106,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 1f676f49>",
-      "tools": "<tools 3d581695>",
+      "system": "<prompt 9d0625ac>",
+      "tools": "<tools e89801c1>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -187,8 +187,8 @@
  ],
  "calls": [
   {
-   "system": "<prompt 1f676f49>",
-   "tools": "<tools 3d581695>",
+   "system": "<prompt 9d0625ac>",
+   "tools": "<tools e89801c1>",
    "messages": [
     {
      "role": "user",
@@ -242,11 +242,11 @@
   ],
   "error": "The selected clusters changed. Submit the question again.",
   "pressure": {
-   "inputTokens": 9660,
+   "inputTokens": 8727,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.05169092465753425,
+   "ratio": 0.04669841609589041,
    "estimated": true
   }
  }

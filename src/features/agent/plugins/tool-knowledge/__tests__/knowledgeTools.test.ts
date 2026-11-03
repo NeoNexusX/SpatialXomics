@@ -1,13 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  pubchemLookupCompound,
-  pubchemSearchFormula,
-  massSearchLipidIndex,
-  normalizeLipidQuery,
-  searchLipidIndex,
-  ADDUCTS,
-  type LipidRow,
-} from '../index'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { pubchemLookupCompound, pubchemSearchFormula } from '../index'
 
 /** fetch mock：按 URL 前缀/包含串路由到固定响应 */
 function mockFetch(
@@ -31,10 +23,6 @@ function mockFetch(
   vi.stubGlobal('fetch', impl)
   return impl
 }
-
-beforeEach(() => {
-  // jsdom 的 Response 支持构造；不可用时跳过（环境兜底）
-})
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -133,117 +121,6 @@ describe('pubchemSearchFormula', () => {
   })
 })
 
-// ---- LIPID MAPS 本地索引（纯函数，固定 fixture） ----
-
-/** 与 build-lipid-index.mjs 输出同构，按精确质量升序 */
-const FIXTURE: LipidRow[] = [
-  [
-    'LMFA01010001',
-    'FA 16:0',
-    'Palmitic acid',
-    'C16H32O2',
-    256.240231,
-    'Fatty Acyls [FA]',
-    'Fatty Acids and Conjugates [FA01]',
-    985,
-  ],
-  [
-    'LMFA01010002',
-    'FA 18:0',
-    'Stearic acid',
-    'C18H36O2',
-    284.271531,
-    'Fatty Acyls [FA]',
-    'Fatty Acids and Conjugates [FA01]',
-    5281,
-  ],
-  [
-    'LMGP01010576',
-    'PC 34:1',
-    'PC 16:0/18:1(11Z)',
-    'C42H82NO8P',
-    759.577806,
-    'Glycerophospholipids [GP]',
-    'Glycerophosphocholines [GP01]',
-    24778688,
-  ],
-]
-
-describe('normalizeLipidQuery', () => {
-  it('unifies shorthand separators and case', () => {
-    expect(normalizeLipidQuery('PC(34:1)')).toBe('pc34:1')
-    expect(normalizeLipidQuery('PC 34:1')).toBe('pc34:1')
-    expect(normalizeLipidQuery('pc_34:1')).toBe('pc34:1')
-    expect(normalizeLipidQuery('FA 16:0/18:1')).toBe('fa16:018:1')
-    expect(normalizeLipidQuery('PC(16:0/18:1)')).toBe(normalizeLipidQuery('PC 16:0_18:1'))
-  })
-})
-
-describe('searchLipidIndex', () => {
-  it('matches shorthand across separator styles', () => {
-    expect(searchLipidIndex(FIXTURE, 'pc(34:1)', 10).map((r) => r[0])).toEqual(['LMGP01010576'])
-    expect(searchLipidIndex(FIXTURE, 'palmitic', 10).map((r) => r[0])).toEqual(['LMFA01010001'])
-  })
-
-  it('matches LM_ID fragments case-insensitively', () => {
-    expect(searchLipidIndex(FIXTURE, 'lmgp0101', 10).map((r) => r[0])).toEqual(['LMGP01010576'])
-  })
-
-  it('respects the max cap', () => {
-    expect(searchLipidIndex(FIXTURE, 'FA', 1)).toHaveLength(1)
-  })
-})
-
-describe('massSearchLipidIndex', () => {
-  it('finds [M-H]- of palmitic acid with near-zero ppm', () => {
-    const mz = 256.240231 - 1.007276 // [M-H]-
-    const hits = massSearchLipidIndex(FIXTURE, mz, 'negative', null, 5, 10)
-    expect(hits).toHaveLength(1)
-    expect(hits[0]![8]).toBe('[M-H]-')
-    expect(Math.abs(hits[0]![9])).toBeLessThan(0.01)
-  })
-
-  it('ADDUCTS covers the common adducts the annotation panel uses', () => {
-    // 检索表缺项时，模型会对着面板里检出的加合离子报「无候选」；[M+Li]+ 显式请求还会
-    // 直接抛 Unknown adduct。数值来自共享加合物表（shared/chem/adducts.ts）
-    expect(ADDUCTS.positive['[M+Li]+']).toBeCloseTo(7.015455, 5)
-    expect(ADDUCTS.negative['[M-2H+Na]-']).toBeCloseTo(20.974666, 5)
-    expect(ADDUCTS.negative['[M-2H+K]-']).toBeCloseTo(36.948606, 5)
-    // 面板规则表的每个键都必须在对应极性可检索（防未来再漂移）
-    for (const key of ['M+H', 'M+Na', 'M+K', 'M+NH4', 'M+Li']) {
-      expect(ADDUCTS.positive[`[${key}]+`]).toBeDefined()
-    }
-    for (const key of ['M-H', 'M+Cl', 'M+HCOO', 'M+CH3COO', 'M-2H+Na', 'M-2H+K']) {
-      expect(ADDUCTS.negative[`[${key}]-`]).toBeDefined()
-    }
-  })
-
-  it('scans the supplemented [M+Li]+ adduct and finds the molecule', () => {
-    const mz = 256.240231 + 7.015455 // 棕榈酸 [M+Li]+
-    const hits = massSearchLipidIndex(FIXTURE, mz, 'positive', null, 5, 10)
-    expect(hits.map((h) => h[0])).toContain('LMFA01010001')
-    expect(hits.find((h) => h[0] === 'LMFA01010001')![8]).toBe('[M+Li]+')
-  })
-
-  it('finds [M+H]+ of PC 34:1', () => {
-    const mz = 759.577806 + 1.007276
-    const hits = massSearchLipidIndex(FIXTURE, mz, 'positive', null, 5, 10)
-    expect(hits.map((h) => h[0])).toContain('LMGP01010576')
-    expect(hits.find((h) => h[0] === 'LMGP01010576')![8]).toBe('[M+H]+')
-  })
-
-  it('specific adduct restricts the scan', () => {
-    const mz = 759.577806 + 22.989218 // [M+Na]+
-    const hits = massSearchLipidIndex(FIXTURE, mz, 'positive', { '[M+Na]+': 22.989218 }, 5, 10)
-    expect(hits).toHaveLength(1)
-    expect(hits[0]![8]).toBe('[M+Na]+')
-  })
-
-  it('returns empty outside the ppm window', () => {
-    expect(massSearchLipidIndex(FIXTURE, 500, 'positive', null, 5, 10)).toEqual([])
-  })
-})
-
 it('uses supported PubChem property names and reads current response keys', async () => {
   const fetcher = mockFetch([
     {
@@ -272,47 +149,6 @@ it('uses supported PubChem property names and reads current response keys', asyn
   expect(result).toContain('smiles: C(O)C')
   expect(fetcher.mock.calls[0]![0]).toContain('MolecularWeight,ConnectivitySMILES')
   expect(fetcher.mock.calls[1]![0]).toContain('/cid/5793/synonyms/')
-})
-
-it('does not turn an empty normalized lipid query into a match-all search', () => {
-  expect(searchLipidIndex(FIXTURE, ' ( / ) ', 10)).toEqual([])
-})
-
-it('matches binary-search lipid results against a full scan across adducts', () => {
-  const mz = 759.577806 + ADDUCTS.positive['[M+Na]+']!
-  const expected = FIXTURE.flatMap((row) =>
-    Object.entries(ADDUCTS.positive)
-      .filter(([, shift]) => Math.abs(row[4] + shift - mz) <= (mz * 10) / 1e6)
-      .map(([adduct]) => `${row[0]} ${adduct}`),
-  )
-  expect(
-    massSearchLipidIndex(FIXTURE, mz, 'positive', null, 10, 25)
-      .map((row) => `${row[0]} ${row[8]}`)
-      .sort(),
-  ).toEqual(expected.sort())
-})
-
-it('visits only a logarithmic search path plus matching windows in a large sorted library', () => {
-  let massReads = 0
-  const rows: LipidRow[] = Array.from({ length: 50000 }, (_, i) => {
-    const row: LipidRow = [`LM${i}`, null, null, 'C', i + 1, null, null, null]
-    return new Proxy(row, {
-      get(target, key, receiver) {
-        if (key === '4') massReads++
-        return Reflect.get(target, key, receiver)
-      },
-    })
-  })
-  const hits = massSearchLipidIndex(
-    rows,
-    40000 + ADDUCTS.positive['[M+H]+']!,
-    'positive',
-    null,
-    1,
-    25,
-  )
-  expect(hits.some((row) => row[0] === 'LM39999')).toBe(true)
-  expect(massReads).toBeLessThan(150)
 })
 
 it('propagates cancellation during optional PubChem synonyms rather than returning partial success', async () => {

@@ -182,6 +182,12 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true,
       proxy: {
+        // Live KEGG tools use the official REST API via same-origin requests.
+        '/kegg-rest': {
+          target: 'https://rest.kegg.jp',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/kegg-rest/, ''),
+        },
         '/api': {
           target: backendUrl,
           changeOrigin: true,

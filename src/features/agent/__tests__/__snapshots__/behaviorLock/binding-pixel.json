@@ -77,8 +77,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 1f676f49>",
-      "tools": "<tools 3d581695>",
+      "system": "<prompt 9d0625ac>",
+      "tools": "<tools e89801c1>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -104,8 +104,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 1f676f49>",
-      "tools": "<tools 3d581695>",
+      "system": "<prompt 9d0625ac>",
+      "tools": "<tools e89801c1>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -185,8 +185,8 @@
  ],
  "calls": [
   {
-   "system": "<prompt 1f676f49>",
-   "tools": "<tools 3d581695>",
+   "system": "<prompt 9d0625ac>",
+   "tools": "<tools e89801c1>",
    "messages": [
     {
      "role": "user",
@@ -240,11 +240,11 @@
   ],
   "error": "The selected pixel changed. Submit the question again.",
   "pressure": {
-   "inputTokens": 9670,
+   "inputTokens": 8737,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.05174443493150685,
+   "ratio": 0.046751926369863014,
    "estimated": true
   }
  }

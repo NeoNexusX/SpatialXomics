@@ -129,7 +129,7 @@ export function useDownloadProgress() {
   ) =>
     runRawDownload(
       publicId,
-      (id) => ossDownloadRaw(id, options),
+      (id) => ossDownloadRaw(id, { ...options, isPublic: options?.isPublic ?? false }),
       (error) =>
         (error as { response?: { status?: number } })?.response?.status === 403
           ? t('datasets.download.limitReached')

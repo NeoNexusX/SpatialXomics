@@ -109,11 +109,20 @@ npm run build             # 类型检查 + SPA 构建，输出 dist/
 npm run check             # 类型检查 + ESLint + 单元测试
 npm run test:unit:run     # 单次运行单元测试
 npm run test:e2e          # Playwright E2E
+npm run test:e2e:offline  # 三浏览器回归，无需账号、后端和模型密钥
 npm run docs:build        # 文档构建，输出 dist-docs/
 npm run icons:bundle      # 更新离线图标子集
 ```
 
 `npm run format` 仅格式化 `src/`；Markdown 文档需按原格式手动维护。
+
+### KEGG 在线查询
+
+`kegg_pathway_lookup` 和 `pathway_enrichment` 在运行时查询 KEGG 官方 REST API，不需要本地 KEGG 索引或预下载数据。浏览器请求同源 `/kegg-rest/`，Vite（开发）或 nginx（Docker 部署）固定转发到 `https://rest.kegg.jp/`；自定义托管也需要配置此转发。`vite preview` 复用 Vite 的代理配置。修改 Vite 配置后需重启开发服务器；线上需部署新的前端与 nginx 配置。
+
+工具按每秒最多 3 次调度查询，nginx 同时限制所有客户端的上游总请求速率。通路汇总只接受精确化合物名称/同义词或 KEGG C 编号，报告映射覆盖率、歧义匹配和查询预算未覆盖的候选。结果是描述性计数，不是统计显著性富集。网络、上游或代理失败会明确报错，不会被当成“无通路”。
+
+HMDB 工具的离线索引按 `scripts/build-hmdb-index.mjs` 的文件头说明准备；KEGG 通路工具不依赖该索引。脂质候选由可视化页的注释面板生成，助手读取已有注释结果。
 
 ## 运行时配置
 
@@ -130,3 +139,5 @@ npm run icons:bundle      # 更新离线图标子集
 - `test` 分支运行检查、文档构建和三浏览器 Playwright；`dev` 与 `main` 分支分别触发对应环境部署。
 
 文档维护流程见 [docs/zh/dev/doc-maintenance.md](docs/zh/dev/doc-maintenance.md)。
+
+开发说明见 [前端架构](docs/zh/dev/frontend-architecture.md)、[Agent 架构](docs/zh/dev/agent-architecture.md)和[测试与 E2E](docs/zh/dev/testing.md)。真实后端测试需要 `E2E_USERNAME` / `E2E_PASSWORD`；离线回归无需登录初始化，可用 `E2E_PORT=5193 npm run test:e2e:offline` 使用独立端口。

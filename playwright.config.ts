@@ -12,6 +12,9 @@ import { defineConfig, devices } from '@playwright/test'
  */
 /** 中文冒烟用例只在 chromium-zh 里跑；其余项目锁定 en-US，跑到它会误报 */
 const ZH_SMOKE = /i18n-zh\.spec\.ts/
+const OFFLINE = /\.offline\.spec\.ts/
+const LIVE_IGNORE = [ZH_SMOKE, OFFLINE]
+const serverPort = Number(process.env.E2E_PORT || (process.env.CI ? 4173 : 5173))
 
 export default defineConfig({
   testDir: './e2e',
@@ -37,10 +40,11 @@ export default defineConfig({
     /* Maximum time each action such as `click()` can take. Defaults to 0 (no limit). */
     actionTimeout: 0,
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: process.env.CI ? 'http://localhost:4173' : 'http://localhost:5173',
+    baseURL: `http://localhost:${serverPort}`,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
 
     /* Only on CI systems run the tests headless */
     headless: !!process.env.CI,
@@ -62,6 +66,17 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
+    // 浏览器真实运行应用，仅在网络边界替换后端和 LLM；无需账号或模型密钥。
+    ...(['chromium', 'firefox', 'webkit'] as const).map((browserName) => ({
+      name: `offline-${browserName}`,
+      testMatch: OFFLINE,
+      use: {
+        browserName,
+        headless: true,
+        storageState: { cookies: [], origins: [] },
+        trace: 'retain-on-failure' as const,
+      },
+    })),
     // Setup — 先登录一次，保存状态给后续测试复用
     {
       name: 'setup',
@@ -69,7 +84,7 @@ export default defineConfig({
     },
     {
       name: 'chromium',
-      testIgnore: ZH_SMOKE,
+      testIgnore: LIVE_IGNORE,
       use: {
         ...devices['Desktop Chrome'],
         storageState: '.auth/user.json',
@@ -78,7 +93,7 @@ export default defineConfig({
     },
     {
       name: 'firefox',
-      testIgnore: ZH_SMOKE,
+      testIgnore: LIVE_IGNORE,
       use: {
         ...devices['Desktop Firefox'],
         storageState: '.auth/user.json',
@@ -87,7 +102,7 @@ export default defineConfig({
     },
     {
       name: 'webkit',
-      testIgnore: ZH_SMOKE,
+      testIgnore: LIVE_IGNORE,
       use: {
         ...devices['Desktop Safari'],
         storageState: '.auth/user.json',
@@ -146,8 +161,10 @@ export default defineConfig({
      * Use the preview server on CI for more realistic testing.
      * Playwright will re-use the local server if there is already a dev-server running.
      */
-    command: process.env.CI ? 'npm run preview' : 'npm run dev:app',
-    port: process.env.CI ? 4173 : 5173,
+    command: process.env.CI
+      ? `npm run preview -- --port ${serverPort}`
+      : `npm run dev:app -- --port ${serverPort}`,
+    port: serverPort,
     reuseExistingServer: !process.env.CI,
   },
 })

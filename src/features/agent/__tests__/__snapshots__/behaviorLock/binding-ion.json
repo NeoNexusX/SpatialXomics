@@ -76,8 +76,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 1f676f49>",
-      "tools": "<tools 3d581695>",
+      "system": "<prompt 9d0625ac>",
+      "tools": "<tools e89801c1>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -103,8 +103,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 1f676f49>",
-      "tools": "<tools 3d581695>",
+      "system": "<prompt 9d0625ac>",
+      "tools": "<tools e89801c1>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -184,8 +184,8 @@
  ],
  "calls": [
   {
-   "system": "<prompt 1f676f49>",
-   "tools": "<tools 3d581695>",
+   "system": "<prompt 9d0625ac>",
+   "tools": "<tools e89801c1>",
    "messages": [
     {
      "role": "user",
@@ -239,11 +239,11 @@
   ],
   "error": "The selected ion changed after this question was submitted. Submit the question again for the new selection.",
   "pressure": {
-   "inputTokens": 9676,
+   "inputTokens": 8743,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.05177654109589041,
+   "ratio": 0.046784032534246574,
    "estimated": true
   }
  }
