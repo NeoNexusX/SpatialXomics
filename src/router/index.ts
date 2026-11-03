@@ -74,13 +74,17 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
-    // 集合公开分享页（免登录）：用 public_id 访问，只读展示。
+    // 集合公开分享页：用 public_id 访问，只读展示。
     // 路径不带 public 段——分享链接直接是 /collections/{public_id}。
     // 与 /collections/overview/:publicId 分段数不同不会冲突，
     // 且 public_id 是 16 位 base62，不会与静态段撞名。
+    // 查看需登录（与数据集分享页统一）：路由守卫拦匿名。详情仍读公开接口
+    // （认证版详情 owner 限定，见上一路由注释），下载改走认证 download_raw
+    // + 身份完整校验；noauth 下载端点停用但保留。
     path: '/collections/:publicId',
     name: 'PublicCollection',
     component: view(() => import('../views/PublicCollectionView.vue'), 'collections', 'datasets'),
+    meta: { requiresAuth: true },
   },
   {
     // Dataset Overview：public_id 直接进路径（入口在新标签页打开），刷新/收藏/

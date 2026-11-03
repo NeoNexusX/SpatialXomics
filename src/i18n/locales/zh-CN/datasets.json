@@ -149,7 +149,9 @@
       "failed": "下载失败",
       "timeout": "下载准备超时，请稍后重试",
       "limitReached": "下载次数已达上限",
-      "noUrls": "未获取到下载地址"
+      "noUrls": "未获取到下载地址",
+      "profileIncomplete": "请先在个人资料中补全机构、职位、研究领域与国家 / 地区，再下载",
+      "profileUnavailable": "暂时无法获取账户信息，请稍后重试"
     }
   }
 }

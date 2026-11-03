@@ -5,17 +5,45 @@ import {
   ossDownloadRawNoauth,
 } from '@/features/datasets/utils/downloadHelper'
 import { useDownloadStore } from '@/features/datasets/stores/downloadStore'
+import { useAuthStore } from '@/shared/auth/authStore'
 import { useToast } from '@/shared/composables/useToast'
 import { extractBackendError } from '@/shared/api/httpClient'
 import { t } from '@/i18n'
 
 const packingIds = reactive(new Set<string>())
 
+/** 下载前须非空的身份字段（GET /user 返回的 profile 键） */
+const REQUIRED_PROFILE_FIELDS = ['institution', 'position', 'research_field', 'region'] as const
+
 export function useDownloadProgress() {
   const { showToast, removeToast } = useToast()
   const downloadStore = useDownloadStore()
+  const auth = useAuthStore()
 
   const isPacking = (publicId: string) => packingIds.has(publicId)
+
+  /**
+   * 下载前身份校验：登录用户先 GET /user（auth.fetchUser，带并发去重）拉最新
+   * profile，四个身份字段任一为空则拦截并橙色提示去补全。匿名（无 token，
+   * 公开集合页免登录下载）无从校验，直接放行。前端这层只是引导，真正的
+   * 门禁在后端签发 pre-signed URL 处。
+   */
+  const ensureProfileComplete = async (): Promise<boolean> => {
+    if (!auth.token) return true
+    await auth.fetchUser()
+    if (!auth.token) return false // fetch 中会话失效：401 路径已登出并按全局逻辑处理
+    const profile = auth.user
+    if (!profile) {
+      showToast(t('datasets.download.profileUnavailable'), 'warning')
+      return false
+    }
+    const incomplete = REQUIRED_PROFILE_FIELDS.some((field) => !String(profile[field] ?? '').trim())
+    if (incomplete) {
+      showToast(t('datasets.download.profileIncomplete'), 'warning')
+      return false
+    }
+    return true
+  }
 
   const handleDownload = async (
     publicId?: string,
@@ -24,6 +52,10 @@ export function useDownloadProgress() {
     if (!publicId) return
     if (packingIds.has(publicId)) return
     packingIds.add(publicId)
+    if (!(await ensureProfileComplete())) {
+      packingIds.delete(publicId)
+      return
+    }
     const toastId = showToast(t('datasets.download.preparing'), 'info', 0)
     try {
       await ossDownloadAndSave(publicId, options)
@@ -64,6 +96,10 @@ export function useDownloadProgress() {
     }
 
     packingIds.add(publicId)
+    if (!(await ensureProfileComplete())) {
+      packingIds.delete(publicId)
+      return
+    }
     downloadStore.startDownload(publicId)
     const toastId = showToast(t('datasets.download.downloading'), 'info', 0)
     try {
