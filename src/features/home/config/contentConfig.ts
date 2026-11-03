@@ -22,14 +22,15 @@ import type { LocalizedText } from '@/shared/config/localizedText'
  * 功能展示项（FeatureScene 联动画廊的「联动单元」：词语 + 图片 + 卡片文案，按数组顺序一一对应）。
  *
  * 悬停画廊里第 i 张图时，左侧卡片同步展示第 i 项的 word/title/desc，实现「图 ↔ 卡片」联动。
- * - word:  画廊图片上方的词，如 'OPEN' / 'FAST' / 'INTELLIGENT'
+ * - word:  画廊图片上方的词，可本地化，如 { "en": "VISUAL", "zh-CN": "可视化" }
+ *          （旧写法纯字符串仍兼容，视为各语言通用）
  * - title: 左侧卡片标题（可选）
  * - desc:  左侧卡片描述（可选）
  * - image: 图片 URL（可选）；留空则回退到 hero.gallery 中同序号的图，便于先复用 Hero 的配图
  */
 export interface FeatureItem {
-  /** 画廊图片上方的词，如 'OPEN' */
-  word: string
+  /** 画廊图片上方的词，如 'VISUAL' / '可视化'；可本地化 */
+  word: LocalizedText
   /** 左侧卡片标题 */
   title?: LocalizedText
   /** 左侧卡片描述 */

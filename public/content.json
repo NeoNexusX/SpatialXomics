@@ -15,7 +15,7 @@
   "features": {
     "items": [
       {
-        "word": "可视化",
+        "word": { "en": "VISUAL", "zh-CN": "可视化" },
         "title": {
           "en": "From Mass Signals to Spatial Distributions",
           "zh-CN": "从质谱信号到空间分布"
@@ -27,7 +27,7 @@
         "image": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/mz726.539885.png"
       },
       {
-        "word": "可交互",
+        "word": { "en": "INTERACTIVE", "zh-CN": "可交互" },
         "title": {
           "en": "Linked Views, Explore Data on Demand",
           "zh-CN": "多视图联动，按需探索数据"
@@ -39,7 +39,7 @@
         "image": "https://neonexus-picture.oss-ap-southeast-1.aliyuncs.com/test/kmeans_image2.png"
       },
       {
-        "word": "可扩展",
+        "word": { "en": "SCALABLE", "zh-CN": "可扩展" },
         "title": {
           "en": "Elastic Cloud Computing at Any Scale",
           "zh-CN": "弹性云计算，适应数据规模"
