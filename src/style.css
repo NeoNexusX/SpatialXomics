@@ -18,6 +18,15 @@ i {
   font-synthesis: style;
 }
 
+/* SvgIcon 的默认尺寸（比相邻文字大一号）。必须用 :where() 清零特异性：
+   Tailwind 把任意值工具类（.h-\[1.125em\]）排在命名刻度（.h-5/.h-7…）之后，
+   若默认尺寸写在组件 class 里会反过来压制调用方传入的所有 h-*/w-* 尺寸类；
+   :where 规则特异性为 0，任何单类工具类都稳定胜出。 */
+:where([data-svg-icon]) {
+  height: 1.125em;
+  width: 1.125em;
+}
+
 :root {
   /* 拉丁字形用 Poppins，中文落到系统 CJK 字体，不下载 CJK 网络字体（动辄数 MB）：
      PingFang SC = 苹方（macOS / iOS），Microsoft YaHei = 微软雅黑（Windows），

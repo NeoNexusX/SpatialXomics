@@ -10,6 +10,9 @@ const iconName = computed(() => ICON_MAP[props.type] ?? 'heroicons:question-mark
 </script>
 
 <template>
-  <!-- 默认 1.125em（比相邻文字大一号），调用方的 w-*/h-* 类可覆盖 -->
-  <Icon v-bind="$attrs" :icon="iconName" class="h-[1.125em] w-[1.125em] inline-block" aria-hidden="true" />
+  <!-- 默认尺寸走 style.css 的 :where([data-svg-icon])（零特异性）：Tailwind 会把
+       任意值工具类 h-[1.125em] 排在命名刻度（h-5/h-7…）之后，写在 class 里会
+       反过来压制调用方传入的尺寸类——用 data 属性 + :where 才能保证任何
+       h-*/w-* 类稳定覆盖默认值 -->
+  <Icon v-bind="$attrs" :icon="iconName" data-svg-icon class="inline-block" aria-hidden="true" />
 </template>

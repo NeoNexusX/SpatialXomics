@@ -12,7 +12,10 @@
       >
         <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="t.isError ? 'bg-error' : 'bg-success'"></span>
         <span class="font-mono text-base-content/70 truncate">{{ t.name }}</span>
-        <span class="ml-auto text-base-content/40">{{ expanded.has(i) ? '▾' : '▸' }}</span>
+        <svg-icon
+          :type="expanded.has(i) ? 'chevron_down' : 'chevron_right'"
+          class="ml-auto w-3.5 h-3.5 shrink-0 text-base-content/40"
+        />
       </button>
       <div
         v-if="expanded.has(i)"

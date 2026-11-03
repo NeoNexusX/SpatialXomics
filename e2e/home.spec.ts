@@ -39,7 +39,11 @@ test('features scene renders gallery words and default card', async ({ page }) =
 
   // 期望词表不硬编码：读与页面同源的 content.json（与 per-page 用例读 config.json 同法）
   const content = await (await page.request.get('/content.json')).json()
-  const words: string[] = content.features.items.map((it: { word: string }) => it.word)
+  // word 支持双语对象（{ en, zh-CN }）或旧纯字符串；项目 locale 固定 en-US，取 en。
+  const words: string[] = content.features.items.map(
+    (it: { word: string | { en?: string } }) =>
+      typeof it.word === 'string' ? it.word : (it.word.en ?? ''),
+  )
   const firstTitle: string = content.features.items[0].title.en
 
   // 平滑滚动在吸附边界可能来回抖动、远程图片加载也会持续改变布局，

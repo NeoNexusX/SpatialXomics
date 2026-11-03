@@ -8,7 +8,7 @@
  * 加载顺序（后者依赖前者注册的服务）：
  *   llm → tools → skills
  *   → frontendContextTools / backendApiTools
- *   → knowledgeTools（化学）/ bioTools（生物）/ spectralTools（谱库）/ literatureTools（文献）
+ *   → knowledgeTools（化学）/ bioTools（生物）/ literatureTools（文献）
  *   → agentLoop
  */
 
@@ -20,7 +20,6 @@ import { frontendContextTools } from '../tools/frontendContextTools'
 import { backendApiTools } from '../tools/backendApiTools'
 import { knowledgeTools } from '../tools/knowledgeTools'
 import { bioTools } from '../tools/bioTools'
-import { spectralTools } from '../tools/spectralTools'
 import { literatureTools } from '../tools/literatureTools'
 import { archiveTools } from '../tools/archiveTools'
 import { agentLoopProvider } from './agentLoop'
@@ -39,7 +38,6 @@ export function getAssistantContext(): Context {
   ctx.plugin(backendApiTools)
   ctx.plugin(knowledgeTools)
   ctx.plugin(bioTools)
-  ctx.plugin(spectralTools)
   ctx.plugin(literatureTools)
   ctx.plugin(archiveTools)
   ctx.plugin(agentLoopProvider)

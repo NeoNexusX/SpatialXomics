@@ -18,7 +18,7 @@
       :title="$t('common.assistant.clearHistory')"
       @click="$emit('clear')"
     >
-      <svg-icon type="trash" class="w-3 h-3" />
+      <svg-icon type="trash" class="w-4 h-4" />
     </button>
   </div>
 </template>

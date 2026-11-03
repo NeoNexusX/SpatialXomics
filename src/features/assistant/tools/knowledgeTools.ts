@@ -13,7 +13,8 @@
  * - ChEBI：OLS4 搜索接口 https://www.ebi.ac.uk/ols4/api（CORS ✓）。
  *
  * （文献类工具 pubmed/europepmc/openalex 见 literatureTools.ts；
- *   生物信息 hmdb/kegg 见 bioTools.ts；谱库搜索见 spectralTools.ts。）
+ *   生物信息 hmdb/kegg 见 bioTools.ts。碎片证据/MS/MS 谱库检索已整体移除：
+ *   平台无浏览器可用谱库，需确认时建议 on-tissue MS/MS 或标准品。）
  *
  * 设计约束：
  * - 结果一律摘要化成紧凑文本（ToolRuntime 统一截断到 TOOL_RESULT_CHARS=2000）；
@@ -21,9 +22,10 @@
  */
 
 import type { Context, Plugin } from 'cordis'
-import { defineTool } from './defineTool'
+import { defineTool, renderBatch } from './defineTool'
 import { getJson, take, createLazyJsonLoader } from './httpJson'
 import { adductShiftTable } from '@/shared/chem/adducts'
+import { MAX_BATCH_QUERIES } from '../agentconfig/defaults'
 
 const PUBCHEM_BASE = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug'
 const OLS4_BASE = 'https://www.ebi.ac.uk/ols4/api'
@@ -298,13 +300,26 @@ export const knowledgeTools: Plugin.Function<void> = (ctx: Context) => {
       name: 'pubchem_compound_lookup',
       category: 'chemistry',
       description:
-        'Look up a chemical compound by name on PubChem: formula, exact (monoisotopic) mass, ' +
-        'SMILES/InChIKey, synonyms. Use to verify a candidate annotation or get molecule facts.',
+        'Look up chemical compounds by name on PubChem: formula, exact (monoisotopic) mass, ' +
+        'SMILES/InChIKey, synonyms. Use to verify candidate annotations or get molecule facts. ' +
+        'BATCHING: for several compounds pass "names" (array) in ONE call instead of one call per ' +
+        'compound; a name that fails does not block the rest.',
       parameters: {
-        name: { type: 'string', required: true, description: 'Compound name, e.g. "PC(16:0/18:1)" or "glucose"' },
+        name: {
+          type: 'string',
+          description: 'Single compound name, e.g. "PC(16:0/18:1)" or "glucose"; for multiple use "names"',
+        },
+        names: {
+          type: 'array',
+          items: 'string',
+          maxItems: MAX_BATCH_QUERIES,
+          description: 'Batch form of "name": many compound names in one call',
+        },
       },
       async execute(args) {
-        return pubchemLookupCompound(args.name!)
+        const names = args.names ?? (args.name != null ? [args.name] : [])
+        if (names.length === 0) throw new Error('Provide "name" or "names"')
+        return renderBatch(names, (n) => n, (n) => pubchemLookupCompound(n))
       },
     }),
   )
@@ -333,13 +348,26 @@ export const knowledgeTools: Plugin.Function<void> = (ctx: Context) => {
       description:
         'Look up compounds in the ChEBI ontology (online, EBI OLS4): what a molecule IS in ' +
         'biological role terms (e.g. "antioxidant", "xenobiotic metabolite") — labels, synonyms, ' +
-        'definitions, CHEBI ids. Use for the semantic/biological role layer of an identification.',
+        'definitions, CHEBI ids. Use for the semantic/biological role layer of an identification. ' +
+        'BATCHING: for several compounds pass "queries" (array) in ONE call.',
       parameters: {
-        query: { type: 'string', required: true, description: 'Compound name or CHEBI id fragment' },
-        maxResults: { type: 'integer', description: 'Max terms (default 5, max 10)' },
+        query: {
+          type: 'string',
+          description: 'Single compound name or CHEBI id fragment; for multiple use "queries"',
+        },
+        queries: {
+          type: 'array',
+          items: 'string',
+          maxItems: MAX_BATCH_QUERIES,
+          description: 'Batch form of "query": many names in one call',
+        },
+        maxResults: { type: 'integer', description: 'Max terms per query (default 5, max 10)' },
       },
       async execute(args) {
-        return chebiLookup(args.query!, args.maxResults ?? 5)
+        const queries = args.queries ?? (args.query != null ? [args.query] : [])
+        if (queries.length === 0) throw new Error('Provide "query" or "queries"')
+        const max = Math.min(Math.max(args.maxResults ?? 5, 1), 10)
+        return renderBatch(queries, (q) => q, (q) => chebiLookup(q, max))
       },
     }),
   )
@@ -352,13 +380,26 @@ export const knowledgeTools: Plugin.Function<void> = (ctx: Context) => {
         'Look up compounds in the CURRENT offline annotation library (deployed index: ' +
         `${CURRENT_LIBRARY.label}, ${CURRENT_LIBRARY.about}). Search by ${CURRENT_LIBRARY.queryKinds}. ` +
         'Returns formula, exact mass, classification, PubChem CID. First call loads the index ' +
-        '(~1MB, cached afterwards). Small-molecule libraries (HMDB/KEGG) live in the biology tools.',
+        '(~1MB, cached afterwards). Small-molecule libraries (HMDB/KEGG) live in the biology tools. ' +
+        'BATCHING: for several compounds pass "queries" (array) in ONE call.',
       parameters: {
-        query: { type: 'string', required: true, description: 'Shorthand / name / id fragment' },
-        maxResults: { type: 'integer', description: 'Max entries (default 10, max 25)' },
+        query: {
+          type: 'string',
+          description: 'Single shorthand / name / id fragment; for multiple use "queries"',
+        },
+        queries: {
+          type: 'array',
+          items: 'string',
+          maxItems: MAX_BATCH_QUERIES,
+          description: 'Batch form of "query": many shorthands / names in one call',
+        },
+        maxResults: { type: 'integer', description: 'Max entries per query (default 10, max 25)' },
       },
       async execute(args) {
-        return libraryLookup(args.query!, Math.min(Math.max(args.maxResults ?? 10, 1), 25))
+        const queries = args.queries ?? (args.query != null ? [args.query] : [])
+        if (queries.length === 0) throw new Error('Provide "query" or "queries"')
+        const max = Math.min(Math.max(args.maxResults ?? 10, 1), 25)
+        return renderBatch(queries, (q) => q, (q) => libraryLookup(q, max))
       },
     }),
   )
@@ -368,12 +409,20 @@ export const knowledgeTools: Plugin.Function<void> = (ctx: Context) => {
       name: 'library_mass_search',
       category: 'chemistry',
       description:
-        'Annotate an m/z value against the CURRENT offline annotation library (deployed index: ' +
+        'Annotate m/z values against the CURRENT offline annotation library (deployed index: ' +
         `${CURRENT_LIBRARY.label}) with adduct-aware matching: give observed m/z and polarity ` +
         '(optionally a specific adduct, else all common ones are scanned). Returns candidate ' +
-        'compounds with neutral mass, Δppm, and class. First call loads the index (~1MB, cached).',
+        'compounds with neutral mass, Δppm, and class. First call loads the index (~1MB, cached). ' +
+        'BATCHING: to annotate a peak list pass "mzs" (array of m/z) in ONE call instead of one ' +
+        'call per peak.',
       parameters: {
-        mz: { type: 'number', required: true, description: 'Observed m/z value' },
+        mz: { type: 'number', description: 'Single observed m/z value; for multiple use "mzs"' },
+        mzs: {
+          type: 'array',
+          items: 'number',
+          maxItems: MAX_BATCH_QUERIES,
+          description: 'Batch form of "mz": many m/z values in one call',
+        },
         polarity: {
           type: 'string',
           required: true,
@@ -385,16 +434,18 @@ export const knowledgeTools: Plugin.Function<void> = (ctx: Context) => {
             'Specific adduct, e.g. "[M+H]+", "[M+Na]+", "[M-H]-", "[M+HCOO]-"; omit to scan all common adducts',
         },
         ppm: { type: 'integer', description: 'Mass tolerance in ppm (default 10, max 50)' },
-        maxResults: { type: 'integer', description: 'Max candidates (default 15, max 25)' },
+        maxResults: { type: 'integer', description: 'Max candidates per m/z (default 15, max 25)' },
       },
       async execute(args) {
         const polarity = args.polarity === 'negative' ? 'negative' : 'positive'
-        return libraryMassSearch(
-          args.mz!,
-          polarity,
-          args.adduct ?? null,
-          Math.min(Math.max(args.ppm ?? 10, 1), 50),
-          Math.min(Math.max(args.maxResults ?? 15, 1), 25),
+        const mzs = args.mzs ?? (args.mz != null ? [args.mz] : [])
+        if (mzs.length === 0) throw new Error('Provide "mz" or "mzs"')
+        const ppm = Math.min(Math.max(args.ppm ?? 10, 1), 50)
+        const max = Math.min(Math.max(args.maxResults ?? 15, 1), 25)
+        return renderBatch(
+          mzs,
+          (mz) => `m/z ${mz}`,
+          (mz) => libraryMassSearch(mz, polarity, args.adduct ?? null, ppm, max),
         )
       },
     }),

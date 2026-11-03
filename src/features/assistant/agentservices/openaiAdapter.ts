@@ -10,6 +10,7 @@
 
 import { parseSseStream } from './sseParser'
 import type {
+  ChatMessage,
   GenerateOptions,
   LlmAdapter,
   StreamChunk,
@@ -100,11 +101,9 @@ export function resolveDefaultModel(): string {
 
 /**
  * 是否有可用配置（地址与密钥均非空，无论来自用户还是 env）。agentLoop send 前置检查用。
- * Anthropic 例外：有内置默认端点，未自配地址也成立（env 默认是 OpenAI 部署的，不适用）。
  */
 export function isLlmConfigured(): boolean {
   const user = loadUserLlmConfig()
-  if (user.provider === 'anthropic') return user.apiKey !== ''
   const base = user.baseUrl || ENV.llmProxyUrl
   const key = user.apiKey || ENV.llmApiKey
   return base !== '' && key !== ''
@@ -182,6 +181,39 @@ export function foldToolMessagesToUser(
 }
 
 /**
+ * 识别「端点/模型不接受图片」的 400 错误体。非 vision 模型（deepseek-chat 等）
+ * 收到 image_url content-parts 时报 400，常见措辞：
+ * - "image_url is not supported" / "does not support image"
+ * - "Invalid content type: image_url"（OpenAI 端点对非 vision 模型的报错形态）
+ * - "multimodal" / "vision" 相关的不支持表述
+ * 要求错误体同时提到 image（或 multimodal/vision），避免误伤普通校验 400。
+ */
+export function rejectsImages(body: string): boolean {
+  const t = body.toLowerCase()
+  if (!/image|multimodal|vision/.test(t)) return false
+  if (/image_url|image content|content type.*image|input_image|image input/.test(t)) return true
+  return /not support|unsupported|invalid|not accept/.test(t)
+}
+
+/**
+ * 剥离消息里的图片：带图 user 消息的 content 改为「文字 + 图片已省略提示」。
+ * 供 rejectsImages 命中后的无图重试——纯文字部分保留，模型仍能回答文字问题。
+ */
+export function stripImages(
+  messages: GenerateOptions['messages'],
+): GenerateOptions['messages'] {
+  return messages.map((m) => {
+    if (m.role !== 'user' || !m.images?.length) return m
+    const note = m.images.length > 1 ? `[${m.images.length} images omitted]` : '[image omitted]'
+    return {
+      ...m,
+      images: undefined,
+      content: m.content ? `${m.content}\n${note}` : note,
+    }
+  })
+}
+
+/**
  * 识别「端点拒绝历史里的结构化 tool_calls」的 400 错误体。这类端点带一层
  * OpenAI → Claude/Gemini 风格的转换层：能正常**发出** tool_calls（出站函数
  * 调用没问题），但把历史里回喂的 assistant.tool_calls 翻译成 content 块时
@@ -250,10 +282,31 @@ let strictCompatSession = false
  */
 let toolsBlockedSession = false
 
+/**
+ * 会话级「模型不吃图片」开关：首次识别到拒图 400（rejectsImages）后置位，
+ * 本页面会话内后续请求直接剥离 images 首发，不再每轮 400 探测。置位事件
+ * 同时通知 agentLoop 清理持久历史里的 images（见 imagesRejected 回调）。
+ */
+let imagesBlockedSession = false
+
+/** 拒图 400 识别后的一次性回调（agentLoop 注册，用于清理持久历史） */
+let onImagesRejected: (() => void) | null = null
+
 /** 测试隔离用：重置会话级兼容开关 */
 export function resetStrictCompatForTests(): void {
   strictCompatSession = false
   toolsBlockedSession = false
+  imagesBlockedSession = false
+  onImagesRejected = null
+}
+
+/**
+ * agentLoop 注册拒图回调：openaiAdapter 识别出「模型不吃图片」的 400 时调用。
+ * agentLoop 借此把持久 history 里 user 消息的 images 清掉——否则带图消息
+ * 留在历史里，之后每条纯文字提问都重发同一张图，会话每轮 400 直到清空。
+ */
+export function setOnImagesRejected(cb: (() => void) | null): void {
+  onImagesRejected = cb
 }
 
 /**
@@ -285,6 +338,16 @@ function toWireMessages(messages: GenerateOptions['messages']): Array<Record<str
     }
     if (m.role === 'tool') {
       return { role: m.role, content: m.content ?? '', tool_call_id: m.tool_call_id }
+    }
+    // 多模态 user 消息：带图片时改用 OpenAI content-parts（text + image_url）。
+    // 图片一律是 base64 dataURL（前端 FileReader 读取），直接放进 image_url.url。
+    if (m.role === 'user' && m.images && m.images.length > 0) {
+      const parts: Array<Record<string, unknown>> = []
+      if (m.content) parts.push({ type: 'text', text: m.content })
+      for (const url of m.images) {
+        parts.push({ type: 'image_url', image_url: { url } })
+      }
+      return { role: m.role, content: parts }
     }
     return { role: m.role, content: m.content ?? '' }
   })
@@ -432,11 +495,13 @@ export const openaiAdapter: LlmAdapter = {
     const { url: fetchUrl, relayTargetOrigin, absolute } = resolveEndpoint()
 
     /** 实际上行的消息与工具：400 梯子降级后更新（非流式降级共用同一份）；
-     *  会话内已识别过严格端点 / tools 被拒则直接以对应形态首发，省探测往返 */
+     *  会话内已识别过严格端点 / tools 被拒 / 模型拒图则直接以对应形态首发，
+     *  省探测往返 */
     let wireMessages = strictCompatSession
       ? foldForStrictEndpoint(merged.messages)
       : merged.messages
     let wireTools = toolsBlockedSession ? undefined : merged.tools
+    if (imagesBlockedSession) wireMessages = stripImages(wireMessages)
     const send = () =>
       fetch(fetchUrl, {
         method: 'POST',
@@ -472,22 +537,48 @@ export const openaiAdapter: LlmAdapter = {
     let response: Response
     try {
       response = await send()
-      // 400 恢复梯子：工具流量的兼容问题两级降级，每级只重试一次并置位会话
-      // 开关（本页面会话后续请求直接以终态首发）：
-      // 一级（折叠）：个别 OpenAI 兼容端点支持 tools 参数（第一轮能正常返回
+      // 400 恢复梯子：先查图片降级（非 vision 模型对 image_url 一律 400，
+      // 且不剥离重试的话带图消息留在历史里会让整个会话每轮 400），再走工具
+      // 流量的两级降级，每级只重试一次并置位会话开关（本页面会话后续请求
+      // 直接以终态首发）：
+      // 图片级（剥图）：rejectsImages 命中且上行带图 → stripImages 重发。
+      //   纯文字部分保留，模型仍能回答文字问题；同时置位 imagesBlockedSession
+      //   并回调 agentLoop 清理持久历史里的 images。
+      // 工具一级（折叠）：个别 OpenAI 兼容端点支持 tools 参数（第一轮能正常返回
       //   tool_calls），但历史里的结构化工具消息回喂时 400——拒 role:"tool"（角色
       //   枚举只认 system/user/assistant）、拒 content:null（已在 toWireMessages
       //   兜成空串）、拒 assistant.tool_calls（转换层翻成 content 块时丢 name，
       //   含路径被打码的 "Invalid request body: ***.***.***.name" 形态）。
       //   全量折叠成纯文本重发。
-      // 二级（弃 tools）：折叠后仍 400、或首轮纯文本历史无处折叠就 400——说明
-      //   拒的多半是 tools 数组本身，唯一出路是不带 tools/tool_choice 重发，
+      // 工具二级（弃 tools）：折叠后仍 400、或首轮纯文本历史无处折叠就 400——
+      //   说明拒的多半是 tools 数组本身，唯一出路是不带 tools/tool_choice 重发，
       //   函数调用降级为纯对话（模型凭内联文本历史继续）。
-      // 错误体签名（rejectsToolRole / strictToolCallsError）不匹配的 400 不属于
-      // 工具兼容问题，原样透传；两级用尽仍 400 也透传（surface400 附诊断日志）。
-      for (let level = 0; level < 2; level++) {
+      // 错误体签名（rejectsImages / rejectsToolRole / strictToolCallsError）都不
+      // 匹配的 400 不属于已知兼容问题，原样透传；降级用尽仍 400 也透传
+      // （surface400 附诊断日志）。
+      for (let level = 0; level < 3; level++) {
         if (response.status !== 400) break
         const errText = await response.text()
+        // 图片降级：上行带图且错误签名命中（或会话开关已置位但历史里又混入了
+        // 新图——防御性再剥一次）
+        const hasImages = wireMessages.some((m) => (m as ChatMessage).images?.length)
+        if (hasImages && (rejectsImages(errText) || imagesBlockedSession)) {
+          if (!imagesBlockedSession) {
+            imagesBlockedSession = true
+            console.warn(
+              '[assistant] LLM model rejected images — retrying without image parts ' +
+                '(multimodal disabled for this page session)',
+            )
+            try {
+              onImagesRejected?.()
+            } catch {
+              /* 回调失败不影响降级重试 */
+            }
+          }
+          wireMessages = stripImages(wireMessages)
+          response = await send()
+          continue
+        }
         if (!rejectsToolRole(errText) && !strictToolCallsError(errText)) {
           response = new Response(errText, { status: response.status, headers: response.headers })
           break
@@ -495,7 +586,7 @@ export const openaiAdapter: LlmAdapter = {
         const hasStructured = wireMessages.some(
           (m) => m.role === 'tool' || (m.tool_calls?.length ?? 0) > 0,
         )
-        if (level === 0 && hasStructured && !strictCompatSession) {
+        if (hasStructured && !strictCompatSession) {
           strictCompatSession = true
           wireMessages = foldForStrictEndpoint(wireMessages)
         } else if (wireTools && (merged.tools?.length ?? 0) > 0) {

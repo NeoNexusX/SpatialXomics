@@ -149,7 +149,9 @@
       "failed": "Failed to download",
       "timeout": "Download preparation timed out, please try again later",
       "limitReached": "Download limit reached",
-      "noUrls": "No download URLs returned"
+      "noUrls": "No download URLs returned",
+      "profileIncomplete": "Please complete your institution, position, research field, and region in your profile before downloading",
+      "profileUnavailable": "Couldn't load your account info. Please try again later"
     }
   }
 }

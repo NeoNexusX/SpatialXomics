@@ -10,7 +10,6 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { UiChatItem } from '../agenttypes/assistant'
-import { QUICK_PROMPTS } from '../plugins/agentLoop'
 import { getAssistantContext } from '../plugins'
 import { buildPageState } from '../providers/analysisContext'
 import { MAX_HISTORY_MESSAGES, MAX_UI_MESSAGES } from '../agentconfig/defaults'
@@ -55,14 +54,11 @@ function nextId(): string {
 
 // ---- 技能按钮（curated 顺序） ----
 
-/** 按钮展示顺序：完成度高的成品 skill 在前 */
+/** 按钮展示顺序与集合：只保留最核心的两个技能按钮（其余技能仍可经 `skill` 工具调用，
+ *  只是不在欢迎区铺按钮） */
 const SKILL_BUTTON_ORDER = [
   'annotation-review',
-  'adduct-isotope-analysis',
-  'metabolite-biology',
-  'literature-evidence',
   'msi-analysis',
-  'ion-image-interpretation',
 ] as const
 
 /** 技能按钮点击后发出的提示词（驱动模型加载 SKILL.md 并按其模板执行） */
@@ -82,26 +78,46 @@ function bindEvents() {
 
   const ctx = getAssistantContext()
 
-  // 技能目录 → 按钮（skills 服务由异步 fiber 注册，就绪后一次性填充）
+  // 技能目录 → 按钮（skills 服务由异步 fiber 注册，就绪后一次性填充）。
+  // 只展示 curated 集合（SKILL_BUTTON_ORDER）：其余技能没有对应翻译标签，
+  // 铺成按钮会露出英文原名（中文界面下一排英文按钮），模型仍可经
+  // `skill` 工具按需加载。
   ctx.inject(['skills'], (ctx2) => {
     const catalog = ctx2.skills.catalog()
     const rank = (name: string) => {
       const i = (SKILL_BUTTON_ORDER as readonly string[]).indexOf(name)
       return i === -1 ? SKILL_BUTTON_ORDER.length : i
     }
-    skillButtons.value = [...catalog]
+    skillButtons.value = catalog
+      .filter((s) => (SKILL_BUTTON_ORDER as readonly string[]).includes(s.name))
       .sort((a, b) => rank(a.name) - rank(b.name))
       .map((s) => ({ name: s.name, text: skillTriggerPrompt(s.name) }))
   })
 
   // 模型侧历史恢复：agent 服务由异步 fiber 创建，就绪后把 localStorage 恢复的
   // UI 消息转成干净的 user/assistant 对注入（此前 setHistory 无任何调用方，
-  // 刷新页面后 UI 显示完整对话而模型上下文为空）。只取非空正文、跳过错误/
-  // 截断条目——UI 专用字段无法构成合法的 tool 消息链，严格端点会 400。
+  // 刷新页面后 UI 显示完整对话而模型上下文为空）。只取有内容的条目（正文或
+  // 图片——纯图 user 消息 content 为空串，falsy 判断会把它丢掉，而其后的
+  // assistant 回复留在头部会形成 assistant-first 历史，严格端点每轮 400）、
+  // 跳过错误/截断条目——UI 专用字段无法构成合法的 tool 消息链，严格端点会 400。
   ctx.inject(['agent'], (ctx2) => {
     const restored = messages.value
-      .filter((m) => m.content && !m.error && !m.truncated)
-      .map((m) => ({ role: m.role, content: m.content }))
+      .filter(
+        (m) =>
+          ((m.content && m.content.length > 0) || (m.images?.length ?? 0) > 0) &&
+          !m.error &&
+          !m.truncated &&
+          !m.compacted,
+      )
+      .map((m) => {
+        const msg: { role: 'user' | 'assistant'; content: string; images?: string[] } = {
+          role: m.role,
+          content: m.content,
+        }
+        // user 消息的图片一并回灌模型上下文（视觉模型可继续引用）
+        if (m.role === 'user' && m.images && m.images.length > 0) msg.images = m.images
+        return msg
+      })
     ctx2.agent.setHistory(restored)
   })
 
@@ -219,6 +235,20 @@ function bindEvents() {
     // 也不重置 streaming——同 turn 的 turn-end 马上会到）
     turnError = message
   })
+
+  // 自动 Compact 提示条：agentLoop 在 send 内、turn-start 前压缩模型侧历史
+  // 并发来本事件。UI 上插一条居中灰色提示（compacted 标记渲染为系统提示而
+  // 非气泡，且不回灌模型——见 ChatTDesign 与历史恢复过滤）。
+  ctx.on('assistant/compacted', (before: number, after: number) => {
+    const fmt = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n))
+    messages.value.push({
+      id: nextId(),
+      role: 'assistant',
+      content: t('common.assistant.compacted', { before: fmt(before), after: fmt(after) }),
+      compacted: true,
+    })
+    saveHistory()
+  })
 }
 
 // ---- OPFS 持久化（完整历史）与 UI 上限 ----
@@ -274,15 +304,53 @@ async function loadEarlier(): Promise<void> {
 
 // ---- 历史持久化 ----
 
+/** localStorage 持久化的图片总量上限（dataURL 字符数）。base64 单张几百 KB，
+ *  不设限的话几张图就把 ~5MB 的 localStorage 配额打爆，且 QuotaExceededError
+ *  会被下面的 catch 静默吞掉——持久化无声停止，用户重载后丢对话。超限时从
+ *  最旧的图片开始丢弃（消息保留，images 置空）。 */
+const HISTORY_IMAGE_BUDGET = 1_500_000
+
+/** 裁掉历史里的超量图片：从最旧开始丢，直到总量 ≤ budget。
+ *  返回裁剪后的浅拷贝数组（不动 messages.value 原对象——UI 里旧图仍可看） */
+function capHistoryImages(items: UiChatItem[]): UiChatItem[] {
+  let total = 0
+  for (const m of items) {
+    if (m.images) for (const d of m.images) total += d.length
+  }
+  if (total <= HISTORY_IMAGE_BUDGET) return items
+  const out = items.map((m) => ({ ...m, images: m.images ? [...m.images] : undefined }))
+  for (const m of out) {
+    if (total <= HISTORY_IMAGE_BUDGET) break
+    if (!m.images?.length) continue
+    for (let i = 0; i < m.images.length && total > HISTORY_IMAGE_BUDGET; i++) {
+      total -= m.images[i]!.length
+      m.images.splice(i, 1)
+      i--
+    }
+    if (m.images.length === 0) m.images = undefined
+  }
+  return out
+}
+
 function saveHistory(): void {
   try {
-    const trimmed = messages.value.slice(-MAX_HISTORY_MESSAGES).map((m) => ({
+    const capped = capHistoryImages(messages.value)
+    const trimmed = capped.slice(-MAX_HISTORY_MESSAGES).map((m) => ({
       ...m,
       pending: false,
     }))
     localStorage.setItem(STORAGE_KEYS.assistantHistory, JSON.stringify(trimmed))
   } catch {
-    // localStorage 不可用（隐私模式等）时静默跳过
+    // 配额仍不够（极端：裁图后仍超——理论上不会发生，防御性兜底）：
+    // 去图重存一次，宁可丢图不丢对话
+    try {
+      const stripped = messages.value
+        .slice(-MAX_HISTORY_MESSAGES)
+        .map((m) => ({ ...m, pending: false, images: undefined }))
+      localStorage.setItem(STORAGE_KEYS.assistantHistory, JSON.stringify(stripped))
+    } catch {
+      // localStorage 不可用（隐私模式等）时静默跳过
+    }
   }
 }
 
@@ -356,27 +424,12 @@ export function useAssistant() {
   const { t } = useI18n()
 
   /**
-   * 快捷提问按钮文案（tKey → 已翻译文本）。
-   * key 写成静态字面量而非拼接——@intlify/no-dynamic-keys 禁动态 key，
-   * 且集中在此一份，五套聊天视图共用。
+   * 技能按钮文案（技能名 → 已翻译标签；key 写成静态字面量，@intlify/no-dynamic-keys
+   * 禁动态 key，且集中在此一份）。只保留最核心的两个技能按钮。
    */
-  const quickLabels = computed<Record<(typeof QUICK_PROMPTS)[number]['tKey'], string>>(
-    () => ({
-      summarize: t('common.assistant.quick.summarize'),
-      explain: t('common.assistant.quick.explain'),
-      preprocess: t('common.assistant.quick.preprocess'),
-      report: t('common.assistant.quick.report'),
-    }),
-  )
-
-  /** 技能按钮文案（技能名 → 已翻译标签；key 同样写死静态字面量） */
   const skillLabels = computed<Record<string, string>>(() => ({
     'annotation-review': t('common.assistant.skillBtns.annotationReview'),
-    'adduct-isotope-analysis': t('common.assistant.skillBtns.adductIsotope'),
-    'metabolite-biology': t('common.assistant.skillBtns.metaboliteBiology'),
-    'literature-evidence': t('common.assistant.skillBtns.literatureEvidence'),
     'msi-analysis': t('common.assistant.skillBtns.msiAnalysis'),
-    'ion-image-interpretation': t('common.assistant.skillBtns.ionImage'),
   }))
 
   /** 刷新上下文可用性（在 send 前调用，或页面数据变化时调用） */
@@ -393,14 +446,16 @@ export function useAssistant() {
     )
   }
 
-  async function send(text: string): Promise<void> {
+  async function send(text: string, images?: string[]): Promise<void> {
     // 面板常开时跨数据集导航不会重挂 ChatTDesign（consumePendingDatasetClear
     // 的另外两个消费点——模块初始化与 useAssistant()——都不会触发）：
     // 发起提问前再消费一次待清空标志，保证模型上下文与系统提示的
     // Dataset Context 同源，而不是拿旧样本的 tool 结果回答新样本的问题
     if (consumePendingDatasetClear()) getAssistantContext().agent?.clearHistory()
     refreshContext()
-    messages.value.push({ id: nextId(), role: 'user', content: text })
+    const userItem: UiChatItem = { id: nextId(), role: 'user', content: text }
+    if (images && images.length > 0) userItem.images = images
+    messages.value.push(userItem)
     const ctx = getAssistantContext()
     const agent = ctx.agent
     if (!agent) {
@@ -412,7 +467,7 @@ export function useAssistant() {
       saveHistory()
       return
     }
-    await agent.send(text)
+    await agent.send(text, images)
   }
 
   function stop(): void {
@@ -447,18 +502,14 @@ export function useAssistant() {
     }
     const lastUser = [...messages.value].reverse().find((m) => m.role === 'user')
     if (!lastUser) return
-    await send(lastUser.content)
+    await send(lastUser.content, lastUser.images)
   }
-
-  const quickPrompts = QUICK_PROMPTS
 
   return {
     messages,
     streaming,
     error,
     hasContext,
-    quickPrompts,
-    quickLabels,
     skillButtons,
     skillLabels,
     earlierAvailable,

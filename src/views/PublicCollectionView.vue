@@ -126,11 +126,12 @@ async function fetch() {
 
 const updatedDate = computed(() => formatDate(detail.value?.updatedAt))
 
-// 公开页下载走 noauth 端点（后端仅对 is_public 文件放行）
-const { handleDownloadPublicRaw } = useDownloadProgress()
+// 下载与数据集分享页统一：走认证 download_raw（含登录 + 身份完整校验）；
+// noauth 端点保留但不再使用。匿名查看由路由 requiresAuth 守卫拦截。
+const { handleDownloadRaw } = useDownloadProgress()
 
 function downloadMember(member: CollectionMember) {
-  handleDownloadPublicRaw(member.publicId)
+  handleDownloadRaw(member.publicId)
 }
 
 watch(publicId, fetch)
