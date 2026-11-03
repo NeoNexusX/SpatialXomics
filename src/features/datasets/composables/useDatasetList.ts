@@ -1,3 +1,4 @@
+import { useLatestRequest } from '@/shared/composables/useLatestRequest'
 import { computed, reactive, ref } from 'vue'
 import { mapItemToDataset } from '@/features/datasets/mappers/datasetMapper'
 import { buildPageList } from '@/shared/utils/pagination'
@@ -28,6 +29,7 @@ export function useDatasetList(
   const initialDesc = opts?.initialDesc ?? true
 
   // State
+  const requests = useLatestRequest()
   const datasets = ref<File[]>([])
   const loading = ref(false)
   const error = ref('')
@@ -63,6 +65,7 @@ export function useDatasetList(
   }
 
   const fetchFiles = async (opts?: { page?: number; size?: number }) => {
+    const isCurrent = requests.begin()
     loading.value = true
     error.value = ''
     const p = opts?.page ?? page.value
@@ -75,27 +78,25 @@ export function useDatasetList(
       // fetcher 现已返回解包后的响应体（{ data, meta }），不再是 axios response
       const data = (await fetcher(normalizeFilters(filters as Record<string, any>), p, s, sort)) || {}
 
-      if (data.meta) {
-        meta.current_page = data.meta.current_page || p
-        meta.current_records =
-          data.meta.current_records || (Array.isArray(data.data) ? data.data.length : 0)
-        meta.total_pages = data.meta.total_pages || 1
-        meta.total_records = data.meta.total_records || meta.current_records
-      }
-
-      // 排序已由服务端完成（同值行按 public_id 倒序兜底），前端不再重排
+      if (!isCurrent()) return
+      // The server owns ordering and may clamp an out-of-range page.
       datasets.value = Array.isArray(data.data)
         ? data.data.map((it: any, idx: number) => mapItemToDataset(it, idx))
         : []
-      page.value = p
+      meta.current_page = data.meta?.current_page ?? p
+      meta.current_records = data.meta?.current_records ?? datasets.value.length
+      meta.total_pages = data.meta?.total_pages || 1
+      meta.total_records = data.meta?.total_records ?? datasets.value.length
+      page.value = meta.current_page
       size.value = s
     } catch (err: any) {
+      if (!isCurrent()) return
       // 不向外显底层错误内容（状态码/堆栈），统一一句话；原因留控制台
       console.error('[useDatasetList] load failed:', err)
       error.value = t('common.feedback.loadFailed', { target: t('datasets.list.target') })
       datasets.value = []
     } finally {
-      loading.value = false
+      if (isCurrent()) loading.value = false
     }
   }
 

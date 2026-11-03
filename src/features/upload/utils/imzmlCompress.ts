@@ -4,7 +4,7 @@ import { reasonOf } from './uploadAbort'
 import { OSS_UPLOAD } from '@/shared/config'
 
 /** 哈希阶段的进度。上传阶段的进度另走 UnifiedUploadProgress */
-export interface CompressProgressEvent {
+interface CompressProgressEvent {
   percent: number
   speedStr?: string
   etaStr?: string
@@ -16,7 +16,7 @@ export interface CompressOptions {
 }
 
 /** 压缩侧的实时统计，由 worker 定期上报 */
-export interface CompressStats {
+interface CompressStats {
   /** zip 产物总字节的最新估计。只用来给消息文案算「第几片 / 共几片」 */
   estZipBytes: number
   /** 已从源文件读出的字节数。压缩速度的分子 */
@@ -25,7 +25,7 @@ export interface CompressStats {
   stalledMs: number
 }
 
-export interface StreamCompressOptions {
+interface StreamCompressOptions {
   entryNames: { imzmlName: string; ibdName: string }
   partSize: number
   /** 初始信用额度 = 主线程缓冲区容量（分片数） */

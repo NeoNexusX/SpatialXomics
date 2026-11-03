@@ -7,7 +7,7 @@
  * taking only the common name part and removing spaces/punctuation.
  */
 
-export function abbreviateOrganism(name: string): string {
+function abbreviateOrganism(name: string): string {
   if (!name) return 'Unknown'
   // Extract common name: "Mouse (Mus musculus)" → "Mouse"
   // "E. coli (Escherichia coli)" → "Ecoli"

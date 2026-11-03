@@ -4,7 +4,8 @@ import type { File } from '@/features/datasets/types/dataset'
 import { useToast } from '@/shared/composables/useToast'
 import { useCopyToClipboard } from '@/shared/composables/useCopyToClipboard'
 import { t } from '@/i18n'
-import { buildOverviewShareUrl, isValidPublicId } from '@/features/datasets/utils/overviewShareLink'
+import { buildOverviewShareUrl } from '@/features/datasets/utils/overviewShareLink'
+import { isValidPublicId } from '@/features/datasets/utils/publicId'
 
 /** Route parsing, link creation, and clipboard state for public Overview sharing. */
 export function useOverviewShare(dataset: Ref<File | null>) {

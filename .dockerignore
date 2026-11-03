@@ -14,3 +14,5 @@ __screenshots__
 test-results/
 playwright-report/
 coverage/
+.playwright-cli/
+output/

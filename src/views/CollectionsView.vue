@@ -58,6 +58,7 @@
         :pagination="pagination"
         :search-applied="search"
         :can-edit="canEdit"
+        :is-mine="isMine"
         :member-image-paths="memberImagePaths"
         :cover-loading="coverLoading"
         @view="handleView"
@@ -93,7 +94,7 @@ import { useConfirmDelete } from '@/shared/composables/useConfirmDelete'
 
 const router = useRouter()
 
-// 列表装配（取数/服务端分页/范围切换/本地搜索/删除）：
+// 列表装配（取数/服务端分页/范围切换/搜索/删除）：
 // 默认 POST /collections/list_all 浏览全库集合，勾选 Mine only 切到 POST /collections/list
 const {
   collections,
@@ -105,6 +106,7 @@ const {
   search,
   pagination,
   canEdit,
+  isMine,
   handleSearch,
   clearSearch,
   applyFilters,

@@ -11,7 +11,7 @@ import { ionShift, type AdductDef } from '@/shared/chem/adducts'
  * 候选元素：排除了 H、碱金属、Mg/Ca/Fe/Cu/Zn、卤素、C/N/O/P/S，以及纳米颗粒和
  * 掺杂会用到的 Ag/Au/Li。
  */
-export const DECOY_ELEMENTS: readonly string[] = Object.keys(DECOY_ONLY_MASS)
+const DECOY_ELEMENTS: readonly string[] = Object.keys(DECOY_ONLY_MASS)
 
 /** 本次可用的 decoy 元素：再排除已启用加合物引入的元素 */
 export function decoyElementPool(enabled: readonly AdductDef[]): string[] {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createApp, h, type Component } from 'vue'
+import { createApp, h, type App, type Component } from 'vue'
 import { createPinia } from 'pinia'
 import { flushPromises } from '@vue/test-utils'
 import { authStorage } from '@/shared/auth/authStorage'
@@ -54,7 +54,9 @@ vi.mock('../../api/siDb', () => ({
   downloadSiDbCsv: async () => {},
 }))
 
-/** 在真实组件 setup 里跑 composable，让 onMounted 生效；authStore 需要 Pinia */
+const mounted: App[] = []
+
+/** 在真实组件 setup 里跑 composable，让 onMounted 生效；authStore 需要 Pinia。组件要活到用例结束，卸载后迟到的响应会被丢弃 */
 function withSetup<T>(composable: () => T): T {
   let result: T | undefined
   const app = createApp({
@@ -65,7 +67,7 @@ function withSetup<T>(composable: () => T): T {
   } satisfies Component)
   app.use(createPinia())
   app.mount(document.createElement('div'))
-  app.unmount()
+  mounted.push(app)
   return result!
 }
 
@@ -84,6 +86,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  for (const app of mounted.splice(0)) app.unmount()
   authStorage.clearAuthData()
 })
 

@@ -67,7 +67,7 @@
       "log": "Log",
       "ticNorm": "TIC",
       "ticNormHint": "Divide each pixel by its total ion current (pre-computed stats/tic)",
-      "exportPng": "Export current view as PNG",
+      "exportImage": "Export current view",
       "zoomOut": "Zoom out",
       "zoomIn": "Zoom in",
       "resetZoom": "Reset zoom"

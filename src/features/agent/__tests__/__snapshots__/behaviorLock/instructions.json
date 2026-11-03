@@ -1,0 +1,900 @@
+{
+ "restored": {
+  "name": "AGENTS.md",
+  "text": "Last rule."
+ },
+ "prompts": [
+  "## User-provided instructions (AGENTS.md)\nFirst rule.",
+  "## User-provided instructions (RULES.md)\nSecond rule.",
+  null
+ ],
+ "logs": [
+  {
+   "datasetId": "dataset-a",
+   "mode": "temporary",
+   "events": [
+    {
+     "type": "instructions/set",
+     "name": "AGENTS.md",
+     "text": "First rule.",
+     "seq": 0,
+     "id": "uuid-1",
+     "time": 0
+    },
+    {
+     "type": "turn/start",
+     "turnId": "uuid-2",
+     "user": {
+      "role": "user",
+      "content": "question"
+     },
+     "binding": {
+      "datasetId": "dataset-a",
+      "generation": 0,
+      "page": {
+       "meanSpectrumAvailable": false
+      },
+      "selection": {
+       "clusters": []
+      }
+     },
+     "baseSurface": [],
+     "seq": 1,
+     "id": "uuid-3",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-2",
+     "message": {
+      "role": "user",
+      "content": "question"
+     },
+     "seq": 2,
+     "id": "uuid-4",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-2",
+     "message": {
+      "role": "user",
+      "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+     },
+     "origin": "context",
+     "seq": 3,
+     "id": "uuid-5",
+     "time": 0
+    },
+    {
+     "type": "step/start",
+     "turnId": "uuid-2",
+     "step": 1,
+     "seq": 4,
+     "id": "uuid-6",
+     "time": 0
+    },
+    {
+     "type": "request/context",
+     "turnId": "uuid-2",
+     "attemptId": "uuid-7",
+     "request": {
+      "nodes": [
+       2,
+       3
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 944483b0>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 5,
+     "id": "uuid-8",
+     "time": 0
+    },
+    {
+     "type": "attempt/start",
+     "turnId": "uuid-2",
+     "attemptId": "uuid-7",
+     "step": 1,
+     "request": {
+      "nodes": [
+       2,
+       3
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 944483b0>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 6,
+     "id": "uuid-9",
+     "time": 0
+    },
+    {
+     "type": "attempt/end",
+     "turnId": "uuid-2",
+     "attemptId": "uuid-7",
+     "status": "committed",
+     "seq": 7,
+     "id": "uuid-10",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-2",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "one"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 8,
+     "id": "uuid-11",
+     "time": 0
+    },
+    {
+     "type": "step/end",
+     "turnId": "uuid-2",
+     "step": 1,
+     "seq": 9,
+     "id": "uuid-12",
+     "time": 0
+    },
+    {
+     "type": "turn/end",
+     "turnId": "uuid-2",
+     "reason": "completed",
+     "seq": 10,
+     "id": "uuid-13",
+     "time": 0
+    },
+    {
+     "type": "instructions/set",
+     "name": "RULES.md",
+     "text": "Second rule.",
+     "seq": 11,
+     "id": "uuid-14",
+     "time": 0
+    },
+    {
+     "type": "turn/start",
+     "turnId": "uuid-15",
+     "user": {
+      "role": "user",
+      "content": "question"
+     },
+     "binding": {
+      "datasetId": "dataset-a",
+      "generation": 0,
+      "page": {
+       "meanSpectrumAvailable": false
+      },
+      "selection": {
+       "clusters": []
+      }
+     },
+     "baseSurface": [
+      2,
+      3,
+      8
+     ],
+     "seq": 12,
+     "id": "uuid-16",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-15",
+     "message": {
+      "role": "user",
+      "content": "question"
+     },
+     "seq": 13,
+     "id": "uuid-17",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-15",
+     "message": {
+      "role": "user",
+      "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+     },
+     "origin": "context",
+     "seq": 14,
+     "id": "uuid-18",
+     "time": 0
+    },
+    {
+     "type": "step/start",
+     "turnId": "uuid-15",
+     "step": 1,
+     "seq": 15,
+     "id": "uuid-19",
+     "time": 0
+    },
+    {
+     "type": "request/context",
+     "turnId": "uuid-15",
+     "attemptId": "uuid-20",
+     "request": {
+      "nodes": [
+       2,
+       3,
+       8,
+       13,
+       14
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 0f15b763>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 3
+     },
+     "seq": 16,
+     "id": "uuid-21",
+     "time": 0
+    },
+    {
+     "type": "attempt/start",
+     "turnId": "uuid-15",
+     "attemptId": "uuid-20",
+     "step": 1,
+     "request": {
+      "nodes": [
+       2,
+       3,
+       8,
+       13,
+       14
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 0f15b763>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 3
+     },
+     "seq": 17,
+     "id": "uuid-22",
+     "time": 0
+    },
+    {
+     "type": "attempt/end",
+     "turnId": "uuid-15",
+     "attemptId": "uuid-20",
+     "status": "committed",
+     "seq": 18,
+     "id": "uuid-23",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-15",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "two"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 19,
+     "id": "uuid-24",
+     "time": 0
+    },
+    {
+     "type": "step/end",
+     "turnId": "uuid-15",
+     "step": 1,
+     "seq": 20,
+     "id": "uuid-25",
+     "time": 0
+    },
+    {
+     "type": "turn/end",
+     "turnId": "uuid-15",
+     "reason": "completed",
+     "seq": 21,
+     "id": "uuid-26",
+     "time": 0
+    },
+    {
+     "type": "instructions/set",
+     "name": "",
+     "text": "",
+     "seq": 22,
+     "id": "uuid-27",
+     "time": 0
+    },
+    {
+     "type": "turn/start",
+     "turnId": "uuid-28",
+     "user": {
+      "role": "user",
+      "content": "question"
+     },
+     "binding": {
+      "datasetId": "dataset-a",
+      "generation": 0,
+      "page": {
+       "meanSpectrumAvailable": false
+      },
+      "selection": {
+       "clusters": []
+      }
+     },
+     "baseSurface": [
+      2,
+      3,
+      8,
+      13,
+      14,
+      19
+     ],
+     "seq": 23,
+     "id": "uuid-29",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-28",
+     "message": {
+      "role": "user",
+      "content": "question"
+     },
+     "seq": 24,
+     "id": "uuid-30",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-28",
+     "message": {
+      "role": "user",
+      "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+     },
+     "origin": "context",
+     "seq": 25,
+     "id": "uuid-31",
+     "time": 0
+    },
+    {
+     "type": "step/start",
+     "turnId": "uuid-28",
+     "step": 1,
+     "seq": 26,
+     "id": "uuid-32",
+     "time": 0
+    },
+    {
+     "type": "request/context",
+     "turnId": "uuid-28",
+     "attemptId": "uuid-33",
+     "request": {
+      "nodes": [
+       2,
+       3,
+       8,
+       13,
+       14,
+       19,
+       24,
+       25
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 7c70871a>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 6
+     },
+     "seq": 27,
+     "id": "uuid-34",
+     "time": 0
+    },
+    {
+     "type": "attempt/start",
+     "turnId": "uuid-28",
+     "attemptId": "uuid-33",
+     "step": 1,
+     "request": {
+      "nodes": [
+       2,
+       3,
+       8,
+       13,
+       14,
+       19,
+       24,
+       25
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 7c70871a>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 6
+     },
+     "seq": 28,
+     "id": "uuid-35",
+     "time": 0
+    },
+    {
+     "type": "attempt/end",
+     "turnId": "uuid-28",
+     "attemptId": "uuid-33",
+     "status": "committed",
+     "seq": 29,
+     "id": "uuid-36",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-28",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "three"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 30,
+     "id": "uuid-37",
+     "time": 0
+    },
+    {
+     "type": "step/end",
+     "turnId": "uuid-28",
+     "step": 1,
+     "seq": 31,
+     "id": "uuid-38",
+     "time": 0
+    },
+    {
+     "type": "turn/end",
+     "turnId": "uuid-28",
+     "reason": "completed",
+     "seq": 32,
+     "id": "uuid-39",
+     "time": 0
+    },
+    {
+     "type": "instructions/set",
+     "name": "AGENTS.md",
+     "text": "Last rule.",
+     "seq": 33,
+     "id": "uuid-40",
+     "time": 0
+    },
+    {
+     "type": "turn/start",
+     "turnId": "uuid-41",
+     "user": {
+      "role": "user",
+      "content": "question"
+     },
+     "binding": {
+      "datasetId": "dataset-a",
+      "generation": 0,
+      "page": {
+       "meanSpectrumAvailable": false
+      },
+      "selection": {
+       "clusters": []
+      }
+     },
+     "baseSurface": [
+      2,
+      3,
+      8,
+      13,
+      14,
+      19,
+      24,
+      25,
+      30
+     ],
+     "seq": 34,
+     "id": "uuid-42",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-41",
+     "message": {
+      "role": "user",
+      "content": "question"
+     },
+     "seq": 35,
+     "id": "uuid-43",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-41",
+     "message": {
+      "role": "user",
+      "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+     },
+     "origin": "context",
+     "seq": 36,
+     "id": "uuid-44",
+     "time": 0
+    },
+    {
+     "type": "step/start",
+     "turnId": "uuid-41",
+     "step": 1,
+     "seq": 37,
+     "id": "uuid-45",
+     "time": 0
+    },
+    {
+     "type": "request/context",
+     "turnId": "uuid-41",
+     "attemptId": "uuid-46",
+     "request": {
+      "nodes": [
+       2,
+       3,
+       8,
+       13,
+       14,
+       19,
+       24,
+       25,
+       30,
+       35,
+       36
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 556e966c>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 9
+     },
+     "seq": 38,
+     "id": "uuid-47",
+     "time": 0
+    },
+    {
+     "type": "attempt/start",
+     "turnId": "uuid-41",
+     "attemptId": "uuid-46",
+     "step": 1,
+     "request": {
+      "nodes": [
+       2,
+       3,
+       8,
+       13,
+       14,
+       19,
+       24,
+       25,
+       30,
+       35,
+       36
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 556e966c>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 9
+     },
+     "seq": 39,
+     "id": "uuid-48",
+     "time": 0
+    },
+    {
+     "type": "attempt/end",
+     "turnId": "uuid-41",
+     "attemptId": "uuid-46",
+     "status": "committed",
+     "seq": 40,
+     "id": "uuid-49",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-41",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "four"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 41,
+     "id": "uuid-50",
+     "time": 0
+    },
+    {
+     "type": "step/end",
+     "turnId": "uuid-41",
+     "step": 1,
+     "seq": 42,
+     "id": "uuid-51",
+     "time": 0
+    },
+    {
+     "type": "turn/end",
+     "turnId": "uuid-41",
+     "reason": "completed",
+     "seq": 43,
+     "id": "uuid-52",
+     "time": 0
+    }
+   ]
+  }
+ ],
+ "calls": [
+  {
+   "system": "<prompt 556e966c>",
+   "tools": "<tools a4d11b16>",
+   "messages": [
+    {
+     "role": "user",
+     "content": "question"
+    },
+    {
+     "role": "user",
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "one"
+      }
+     ],
+     "source": {
+      "endpoint": "anthropic",
+      "model": "m",
+      "baseUrl": "https://llm.test/v1"
+     }
+    },
+    {
+     "role": "user",
+     "content": "question"
+    },
+    {
+     "role": "user",
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "two"
+      }
+     ],
+     "source": {
+      "endpoint": "anthropic",
+      "model": "m",
+      "baseUrl": "https://llm.test/v1"
+     }
+    },
+    {
+     "role": "user",
+     "content": "question"
+    },
+    {
+     "role": "user",
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "three"
+      }
+     ],
+     "source": {
+      "endpoint": "anthropic",
+      "model": "m",
+      "baseUrl": "https://llm.test/v1"
+     }
+    },
+    {
+     "role": "user",
+     "content": "question"
+    },
+    {
+     "role": "user",
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+    }
+   ],
+   "turnStart": 9,
+   "maxTokens": 64000
+  }
+ ],
+ "trace": [
+  "restoring",
+  "idle [text:5]",
+  "preparing [text:5]",
+  "preparing",
+  "generating",
+  "generating [text:4]",
+  "idle [text:4]"
+ ],
+ "snapshot": {
+  "phase": "idle",
+  "mode": "temporary",
+  "messages": [
+   {
+    "id": "uuid-2-user",
+    "role": "user",
+    "content": "question"
+   },
+   {
+    "id": "uuid-2",
+    "role": "assistant",
+    "content": "one",
+    "parts": [
+     {
+      "type": "text",
+      "text": "one"
+     }
+    ],
+    "pending": false,
+    "interrupted": false
+   },
+   {
+    "id": "uuid-15-user",
+    "role": "user",
+    "content": "question"
+   },
+   {
+    "id": "uuid-15",
+    "role": "assistant",
+    "content": "two",
+    "parts": [
+     {
+      "type": "text",
+      "text": "two"
+     }
+    ],
+    "pending": false,
+    "interrupted": false
+   },
+   {
+    "id": "uuid-28-user",
+    "role": "user",
+    "content": "question"
+   },
+   {
+    "id": "uuid-28",
+    "role": "assistant",
+    "content": "three",
+    "parts": [
+     {
+      "type": "text",
+      "text": "three"
+     }
+    ],
+    "pending": false,
+    "interrupted": false
+   },
+   {
+    "id": "uuid-41-user",
+    "role": "user",
+    "content": "question"
+   },
+   {
+    "id": "uuid-41",
+    "role": "assistant",
+    "content": "four",
+    "parts": [
+     {
+      "type": "text",
+      "text": "four"
+     }
+    ],
+    "pending": false,
+    "interrupted": false
+   }
+  ],
+  "error": null,
+  "pressure": {
+   "inputTokens": 2542,
+   "contextWindow": 256000,
+   "outputReserve": 64000,
+   "inputBudget": 186880,
+   "ratio": 0.013602311643835616,
+   "estimated": true
+  },
+  "instructions": {
+   "name": "AGENTS.md",
+   "text": "Last rule."
+  }
+ }
+}

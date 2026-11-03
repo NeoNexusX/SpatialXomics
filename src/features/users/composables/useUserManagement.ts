@@ -1,3 +1,4 @@
+import { useLatestRequest } from '@/shared/composables/useLatestRequest'
 import { computed, onMounted, reactive, ref, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/shared/auth/authStore'
@@ -14,6 +15,7 @@ import type { AdminUser, UserListFilters, UserQuotaLimits } from '@/features/use
 import { t } from '@/i18n'
 
 export function useUserManagement() {
+  const requests = useLatestRequest()
   // External composables
   const authStore = useAuthStore()
   const router = useRouter()
@@ -74,10 +76,12 @@ export function useUserManagement() {
   }
 
   const fetchUsers = async () => {
+    const isCurrent = requests.begin()
     loading.value = true
     error.value = ''
     try {
       const res = await listAdminUsers(filters.value, currentPage.value, pageSize.value)
+      if (!isCurrent()) return
       users.value = res.data?.data || []
       if (res.data?.meta) {
         meta.current_page = res.data.meta.current_page || currentPage.value
@@ -89,11 +93,12 @@ export function useUserManagement() {
         meta.total_records = users.value.length
       }
     } catch (err: any) {
+      if (!isCurrent()) return
       console.error('Failed to load users:', err)
       error.value =
         err.message || t('common.feedback.loadFailed', { target: t('users.management.target') })
     } finally {
-      loading.value = false
+      if (isCurrent()) loading.value = false
     }
   }
 

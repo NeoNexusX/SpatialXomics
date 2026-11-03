@@ -1,13 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, nextTick, ref } from 'vue'
+import { mzAxisRef, resetZarrSharedState, setZarrStore } from '@/services/zarr/zarrSharedState'
 import type { KmeansCluster } from '../useOverlayData'
 import { useRegionComparison } from '../useRegionComparison'
 import type { ImportedMask } from '../useImportedMasks'
 
 /**
  * 只覆盖「导入掩膜作为可比较区域」这一层：availableRegions 的编排、
- * parseRegion 产出的 source、以及选择集失效后的自动清理。完整的比较扫描
- * 依赖 zarr store（streamRegionStatsBySpectra），不在单测范围。
+ * parseRegion 产出的 source、以及选择集失效后的自动清理。扫描本身是 zarr store
+ * 的事，这里只用假 store 看取消的语义。
  */
 
 function makeImportedMask(id: string, name: string): ImportedMask {
@@ -89,5 +90,49 @@ describe('useRegionComparison · imported masks', () => {
     await nextTick()
     expect(api.regionAIds.value).toEqual([])
     expect(api.regionBIds.value).toEqual(['imported:import-2'])
+  })
+
+  describe('cancelling', () => {
+    afterEach(() => {
+      setZarrStore(null)
+      resetZarrSharedState()
+    })
+
+    const stats = (value: number) => ({
+      sum: Float64Array.of(value),
+      count: Int32Array.of(value > 0 ? 2 : 0),
+    })
+
+    it('does not let an abandoned scan overwrite the comparison that replaced it', async () => {
+      const scans: { finish: (result: unknown) => void; cancelled: () => boolean }[] = []
+      setZarrStore({
+        spatialShape: [2, 2],
+        buildPixelMask: async () => ({ mask: new Uint8Array(4), pixelCount: 2 }),
+        streamRegionStatsBySpectra: (_masks: unknown, _progress: unknown, cancelled: () => boolean) =>
+          new Promise((finish) => scans.push({ finish, cancelled })),
+      } as never)
+      mzAxisRef.value = Float64Array.of(100)
+      const api = setup([makeImportedMask('a', 'A'), makeImportedMask('b', 'B')])
+      api.regionAIds.value = ['imported:a']
+      api.regionBIds.value = ['imported:b']
+
+      const abandoned = api.compare()
+      await vi.waitFor(() => expect(scans).toHaveLength(1))
+      api.reset()
+      const current = api.compare()
+      await vi.waitFor(() => expect(scans).toHaveLength(2))
+      expect(scans[0]!.cancelled()).toBe(true)
+      expect(scans[1]!.cancelled()).toBe(false)
+
+      scans[0]!.finish([stats(9), stats(9)])
+      await abandoned
+      expect(api.results.value).toEqual([])
+      expect(api.comparing.value).toBe(true)
+
+      scans[1]!.finish([stats(2), stats(0)])
+      await current
+      expect(api.results.value).toHaveLength(1)
+      expect(api.comparing.value).toBe(false)
+    })
   })
 })

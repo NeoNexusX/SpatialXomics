@@ -30,4 +30,6 @@ The Home, Sign in, and Create account pages, the dataset visualization page, and
 
 Click the ball to open a side drawer. It mirrors the navigation bar except for two details: the drawer offers no sign-in/sign-up entry — signed-out visitors use the **Join to start** button on the home page — and sign-out is handled by the button on the nav ball itself, not in the drawer.
 
+After signing in, the nav ball also shows an SXO icon that opens the SXO-Harness chat panel (see [SXO-Harness Agent](./sxo-harness)). The icon appears only on the pages that use the nav ball; pages with the top navigation bar currently have no agent entry, so open it from Home or the dataset visualization page.
+
 ![Nav drawer](https://cdn.neonexus.top/docs/20261021105310451.jpg_view)

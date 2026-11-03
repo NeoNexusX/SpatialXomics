@@ -17,25 +17,26 @@ function currentLocale(): string {
   return i18n.global.locale.value
 }
 
-/** 日期：en → 9/14/2026，zh-CN → 2026/9/14 */
-export function formatDate(value?: Date | string | number | null): string {
+type DateInput = Date | string | number | null | undefined
+
+type DateFormat = 'toLocaleDateString' | 'toLocaleString' | 'toLocaleTimeString'
+
+function formatLocalDate(value: DateInput, method: DateFormat): string {
   if (value == null || value === '') return ''
-  const d = value instanceof Date ? value : new Date(value)
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(currentLocale())
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : date[method](currentLocale())
 }
 
-/** 日期 + 时间 */
-export function formatDateTime(value?: Date | string | number | null): string {
-  if (value == null || value === '') return ''
-  const d = value instanceof Date ? value : new Date(value)
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString(currentLocale())
+export function formatDate(value?: DateInput): string {
+  return formatLocalDate(value, 'toLocaleDateString')
 }
 
-/** 仅时间 */
-export function formatTime(value?: Date | string | number | null): string {
-  if (value == null || value === '') return ''
-  const d = value instanceof Date ? value : new Date(value)
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString(currentLocale())
+export function formatDateTime(value?: DateInput): string {
+  return formatLocalDate(value, 'toLocaleString')
+}
+
+export function formatTime(value?: DateInput): string {
+  return formatLocalDate(value, 'toLocaleTimeString')
 }
 
 /** 数字千分位。en 与 zh-CN 的分组写法相同，收口是为了将来加语言时不必再找一遍调用点。 */

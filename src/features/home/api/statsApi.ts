@@ -18,7 +18,7 @@ import type {
 // ──────────────────────────────────────────────────────────────────────────
 
 /** GET /stats/files/classification?field= - 按指定字段统计文件分类数量 */
-export async function getFilesClassification(field: string): Promise<Record<string, number>> {
+async function getFilesClassification(field: string): Promise<Record<string, number>> {
   const res = await api.get('/stats/files/classification', { params: { field } })
   return res.data
 }

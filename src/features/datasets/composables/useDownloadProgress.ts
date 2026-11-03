@@ -125,11 +125,11 @@ export function useDownloadProgress() {
    */
   const handleDownloadRaw = (
     publicId?: string,
-    options?: { getFallbackFilename?: () => string | undefined; isPublic?: boolean },
+    options?: { isPublic?: boolean },
   ) =>
     runRawDownload(
       publicId,
-      (id) => ossDownloadRaw(id, { ...options, isPublic: options?.isPublic ?? false }),
+      (id) => ossDownloadRaw(id, options),
       (error) =>
         (error as { response?: { status?: number } })?.response?.status === 403
           ? t('datasets.download.limitReached')

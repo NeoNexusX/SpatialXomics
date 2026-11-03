@@ -258,9 +258,7 @@ const updatedDate = computed(() => formatDate(detail.value?.updatedAt))
 const { handleDownloadRaw } = useDownloadProgress()
 
 function downloadMember(member: { publicId: string; filename: string }) {
-  handleDownloadRaw(member.publicId, {
-    getFallbackFilename: () => member.filename,
-  })
+  handleDownloadRaw(member.publicId)
 }
 
 // ---- 编辑元信息：页内原地编辑（Edit → 字段变输入框 → Save/Cancel）----

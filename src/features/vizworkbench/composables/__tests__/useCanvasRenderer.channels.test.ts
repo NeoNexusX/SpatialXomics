@@ -2,43 +2,15 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import { defineComponent, h, ref, type Ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { useCanvasRenderer } from '../useCanvasRenderer'
+import { installCanvasStub, px } from './canvasStub'
 import type { BlendChannel } from '../../utils/ionChannelBlend'
 
 /**
- * jsdom has no 2D canvas context, so this stubs `getContext('2d')` with a
- * recording object. Everything that matters for the multi-ion path — which
- * pixels get written and in what order — is observable this way; the per-pixel
- * math itself lives in ionChannelBlend.ts and is covered there.
+ * Everything that matters for the multi-ion path — which pixels get written and
+ * in what order — is observable through the canvas stub; the per-pixel math
+ * itself lives in ionChannelBlend.ts and is covered there.
  */
 let puts: ImageData[]
-
-function installCanvasStub() {
-  puts = []
-  const contexts = new WeakMap<HTMLCanvasElement, unknown>()
-  HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string) {
-    if (type !== '2d') return null
-    let ctx = contexts.get(this)
-    if (!ctx) {
-      ctx = {
-        canvas: this,
-        imageSmoothingEnabled: true,
-        fillStyle: '',
-        setTransform() {},
-        clearRect() {},
-        fillRect() {},
-        drawImage() {},
-        createImageData(w: number, h: number) {
-          return { data: new Uint8ClampedArray(w * h * 4), width: w, height: h }
-        },
-        putImageData(img: ImageData) {
-          puts.push(img)
-        },
-      }
-      contexts.set(this, ctx)
-    }
-    return ctx
-  } as unknown as HTMLCanvasElement['getContext']
-}
 
 interface Harness {
   render: () => void
@@ -96,12 +68,10 @@ function makeRenderer(): Harness {
   }
 }
 
-function px(img: ImageData, i: number) {
-  return [img.data[i * 4], img.data[i * 4 + 1], img.data[i * 4 + 2], img.data[i * 4 + 3]]
-}
-
 describe('useCanvasRenderer multi-ion channels', () => {
-  beforeEach(() => installCanvasStub())
+  beforeEach(() => {
+    puts = installCanvasStub().puts
+  })
 
   it('renders the additive channel composite when channels mode is on', () => {
     const r = makeRenderer()

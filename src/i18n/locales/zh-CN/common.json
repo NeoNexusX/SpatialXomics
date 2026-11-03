@@ -138,15 +138,30 @@
       "example": "例如 {value}",
       "patternMismatch": "“{value}” 格式不正确"
     },
-    "assistant": {
-      "title": "SXO-Harness",
+    "agent": {
+      "citation": {
+        "opensInNewTab": "（在新标签页打开）"
+      },
+      "title": "SXO Harness Agent",
       "back": "返回",
       "newChat": "新对话",
+      "conversations": {
+        "title": "对话",
+        "import": "导入",
+        "export": "导出",
+        "untitled": "未命名",
+        "limit": "已达上限，删除一个后继续",
+        "running": "运行中，先停止才能切换",
+        "inOtherTab": "这个对话正在另一标签页中使用",
+        "invalidFile": "文件无效或已损坏",
+        "deleteTitle": "删除这个对话？",
+        "deleteMessage": "无法恢复，可先导出"
+      },
       "skillBtns": {
         "annotationReview": "注释审查",
         "msiAnalysis": "MSI 分析"
       },
-      "placeholder": "给 SXO-Harness 发消息",
+      "placeholder": "给 SXO Harness Agent 发消息",
       "attachImage": "添加图片",
       "removeImage": "移除图片",
       "imageAlt": "图片",
@@ -159,6 +174,9 @@
       "thinking": "思考中",
       "thought": "思考过程",
       "working": "运行中",
+      "retrying": "正在重试（{retry}/{max}）",
+      "usage": "输入 {input} tokens（缓存命中 {cached}）/ 输出 {output} tokens",
+      "compacting": "正在压缩较早的对话",
       "compacted": "较早的对话已压缩",
       "emptyResponse": "模型没有返回内容",
       "noApiConfigured": "尚未配置连接",
@@ -172,7 +190,12 @@
         "badResponse": "{host} 不是有效的 API 地址",
         "unknown": "未知错误",
         "refused": "模型拒绝了这次请求",
-        "outputLimit": "回复达到长度上限"
+        "outputLimit": "回复达到长度上限",
+        "invalidKey": "密钥含有非法字符",
+        "quota": "额度已用完",
+        "contextWindow": "对话超出了模型的上下文上限",
+        "interrupted": "与 {host} 的连接中断",
+        "timeout": "{host} 长时间没有响应"
       },
       "connection": {
         "title": "连接",
@@ -196,8 +219,25 @@
         "manualUnsupported": "不支持图片",
         "manualUnavailable": "不可用",
         "clearConfirm": "再点一次确认",
-        "chooseModel": "选择模型"
-      }
+        "chooseModel": "选择模型",
+        "contextWindow": "当前模型的上下文上限（tokens）",
+        "contextWindowHint": "默认 256,000 tokens。按端点与模型保存，在下一轮生效。",
+        "contextWindowSaved": "已保存模型上限",
+        "instructions": "会话指令（AGENTS.md，最大 64 KiB）"
+      },
+      "temporarySession": "临时会话，刷新后不会恢复",
+      "readOnlySession": "此会话正在另一标签页中使用，当前为只读",
+      "context": {
+        "title": "上下文",
+        "used": "{used} / {limit} tokens",
+        "sessionTokens": "会话累计 · token",
+        "inputUsed": "输入",
+        "outputUsed": "输出"
+      },
+      "retrySave": "重试保存",
+      "compactNow": "压缩上下文",
+      "compactionFailed": "上下文压缩未完成 · {reason}",
+      "compactionNoProgress": "此次压缩未缩减上下文"
     },
     "page": {
       "myDatasets": "我的数据集",

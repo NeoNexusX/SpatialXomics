@@ -15,7 +15,5 @@
  */
 export { ENV } from './env'
 export { STORAGE_KEYS, SESSION_KEYS } from './storageKeys'
-export { OSS_UPLOAD, ZARR_STORE, pickPartPlan, planForPartSize } from './defaults'
-export type { PartPlan } from './defaults'
-export { loadConfig, getConfig } from './runtimeConfig'
-export type { AppConfig } from './runtimeConfig'
+export { OSS_UPLOAD, pickPartPlan, planForPartSize } from './defaults'
+export { getConfig } from './runtimeConfig'

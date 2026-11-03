@@ -62,6 +62,7 @@ export function useUploadFlow(options: UseUploadFlowOptions) {
   /** 已发出中止、正在等在途分片收尾。见 abortUpload 的注释 */
   const aborting = ref(false)
   let abortController: AbortController | null = null
+  let parseRequest = 0
   const showPublicConfirm = ref(false)
 
   // Computed
@@ -174,14 +175,16 @@ export function useUploadFlow(options: UseUploadFlowOptions) {
     selectedPair.value = pair
     metadataForm.resetParsedFields()
     parsingMetadata.value = true
+    // 解析期间又选了别的文件：这次的结果已经不属于当前文件
+    const request = ++parseRequest
 
     try {
       const settings = await parseImzmlUploadMetadata(pair.imzml)
-      metadataForm.applyParsedSettings(settings)
+      if (request === parseRequest) metadataForm.applyParsedSettings(settings)
     } catch (err: any) {
-      showToast(err?.message || t('upload.toast.parseFailed'), 'error')
+      if (request === parseRequest) showToast(err?.message || t('upload.toast.parseFailed'), 'error')
     } finally {
-      parsingMetadata.value = false
+      if (request === parseRequest) parsingMetadata.value = false
     }
   }
 

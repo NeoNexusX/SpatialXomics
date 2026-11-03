@@ -32,6 +32,10 @@ features:
     details: View ion images, TIC plots, and spectra; use UMAP/KMeans, ROIs, region comparison, and annotation matching for spatial analysis.
     link: /guide/data-visualization
     linkText: Read Guide
+  - title: SXO-Harness Agent
+    details: Chat about the current dataset, read ion images, statistics, annotations, and clustering, and look up compounds, pathways, literature, and web sources.
+    link: /guide/sxo-harness
+    linkText: Read Guide
   - title: Database
     details: Browse the HMDB 4.0 metabolite reference database, search and filter entries, download the full CSV, or import it for annotation.
     link: /guide/database

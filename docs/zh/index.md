@@ -32,6 +32,10 @@ features:
     details: 查看离子图、TIC 图与质谱，使用 UMAP/KMeans、ROI、区域比较与注释匹配进行空间分析。
     link: /zh/guide/data-visualization
     linkText: 查看指南
+  - title: SXO-Harness 助手
+    details: 围绕当前数据集对话，读取离子图、统计、注释与聚类，并检索化合物、通路、文献和网络来源。
+    link: /zh/guide/sxo-harness
+    linkText: 查看指南
   - title: 数据库
     details: 浏览 HMDB 4.0 代谢物参考库，检索与筛选条目，下载整库 CSV 或导入注释。
     link: /zh/guide/database

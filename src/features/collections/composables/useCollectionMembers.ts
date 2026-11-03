@@ -6,7 +6,7 @@ import type { CollectionDetail, CollectionMember } from '../types/collection'
 import { t } from '@/i18n'
 
 /** 409 order conflict 的标准处理：提示 + 拉最新列表让用户重试（不自动合并） */
-export const ORDER_CONFLICT_MESSAGE = 'collection member order conflict'
+const ORDER_CONFLICT_MESSAGE = 'collection member order conflict'
 
 export interface UseCollectionMembersOptions {
   /** 持有详情的 ref（owner: useCollectionDetail），写操作成功后整体回写 */
@@ -112,5 +112,5 @@ export function useCollectionMembers(options: UseCollectionMembersOptions) {
     }
   }
 
-  return { members, adding, removing, reordering, add, remove, reorder, syncFromServer }
+  return { members, adding, removing, reordering, add, remove, reorder }
 }

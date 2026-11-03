@@ -21,7 +21,7 @@
  * are fetched — KMeans is computed locally in the browser.
  */
 
-import { createOssClient, OssError } from '../zarr/ossClient'
+import { createOssClient, OssError, ossKey } from '../zarr/ossClient'
 import type { OssClient } from '../zarr/ossClient'
 import type { ZarrAccessResponse, RootAttrs } from '../zarr/types/zarr'
 import type { ClusteringImage, UmapData, UmapEmbedding } from './types/clustering'
@@ -116,7 +116,7 @@ export class ClusteringZarrStore {
 
   /** Root attributes of the run zarr (spatial_shape, coordinate_base, ...). */
   private async readRootAttrs(): Promise<RootAttrs> {
-    const ab = await this.oss.getObjectArrayBuffer(this.rootKey('zarr.json'))
+    const ab = await this.oss.getObjectArrayBuffer(ossKey(this.folderPath, 'zarr.json'))
     const text = new TextDecoder('utf-8').decode(new Uint8Array(ab))
     const root = JSON.parse(text) as ZarrV3GroupMetadata
     const attrs = root.attributes as unknown as RootAttrs | undefined
@@ -205,7 +205,7 @@ export class ClusteringZarrStore {
 
   /**
    * Read a whole array as one contiguous row-major buffer (single- and
-   * multi-chunk arrays alike) via the shared zarrCodecs assembler.
+   * multi-chunk arrays alike).
    */
   private async readArrayFull(
     arrayPath: string,
@@ -219,22 +219,9 @@ export class ClusteringZarrStore {
     })
   }
 
+  /** All arrays live under the UMAP group, so the rest of the store uses plain array names. */
   private key(relativePath: string): string {
-    // All arrays live under the UMAP group inside the run's zarr; prepend the
-    // group path and the OSS folder prefix once here so the rest of the store
-    // uses plain array names.
-    const rel = `${UMAP_GROUP}/${relativePath.replace(/^\/+/, '')}`
-    const root = this.folderPath
-    if (!root) return rel
-    return root.endsWith('/') ? `${root}${rel}` : `${root}/${rel}`
-  }
-
-  /** Key of a path at the zarr ROOT (no UMAP_GROUP prefix), e.g. zarr.json. */
-  private rootKey(relativePath: string): string {
-    const rel = relativePath.replace(/^\/+/, '')
-    const root = this.folderPath
-    if (!root) return rel
-    return root.endsWith('/') ? `${root}${rel}` : `${root}/${rel}`
+    return ossKey(this.folderPath, `${UMAP_GROUP}/${relativePath.replace(/^\/+/, '')}`)
   }
 
   private async readJson<T>(relativePath: string): Promise<T> {

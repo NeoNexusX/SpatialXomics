@@ -222,7 +222,7 @@ export function useAnalysisBuilder(
     const analyzer = (dataset.analyzer || '').toString().toLowerCase()
     if (analyzer) {
       if (analyzer.includes('orbit')) analysisForm.analyzer = 'Orbitrap'
-      else if (analyzer.includes('ft') || analyzer.includes('fticr'))
+      else if (analyzer.includes('ft'))
         analysisForm.analyzer = 'FTICR'
       else if (analyzer.includes('q') && analyzer.includes('tof')) analysisForm.analyzer = 'Q-TOF'
       else if (analyzer.includes('tof')) analysisForm.analyzer = 'TOF'

@@ -8,7 +8,7 @@
 import type { CandidateOrigin, Molecule } from '@/features/vizworkbench/types/annotation'
 
 /** 全部等级，按排序先后 */
-export const CANDIDATE_ORIGINS: readonly CandidateOrigin[] = [
+const CANDIDATE_ORIGINS: readonly CandidateOrigin[] = [
   'endogenous',
   'expected',
   'unknown',

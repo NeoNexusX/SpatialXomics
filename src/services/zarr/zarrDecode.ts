@@ -24,7 +24,7 @@ export function getZstdDecoder(): Promise<ZSTDDecoder> {
 
 // ---------- decompression helpers ----------
 
-export async function decompressBytes(payload: Uint8Array, codecName: string): Promise<Uint8Array> {
+async function decompressBytes(payload: Uint8Array, codecName: string): Promise<Uint8Array> {
   const run = async (format: 'gzip' | 'deflate' | 'deflate-raw') => {
     const stream = new Blob([payload as BlobPart])
       .stream()

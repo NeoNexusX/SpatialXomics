@@ -88,10 +88,6 @@ export interface RegionThumbnailRegion {
   mask: Uint8Array
 }
 
-// ---------- constants ----------
-
-/** m/z bin width (Da) for processed-mode region comparison. */
-
 /**
  * Category from per-ion stats. Pure so it can run both at scan time and
  * again client-side when the user adjusts the enrichment ratio — the
@@ -110,6 +106,8 @@ function categorize(
   if (detRatio > 0 && 1 / detRatio >= enrichmentRatio) return 'b-enriched'
   return 'shared'
 }
+
+/** m/z bin width (Da) for processed-mode region comparison. */
 const PROCESSED_BIN_WIDTH = 0.01
 
 // ---------- composable ----------
@@ -157,11 +155,12 @@ export function useRegionComparison(deps: {
     filtered: 0,
   })
 
-  let cancelled = false
+  /** 每次比较一个代次，取消或开始新比较都会让进行中的那次作废 */
+  let currentRun = 0
 
   // 组件卸载时取消进行中的比较，避免后台扫描继续吃 CPU/网络
   onScopeDispose(() => {
-    cancelled = true
+    currentRun++
   })
   // Sources of the last comparison, for involvesRoi / involvesImportedMask.
   let lastSourcesA: RegionSource[] = []
@@ -433,8 +432,9 @@ export function useRegionComparison(deps: {
     const sourcesB = regionBIds.value.map(parseRegion).filter((s): s is RegionSource => !!s)
     if (!sourcesA.length || !sourcesB.length) return
 
+    const run = ++currentRun
+    const cancelled = () => run !== currentRun
     comparing.value = true
-    cancelled = false
     progress.value = 0
     error.value = null
     results.value = []
@@ -454,14 +454,12 @@ export function useRegionComparison(deps: {
       lastSourcesA = membersA.map((member) => member.source)
       lastSourcesB = membersB.map((member) => member.source)
 
-      if (cancelled) return
-
       // Convert to 1D coordinates-order masks
       const [maskA, maskB] = await Promise.all([
         store.buildPixelMask(rasterA),
         store.buildPixelMask(rasterB),
       ])
-      if (cancelled) return
+      if (cancelled()) return
 
       if (maskA.pixelCount === 0 || maskB.pixelCount === 0) {
         error.value = t('vizworkbench.compare.emptyRegion')
@@ -480,9 +478,9 @@ export function useRegionComparison(deps: {
           (done, total) => {
             progress.value = Math.round((done / total) * 100)
           },
-          () => cancelled,
+          cancelled,
         )
-        if (cancelled) return
+        if (cancelled()) return
         if (binCount === 0) {
           error.value = t('vizworkbench.compare.noBins')
           return
@@ -517,9 +515,9 @@ export function useRegionComparison(deps: {
           (done, total) => {
             progress.value = Math.round((done / total) * 100)
           },
-          () => cancelled,
+          cancelled,
         )
-        if (cancelled) return
+        if (cancelled()) return
         if (!stats) {
           error.value = t('vizworkbench.compare.needsPixelMajor')
           return
@@ -548,10 +546,11 @@ export function useRegionComparison(deps: {
 
       results.value = comparisons
     } catch (e) {
+      if (cancelled()) return
       console.error('[useRegionComparison] compare failed:', e)
       error.value = t('vizworkbench.compare.failed')
     } finally {
-      comparing.value = false
+      if (!cancelled()) comparing.value = false
     }
   }
 
@@ -604,7 +603,8 @@ export function useRegionComparison(deps: {
   // ---------- cleanup ----------
 
   function cancel() {
-    cancelled = true
+    currentRun++
+    comparing.value = false
   }
 
   /** True when the last comparison involved a member matching `pred`. */
@@ -627,7 +627,7 @@ export function useRegionComparison(deps: {
   }
 
   function reset() {
-    cancelled = true
+    currentRun++
     results.value = []
     error.value = null
     progress.value = 0

@@ -25,11 +25,14 @@ export async function getDownloadMetadata(publicId: FilePublicId): Promise<Downl
 // GET /files/{public_id}/metadata — 元数据：后端强制登录（匿名一律 401，不看 is_public），
 // 任意登录用户可看（含私有）。已登录走 auth_api（过期 token 401 由全局拦截处理）；
 // 匿名走 api + skipAuthRedirect，由调用方（useDatasetDetail）把 401 转成就地登录引导
-export async function getFileMetadata(publicId: FilePublicId) {
+export async function getFileMetadata(publicId: FilePublicId, signal?: AbortSignal) {
   const authed = !!authStorage.getToken()
   const res = authed
-    ? await auth_api.get(`/files/${publicId}/metadata`)
-    : await api.get(`/files/${publicId}/metadata`, { skipAuthRedirect: true } as any)
+    ? await auth_api.get(`/files/${publicId}/metadata`, ...(signal ? [{ signal }] : []))
+    : await api.get(`/files/${publicId}/metadata`, {
+        skipAuthRedirect: true,
+        ...(signal ? { signal } : {}),
+      } as any)
   return res.data
 }
 
@@ -99,9 +102,11 @@ export async function listFiles(
   size = getConfig().pagination.defaultPageSize,
   isPublic = false,
   sort?: FileListSort,
+  signal?: AbortSignal,
 ) {
   const client = isPublic ? api : auth_api
   const res = await client.post('/files/list_files', filters, {
+    ...(signal ? { signal } : {}),
     params: { page, size, sort_by: sort?.sortBy, order: sort?.order },
   })
   return res.data
@@ -114,8 +119,10 @@ export async function listUserFiles(
   page = 1,
   size = getConfig().pagination.defaultPageSize,
   sort?: FileListSort,
+  signal?: AbortSignal,
 ) {
   const res = await auth_api.post('/files/list_user_files', filters, {
+    ...(signal ? { signal } : {}),
     params: { page, size, sort_by: sort?.sortBy, order: sort?.order },
   })
   return res.data
@@ -146,8 +153,16 @@ export interface ProcessRunFilter {
 }
 
 // 后端返回 { data: [...], meta: { current_page, total_pages, total_records } }
-export async function listMyProcesses(page = 1, size = 10, filter: ProcessRunFilter = {}) {
-  const res = await auth_api.post('/processes/mine', filter, { params: { page, size } })
+export async function listMyProcesses(
+  page = 1,
+  size = 10,
+  filter: ProcessRunFilter = {},
+  signal?: AbortSignal,
+) {
+  const res = await auth_api.post('/processes/mine', filter, {
+    params: { page, size },
+    ...(signal ? { signal } : {}),
+  })
   const body = res.data
   // 兼容纯数组返回（无分页信息时）
   if (Array.isArray(body))

@@ -40,7 +40,7 @@ function rateLimitedDelay(): Promise<void> {
 }
 
 /** Build the 2D structure image URL for a CID. */
-export function structureImageUrlFor(cid: number): string {
+function structureImageUrlFor(cid: number): string {
   return `${PUBCHEM_BASE}/compound/cid/${cid}/PNG`
 }
 

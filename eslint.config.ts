@@ -11,6 +11,31 @@ import skipFormatting from '@vue/eslint-config-prettier/skip-formatting'
 // configureVueProject({ scriptLangs: ['ts', 'tsx'] })
 // More info at https://github.com/vuejs/eslint-config-typescript/#advanced-setup
 
+const ROOT_LEVEL_FOLDERS = {
+  group: [
+    '@/components/*',
+    '@/components/**',
+    '@/composables/*',
+    '@/composables/**',
+    '@/utils/*',
+    '@/utils/**',
+    '@/stores/*',
+    '@/stores/**',
+    '@/types/*',
+    '@/types/**',
+    '@/constants/*',
+    '@/constants/**',
+  ],
+  message:
+    'Root-level frontend folders are deprecated. Import from @/shared/* or the owning @/features/* module instead.',
+}
+
+/** 模型通信只经适配器插件，其他地方看不到 AI SDK */
+const AGENT_SDK = {
+  group: ['ai', '@ai-sdk/*'],
+  message: 'Only the plugins/llm-anthropic adapter talks to the AI SDK.',
+}
+
 export default defineConfigWithVueTs(
   {
     name: 'app/files-to-lint',
@@ -64,34 +89,70 @@ export default defineConfigWithVueTs(
           varsIgnorePattern: '^_',
         },
       ],
+      'no-restricted-imports': ['error', { patterns: [ROOT_LEVEL_FOLDERS] }],
+      'vue/block-lang': 'warn',
+      'vue/multi-word-component-names': 'warn',
+      'vue/no-mutating-props': 'warn',
+    },
+  },
+
+  {
+    name: 'app/agent-sdk-boundary',
+    files: ['src/features/agent/**/*.{ts,vue}'],
+    ignores: ['src/features/agent/plugins/llm-anthropic/**'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [ROOT_LEVEL_FOLDERS, AGENT_SDK] }],
+    },
+  },
+
+  {
+    // 插件之间只能经对方的 index.ts 引用，插件不依赖界面
+    name: 'app/agent-plugin-boundaries',
+    files: ['src/features/agent/plugins/**/*.ts'],
+    ignores: [
+      'src/features/agent/plugins/llm-anthropic/**',
+      'src/features/agent/plugins/**/__tests__/**',
+    ],
+    rules: {
       'no-restricted-imports': [
         'error',
         {
           patterns: [
+            ROOT_LEVEL_FOLDERS,
+            AGENT_SDK,
             {
-              group: [
-                '@/components/*',
-                '@/components/**',
-                '@/composables/*',
-                '@/composables/**',
-                '@/utils/*',
-                '@/utils/**',
-                '@/stores/*',
-                '@/stores/**',
-                '@/types/*',
-                '@/types/**',
-                '@/constants/*',
-                '@/constants/**',
-              ],
-              message:
-                'Root-level frontend folders are deprecated. Import from @/shared/* or the owning @/features/* module instead.',
+              regex: '^\\.\\./[^./][^/]*/',
+              message: "Import another plugin through its entry point, e.g. '../llm'.",
+            },
+            {
+              regex: '/(components|composables)/',
+              message: 'Plugins must not depend on the UI.',
             },
           ],
         },
       ],
-      'vue/block-lang': 'warn',
-      'vue/multi-word-component-names': 'warn',
-      'vue/no-mutating-props': 'warn',
+    },
+  },
+
+  {
+    // 分析页面静态引用 bridge，不能把助手运行时拉进首屏
+    name: 'app/agent-bridge-boundary',
+    files: ['src/features/agent/bridge/**/*.ts'],
+    ignores: ['src/features/agent/bridge/**/__tests__/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            ROOT_LEVEL_FOLDERS,
+            AGENT_SDK,
+            {
+              group: ['@deepseek-ai/*', '**/plugins/**', '**/bundles/**', '**/bootstrap'],
+              message: 'The bridge is imported eagerly and must not load the agent runtime.',
+            },
+          ],
+        },
+      ],
     },
   },
 
@@ -124,10 +185,10 @@ export default defineConfigWithVueTs(
       'src/features/home/components/HeroScene.vue',
       'src/features/home/components/FooterScene.vue',
       'src/features/home/components/FeatureGallery.vue',
-      // shadcn-vue 组件和基于它们的 AI Elements 模式：text-sm 等已在 assistant-scope 内
-      // 接到全局档位（见 features/assistant/assets/shadcn-bridge.css）。
-      'src/features/assistant/components/ui/**/*.vue',
-      'src/features/assistant/components/ai-elements/**/*.vue',
+      // shadcn-vue 组件和基于它们的 AI Elements 模式：text-sm 等已在 agent-scope 内
+      // 接到全局档位（见 features/agent/assets/shadcn-bridge.css）。
+      'src/features/agent/components/ui/**/*.vue',
+      'src/features/agent/components/ai-elements/**/*.vue',
     ],
     rules: {
       'vue/no-restricted-class': 'off',
@@ -176,7 +237,7 @@ export default defineConfigWithVueTs(
           // 各语言下写法相同、不该报成待翻译的文字：
           // 质谱与学术领域的固有缩写、化学标识符、单位，以及 ℹ / 1.0x / (k= 这类记号
           ignoreText: [
-            'm/z', 'TIC', 'PNG', 'CSV', 'DOI', 'ORCID', 'imzML', 'ibd', 'zarr',
+            'm/z', 'TIC', 'PNG', 'JPG', 'CSV', 'DOI', 'ORCID', 'imzML', 'ibd', 'zarr',
             'v', 'MALDI', 'DESI', 'SIMS', 'ROI', 'PCA', 'UMAP', 'KMeans', 'k-means', 'GitHub', 'ID',
             'CID', 'SMILES', 'InChI', 'InChIKey', 'PubChem',
             'μm', 'ppm', 'Da', 'ℹ', 'x', '(k=',

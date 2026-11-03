@@ -1,0 +1,232 @@
+{
+ "accepted": false,
+ "logs": [
+  {
+   "datasetId": "dataset-a",
+   "mode": "read-only",
+   "events": [
+    {
+     "type": "instructions/set",
+     "name": "AGENTS.md",
+     "text": "Old rule.",
+     "seq": 0,
+     "id": "e0",
+     "time": 0
+    },
+    {
+     "type": "turn/start",
+     "turnId": "t1",
+     "user": {
+      "role": "user",
+      "content": "question"
+     },
+     "binding": {
+      "datasetId": "dataset-a",
+      "generation": 0,
+      "page": {}
+     },
+     "baseSurface": [],
+     "seq": 1,
+     "id": "e1",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "t1",
+     "message": {
+      "role": "user",
+      "content": "question"
+     },
+     "seq": 2,
+     "id": "e2",
+     "time": 0
+    },
+    {
+     "type": "step/start",
+     "turnId": "t1",
+     "step": 1,
+     "seq": 3,
+     "id": "e3",
+     "time": 0
+    },
+    {
+     "type": "request/context",
+     "turnId": "t1",
+     "attemptId": "a1",
+     "request": {
+      "system": "<prompt 08b8765f>",
+      "tools": "<tools 741638a5>",
+      "nodes": [
+       2
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "maxTokens": 4096,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 4,
+     "id": "e4",
+     "time": 0
+    },
+    {
+     "type": "attempt/start",
+     "turnId": "t1",
+     "step": 1,
+     "attemptId": "a1",
+     "request": {
+      "system": "<prompt 08b8765f>",
+      "tools": "<tools 741638a5>",
+      "nodes": [
+       2
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "maxTokens": 4096,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 5,
+     "id": "e5",
+     "time": 0
+    },
+    {
+     "type": "attempt/end",
+     "turnId": "t1",
+     "attemptId": "a1",
+     "status": "committed",
+     "usage": {
+      "inputTokens": 100,
+      "outputTokens": 5
+     },
+     "seq": 6,
+     "id": "e6",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "t1",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "reasoning",
+        "text": "plan"
+       },
+       {
+        "type": "tool-call",
+        "id": "one",
+        "name": "lookup",
+        "arguments": "{}"
+       },
+       {
+        "type": "tool-call",
+        "id": "two",
+        "name": "lookup",
+        "arguments": "{}"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      }
+     },
+     "seq": 7,
+     "id": "e7",
+     "time": 0
+    },
+    {
+     "type": "tool/start",
+     "turnId": "t1",
+     "callKey": "7:1",
+     "callId": "one",
+     "name": "lookup",
+     "input": {},
+     "seq": 8,
+     "id": "e8",
+     "time": 0
+    }
+   ]
+  }
+ ],
+ "calls": [],
+ "trace": [
+  "restoring",
+  "idle [reasoning:4,tool:running,tool:running]",
+  "preparing [reasoning:4,tool:running,tool:running]",
+  "idle [reasoning:4,tool:running,tool:running]"
+ ],
+ "snapshot": {
+  "phase": "idle",
+  "mode": "read-only",
+  "messages": [
+   {
+    "id": "t1-user",
+    "role": "user",
+    "content": "question"
+   },
+   {
+    "id": "t1",
+    "role": "assistant",
+    "content": "",
+    "parts": [
+     {
+      "type": "reasoning",
+      "text": "plan",
+      "active": false
+     },
+     {
+      "type": "tool",
+      "id": "7:1",
+      "name": "lookup",
+      "input": {},
+      "state": "running",
+      "preview": ""
+     },
+     {
+      "type": "tool",
+      "id": "7:2",
+      "name": "lookup",
+      "input": {},
+      "state": "running",
+      "preview": ""
+     }
+    ],
+    "pending": false,
+    "usage": {
+     "inputTokens": 100,
+     "outputTokens": 5
+    },
+    "interrupted": true
+   }
+  ],
+  "error": "This conversation is open in another tab",
+  "pressure": {
+   "inputTokens": 128,
+   "contextWindow": 256000,
+   "outputReserve": 4096,
+   "inputBudget": 246784,
+   "ratio": 0.0005186721991701245,
+   "estimated": false
+  },
+  "tokenUsage": {
+   "inputTokens": 100,
+   "outputTokens": 5
+  },
+  "instructions": {
+   "name": "AGENTS.md",
+   "text": "Old rule."
+  }
+ }
+}

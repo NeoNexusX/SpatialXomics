@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { buildOverviewShareUrl, isValidPublicId } from '../overviewShareLink'
+import { buildOverviewShareUrl } from '../overviewShareLink'
+import { isValidPublicId } from '../publicId'
 
 // 只复刻分享链接用到的那条路由（与 router/index.ts 的 '/s/:shareToken' 一致），
 // 避免为一个纯函数拉起整个应用路由表。

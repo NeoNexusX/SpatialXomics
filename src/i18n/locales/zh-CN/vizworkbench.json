@@ -67,7 +67,7 @@
       "log": "对数",
       "ticNorm": "TIC",
       "ticNormHint": "每个像素除以其总离子流（预计算的 stats/tic）",
-      "exportPng": "将当前视图导出为 PNG",
+      "exportImage": "导出当前视图",
       "zoomOut": "缩小",
       "zoomIn": "放大",
       "resetZoom": "重置缩放"

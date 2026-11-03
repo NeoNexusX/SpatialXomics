@@ -1,3 +1,4 @@
+import { useLatestRequest } from '@/shared/composables/useLatestRequest'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { listMyProcesses, deleteProcess, getProcessingStats, type ProcessRunFilter } from '@/features/datasets/api/datasetApi'
 import { parseAlgorithms } from '@/shared/utils/methodsNormalize'
@@ -39,6 +40,7 @@ export interface TaskRow {
 }
 
 export function useWorkspaceDashboard() {
+  const requests = useLatestRequest()
   const processes = ref<ProcessItem[]>([])
   const loading = ref(false)
 
@@ -106,29 +108,30 @@ export function useWorkspaceDashboard() {
   function applySearch(query: string) {
     const q = query.trim()
     filter.value = q ? { filename: q } : {}
-    fetchProcesses({ page: 1, size: size.value })
+    return fetchProcesses({ page: 1, size: size.value })
   }
 
   async function fetchProcesses(opts?: { page?: number; size?: number }) {
+    const isCurrent = requests.begin()
     loading.value = true
     const p = opts?.page ?? page.value
     const s = opts?.size ?? size.value
     try {
       const result = await listMyProcesses(p, s, filter.value)
+      if (!isCurrent()) return
       processes.value = Array.isArray(result?.data) ? result.data : []
 
-      if (result?.meta) {
-        meta.current_page = result.meta.current_page ?? p
-        meta.total_pages = result.meta.total_pages ?? 1
-        meta.total_records = result.meta.total_records ?? processes.value.length
-      }
-      page.value = p
+      meta.current_page = result?.meta?.current_page ?? p
+      meta.total_pages = result?.meta?.total_pages ?? 1
+      meta.total_records = result?.meta?.total_records ?? processes.value.length
+      page.value = meta.current_page
       size.value = s
     } catch (e) {
+      if (!isCurrent()) return
       console.error('Failed to fetch processes:', e)
       processes.value = []
     } finally {
-      loading.value = false
+      if (isCurrent()) loading.value = false
     }
   }
 

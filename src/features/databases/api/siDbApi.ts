@@ -13,7 +13,7 @@ import type { DatabasePageMeta } from '../types/database'
 // 约定：本模块所有函数都返回**解包后的响应体**（res.data），调用方不再处理 axios 信封。
 
 /** 列表行（后端 snake_case；entry_key 即 HMDB ID，如 HMDB0001234） */
-export interface SiDbEntry {
+interface SiDbEntry {
   entry_key: string
   name: string
   formula: string

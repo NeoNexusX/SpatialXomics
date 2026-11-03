@@ -5,7 +5,7 @@
 import type { AnalyzerFamily, Tolerance } from '@/features/vizworkbench/types/annotation'
 
 /** 各分析器家族的默认容差（ppm） */
-export const ANALYZER_TOLERANCE_PPM: Record<Exclude<AnalyzerFamily, 'other'>, number> = {
+const ANALYZER_TOLERANCE_PPM: Record<Exclude<AnalyzerFamily, 'other'>, number> = {
   orbitrap: 5,
   fticr: 3,
   qtof: 10,

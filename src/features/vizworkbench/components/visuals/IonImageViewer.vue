@@ -17,7 +17,7 @@
       @update:intensity-scale="$emit('update:intensityScale', $event)"
       @search-mz="$emit('searchMz', $event)"
       @reset="$emit('reset')"
-      @download="exportPng"
+      @download="exportImage"
     />
     <div
       data-testid="ion-image-viewer"
@@ -118,6 +118,15 @@ import { useZoomPan } from '../../composables/useZoomPan'
 import { useCanvasRenderer } from '../../composables/useCanvasRenderer'
 import { computeFitTransform, fitPointToMatrixCell } from '../../utils/fitTransform'
 import { type BlendChannel } from '../../utils/ionChannelBlend'
+import {
+  DEFAULT_ION_IMAGE_FORMAT,
+  ION_IMAGE_JPEG_BACKGROUND,
+  ION_IMAGE_JPEG_QUALITY,
+  ION_IMAGE_MIME,
+  flattenOnBackground,
+  ionImageFilename,
+  type IonImageFormat,
+} from '../../utils/ionImageExport'
 import type { ViewIonChannel } from '../../composables/useIonChannels'
 import type { DataMode } from '@/services/zarr/types/zarr'
 
@@ -267,55 +276,45 @@ function onContainerMouseDown(e: MouseEvent) {
   }
 }
 
+/** 鼠标位置换算成矩阵单元格；落在图像之外时 inside 为 false */
+function cellAt(e: MouseEvent, cols: number, rows: number) {
+  const rect = containerRef.value!.getBoundingClientRect()
+  const t = computeFitTransform(rect.width, rect.height, cols, rows)
+  const mx = e.clientX - rect.left
+  const my = e.clientY - rect.top
+  const { col, row } = fitPointToMatrixCell(
+    (mx - panX.value) / zoom.value,
+    (my - panY.value) / zoom.value,
+    t,
+    cols,
+    rows,
+  )
+  return { mx, my, col, row, inside: row >= 0 && row < rows && col >= 0 && col < cols }
+}
+
 // 在容器的 click 事件中处理像素选择
 function onContainerClick(e: MouseEvent) {
   if (mouseMoved) return // 拖拽不触发点击
   if (props.drawMode) return
-  // 不再限制 processed 模式：continuous 也可选像素（test 分支的像素选择增强）
-
-  const container = containerRef.value
-  if (!container) return
-  const rect = container.getBoundingClientRect()
   const data = props.matrix
   const cols = props.matrixCols
   const rows = props.matrixRows
-  if (!data || !data.length || !cols || !rows) return
+  if (!containerRef.value || !data || !data.length || !cols || !rows) return
 
-  const W = rect.width,
-    H = rect.height
-  const t = computeFitTransform(W, H, cols, rows)
-
-  const mx = e.clientX - rect.left
-  const my = e.clientY - rect.top
-  const cx = (mx - panX.value) / zoom.value
-  const cy = (my - panY.value) / zoom.value
-  const { col, row } = fitPointToMatrixCell(cx, cy, t, cols, rows)
-
-  if (row >= 0 && row < rows && col >= 0 && col < cols) {
-    emit('select-pixel', col, row)
-  }
+  const { col, row, inside } = cellAt(e, cols, rows)
+  if (inside) emit('select-pixel', col, row)
 }
 
 // --- 悬停 ---
 
 function onHover(e: MouseEvent) {
-  const container = containerRef.value
-  if (!container) return
-  const rect = container.getBoundingClientRect()
   const data = props.matrix
   const cols = props.matrixCols
   const rows = props.matrixRows
-  if (!cols || !rows) return
+  if (!containerRef.value || !cols || !rows) return
   if (!props.channelsMode && (!data || !data.length)) return
-  const W = rect.width,
-    H = rect.height
-  const t = computeFitTransform(W, H, cols, rows)
-  const mx = e.clientX - rect.left
-  const my = e.clientY - rect.top
-  const cx = (mx - panX.value) / zoom.value
-  const cy = (my - panY.value) / zoom.value
-  const { col, row } = fitPointToMatrixCell(cx, cy, t, cols, rows)
-  if (row >= 0 && row < rows && col >= 0 && col < cols) {
+  const { mx, my, col, row, inside } = cellAt(e, cols, rows)
+  if (inside) {
     const i = row * cols + col
     const channelValues = props.channelsMode
       ? (props.channels ?? []).map((c) => ({
@@ -373,20 +372,23 @@ watch(
   () => scheduleRender(),
 )
 
-/** Export the current view as a PNG download (transparent background). */
-function exportPng() {
+/**
+ * 按指定格式导出当前视图（默认 JPG）。
+ * JPG 先铺白底再压缩：JPEG 没有 alpha，透明区域不处理会变成黑色。
+ */
+function exportImage(format: IonImageFormat = DEFAULT_ION_IMAGE_FORMAT) {
   const canvas = exportTransparentCanvas()
   if (!canvas) return
-  const dataUrl = canvas.toDataURL('image/png')
-  const link = document.createElement('a')
   // m/z at the same 6-decimal precision as the rest of the UI
   const label = props.channelsMode
     ? `_channels_${(props.channels ?? []).map((c) => c.mz.toFixed(6)).join('_')}`
     : props.dataMode === 'continuous'
       ? `_mz_${props.selectedMz.toFixed(6)}`
       : ''
-  link.download = `ion_image${label}.png`
-  link.href = dataUrl
+  const src = format === 'jpeg' ? flattenOnBackground(canvas, ION_IMAGE_JPEG_BACKGROUND) : canvas
+  const link = document.createElement('a')
+  link.download = ionImageFilename(label, format)
+  link.href = src.toDataURL(ION_IMAGE_MIME[format], ION_IMAGE_JPEG_QUALITY)
   link.click()
 }
 

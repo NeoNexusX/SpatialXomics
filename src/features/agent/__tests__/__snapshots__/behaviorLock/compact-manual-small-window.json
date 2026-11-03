@@ -1,0 +1,300 @@
+{
+ "logs": [
+  {
+   "datasetId": "dataset-a",
+   "mode": "temporary",
+   "events": [
+    {
+     "type": "turn/start",
+     "turnId": "uuid-1",
+     "user": {
+      "role": "user",
+      "content": "<text 60000 64c180e5 qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq…qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq>"
+     },
+     "binding": {
+      "datasetId": "dataset-a",
+      "generation": 0,
+      "page": {
+       "meanSpectrumAvailable": false
+      },
+      "selection": {
+       "clusters": []
+      }
+     },
+     "baseSurface": [],
+     "seq": 0,
+     "id": "uuid-2",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "user",
+      "content": "<text 60000 64c180e5 qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq…qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq>"
+     },
+     "seq": 1,
+     "id": "uuid-3",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "user",
+      "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+     },
+     "origin": "context",
+     "seq": 2,
+     "id": "uuid-4",
+     "time": 0
+    },
+    {
+     "type": "step/start",
+     "turnId": "uuid-1",
+     "step": 1,
+     "seq": 3,
+     "id": "uuid-5",
+     "time": 0
+    },
+    {
+     "type": "request/context",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-6",
+     "request": {
+      "nodes": [
+       1,
+       2
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 7c70871a>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 16000,
+      "contextWindow": 64000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 4,
+     "id": "uuid-7",
+     "time": 0
+    },
+    {
+     "type": "attempt/start",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-6",
+     "step": 1,
+     "request": {
+      "nodes": [
+       1,
+       2
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 7c70871a>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 16000,
+      "contextWindow": 64000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 5,
+     "id": "uuid-8",
+     "time": 0
+    },
+    {
+     "type": "attempt/end",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-6",
+     "status": "committed",
+     "seq": 6,
+     "id": "uuid-9",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "<text 75000 b1e6d79d eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee…eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee>"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 7,
+     "id": "uuid-10",
+     "time": 0
+    },
+    {
+     "type": "step/end",
+     "turnId": "uuid-1",
+     "step": 1,
+     "seq": 8,
+     "id": "uuid-11",
+     "time": 0
+    },
+    {
+     "type": "turn/end",
+     "turnId": "uuid-1",
+     "reason": "completed",
+     "seq": 9,
+     "id": "uuid-12",
+     "time": 0
+    },
+    {
+     "type": "compaction/start",
+     "compactionId": "uuid-13",
+     "nodes": [
+      1,
+      2
+     ],
+     "seq": 10,
+     "id": "uuid-14",
+     "time": 0
+    },
+    {
+     "type": "compaction/summary",
+     "compactionId": "uuid-13",
+     "summary": "manual summary",
+     "route": {
+      "endpoint": "anthropic",
+      "baseUrl": "https://llm.test/v1",
+      "model": "m"
+     },
+     "maxTokens": 16000,
+     "seq": 11,
+     "id": "uuid-15",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "message": {
+      "role": "user",
+      "content": "<text 357 e9e2518e This is an automatically generated check…edging this checkpoint.\n\n<compacted-summary>\nmanual summary\n</compacted-summary>>"
+     },
+     "surfaceOp": {
+      "op": "replace",
+      "nodes": [
+       1,
+       2
+      ]
+     },
+     "surfaceReason": "summary",
+     "seq": 12,
+     "id": "uuid-16",
+     "time": 0
+    },
+    {
+     "type": "compaction/end",
+     "compactionId": "uuid-13",
+     "beforeTokens": 47254,
+     "afterTokens": 27309,
+     "seq": 13,
+     "id": "uuid-17",
+     "time": 0
+    }
+   ]
+  }
+ ],
+ "calls": [
+  {
+   "system": "<prompt 7c70871a>",
+   "tools": "<tools a4d11b16>",
+   "messages": [
+    {
+     "role": "user",
+     "content": "<text 60000 64c180e5 qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq…qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq>"
+    },
+    {
+     "role": "user",
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+    }
+   ],
+   "turnStart": 0,
+   "maxTokens": 16000
+  },
+  {
+   "system": "<prompt 7c70871a>",
+   "tools": "<tools a4d11b16>",
+   "messages": [
+    {
+     "role": "user",
+     "content": "<text 60000 64c180e5 qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq…qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq>"
+    },
+    {
+     "role": "user",
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+    },
+    {
+     "role": "user",
+     "content": "<text 2161 5b84be62 You are now acting as a compaction engin…e newer information into a single consolidated summary under the same structure.>"
+    }
+   ],
+   "maxTokens": 16000
+  }
+ ],
+ "trace": [
+  "restoring",
+  "preparing",
+  "generating",
+  "generating [text:75000]",
+  "idle [text:75000]",
+  "compacting [text:75000]",
+  "compacting",
+  "idle"
+ ],
+ "snapshot": {
+  "phase": "idle",
+  "mode": "temporary",
+  "messages": [
+   {
+    "id": "uuid-1-user",
+    "role": "user",
+    "content": "<text 60000 64c180e5 qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq…qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq>"
+   },
+   {
+    "id": "uuid-1",
+    "role": "assistant",
+    "content": "<text 75000 b1e6d79d eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee…eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee>",
+    "parts": [
+     {
+      "type": "text",
+      "text": "<text 75000 b1e6d79d eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee…eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee>"
+     }
+    ],
+    "pending": false,
+    "interrupted": false
+   },
+   {
+    "id": "uuid-17",
+    "role": "assistant",
+    "content": "",
+    "compacted": true
+   }
+  ],
+  "error": null,
+  "pressure": {
+   "inputTokens": 27309,
+   "contextWindow": 64000,
+   "outputReserve": 16000,
+   "inputBudget": 46720,
+   "ratio": 0.5845248287671233,
+   "estimated": true
+  }
+ }
+}

@@ -138,15 +138,30 @@
       "example": "e.g. {value}",
       "patternMismatch": "\"{value}\" is not in a valid format."
     },
-    "assistant": {
-      "title": "SXO-Harness",
+    "agent": {
+      "citation": {
+        "opensInNewTab": "(opens in a new tab)"
+      },
+      "title": "SXO Harness Agent",
       "back": "Back",
       "newChat": "New chat",
+      "conversations": {
+        "title": "Conversations",
+        "import": "Import",
+        "export": "Export",
+        "untitled": "Untitled",
+        "limit": "Limit reached. Delete one to continue.",
+        "running": "Running. Stop it before switching.",
+        "inOtherTab": "This conversation is open in another tab",
+        "invalidFile": "Invalid or damaged file",
+        "deleteTitle": "Delete this conversation?",
+        "deleteMessage": "This can't be undone. Export it first if needed."
+      },
       "skillBtns": {
         "annotationReview": "Annotation review",
         "msiAnalysis": "MSI analysis"
       },
-      "placeholder": "Message SXO-Harness",
+      "placeholder": "Message SXO Harness Agent",
       "attachImage": "Add images",
       "removeImage": "Remove image",
       "imageAlt": "Image",
@@ -159,6 +174,9 @@
       "thinking": "Thinking",
       "thought": "Thought process",
       "working": "Running",
+      "retrying": "Retrying ({retry}/{max})",
+      "usage": "{input} tokens in ({cached} cached) / {output} tokens out",
+      "compacting": "Compacting earlier messages",
       "compacted": "Earlier messages were compacted",
       "emptyResponse": "The model returned nothing",
       "noApiConfigured": "No connection configured",
@@ -172,7 +190,12 @@
         "badResponse": "{host} is not a valid API address",
         "unknown": "Unknown error",
         "refused": "The model declined this request",
-        "outputLimit": "The reply hit the length limit"
+        "outputLimit": "The reply hit the length limit",
+        "invalidKey": "The key contains invalid characters",
+        "quota": "Out of quota",
+        "contextWindow": "The conversation exceeds the model context limit",
+        "interrupted": "Connection to {host} was interrupted",
+        "timeout": "{host} stopped responding"
       },
       "connection": {
         "title": "Connection",
@@ -196,8 +219,25 @@
         "manualUnsupported": "does not support images",
         "manualUnavailable": "unavailable",
         "clearConfirm": "Click again to confirm",
-        "chooseModel": "Choose model"
-      }
+        "chooseModel": "Choose model",
+        "contextWindow": "Context limit for this model (tokens)",
+        "contextWindowHint": "Defaults to 256,000 tokens. Saved per endpoint and model, effective next turn.",
+        "contextWindowSaved": "Model limit saved",
+        "instructions": "Conversation instructions (AGENTS.md, up to 64 KiB)"
+      },
+      "temporarySession": "Temporary conversation. Reloading clears it.",
+      "readOnlySession": "This conversation is open in another tab and is read-only here.",
+      "context": {
+        "title": "Context",
+        "used": "{used} / {limit} tokens",
+        "sessionTokens": "Session total · tokens",
+        "inputUsed": "Input",
+        "outputUsed": "Output"
+      },
+      "retrySave": "Retry saving",
+      "compactNow": "Compact context",
+      "compactionFailed": "Context compaction did not complete · {reason}",
+      "compactionNoProgress": "This compaction did not reduce the context"
     },
     "page": {
       "myDatasets": "My Datasets",

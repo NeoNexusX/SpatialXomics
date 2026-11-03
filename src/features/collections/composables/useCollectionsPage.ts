@@ -1,3 +1,4 @@
+import { useLatestRequest } from '@/shared/composables/useLatestRequest'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useAuthStore } from '@/shared/auth/authStore'
 import { getConfig } from '@/shared/config/runtimeConfig'
@@ -20,14 +21,15 @@ import { t } from '@/i18n'
  * - 默认 POST /collections/list_all —— 全库集合（浏览全部，含他人集合）；
  * - 勾选「My collections only」后走 POST /collections/list —— 仅当前登录用户的集合。
  * 后端未提供集合搜索/排序参数：排序固定 updated_at 倒序（无控件），
- * search 是**本地**逻辑，只作用于当前页；后端补上参数后可挪进请求。
+ * search 通过 name 字段走服务端筛选，跨全部分页生效。
  * 写操作（删除）仅对 owner/admin 开放（canEdit）。Create 走独立页面 /collections/new；
  * Edit 内嵌在 overview 页。
  */
 export function useCollectionsPage() {
+  const requests = useLatestRequest()
   const auth = useAuthStore()
 
-  // 当前页服务端数据；搜索在 collections computed 里本地派生
+  // 当前页服务端数据；筛选和搜索均由后端执行
   const rows = ref<CollectionSummary[]>([])
   const loading = ref(false)
   const error = ref('')
@@ -48,35 +50,34 @@ export function useCollectionsPage() {
   // 空数组/空串后端视为不筛选，直接透传即可
   const filters = ref<Record<string, string | string[]>>({})
 
-  // 所有者或管理员才能删除/编辑（列表含他人集合，与后端写权限一致）
-  const canEdit = (c: CollectionSummary) =>
-    c.ownerUsername === auth.user?.username || auth.isAdmin
-
   // 严格归属（不含 admin），卡片据此显示 My Collection 徽标
   const isMine = (c: CollectionSummary) =>
     !!auth.user && c.ownerUsername === auth.user.username
 
+  // 所有者或管理员才能删除/编辑（列表含他人集合，与后端写权限一致）
+  const canEdit = (c: CollectionSummary) => isMine(c) || auth.isAdmin
+
   async function fetchPage(targetPage = page.value) {
+    const isCurrent = requests.begin()
     loading.value = true
     error.value = ''
     try {
       const fetcher = mineOnly.value ? listCollections : listAllCollections
       const res = await fetcher(targetPage, size.value, filters.value)
+      if (!isCurrent()) return
       rows.value = res.data
       Object.assign(meta, res.meta)
       page.value = res.meta.current_page || targetPage
     } catch (err: any) {
+      if (!isCurrent()) return
       error.value = collectionErrorMessage(
         err,
         t('common.feedback.loadFailed', { target: t('collections.list.target') }),
       )
     } finally {
-      loading.value = false
+      if (isCurrent()) loading.value = false
     }
   }
-
-  // 搜索已走服务端（见 handleSearch），不再本地过滤
-  const collections = computed(() => rows.value)
 
   const pagination = computed(() => buildPageList(page.value, meta.total_pages))
 
@@ -121,7 +122,7 @@ export function useCollectionsPage() {
   onMounted(() => fetchPage())
 
   return {
-    collections,
+    collections: rows,
     loading,
     error,
     meta,

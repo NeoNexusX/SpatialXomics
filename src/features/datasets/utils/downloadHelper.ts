@@ -94,7 +94,7 @@ function downloadEntries(files: DownloadRawEntry[] | undefined) {
  */
 export async function ossDownloadRaw(
   publicId: string,
-  options?: { getFallbackFilename?: () => string | undefined, isPublic?: boolean },
+  options?: { isPublic?: boolean },
 ) {
   const { files } = await getDownloadRaw(publicId, options?.isPublic ?? false)
   downloadEntries(files)

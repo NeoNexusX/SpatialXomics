@@ -122,7 +122,7 @@
 | **Colormap**        | 5 种配色：Viridis、Inferno（默认）、Magma、Hot、Gray         |
 | **Intensity Scale** | Linear / Log / TIC（连续模式且有预计算 stats/tic 时可用） |
 | **Reset**           | 一键恢复所有控件到默认值                                     |
-| **PNG**             | 导出当前图像为透明背景 PNG                                   |
+| **JPG / PNG**       | 导出当前图像：默认 JPG（白底），悬停导出按钮可选 PNG（透明背景、无损） |
 
 **3. 强度调节（右侧条）**
 

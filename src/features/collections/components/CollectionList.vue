@@ -18,6 +18,11 @@ defineProps({
     type: Function as PropType<(collection: CollectionSummary) => boolean>,
     required: true,
   },
+  /** 逐卡片判定归属徽标（严格归属，不含管理员） */
+  isMine: {
+    type: Function as PropType<(collection: CollectionSummary) => boolean>,
+    required: true,
+  },
   /** 集合 public_id → 成员 imagePath（列表接口不带 members，由 useCollectionCovers 补） */
   memberImagePaths: {
     type: Object as PropType<Record<string, (string | null)[]>>,
@@ -97,6 +102,7 @@ defineEmits<{
         :key="collection.publicId"
         :collection="collection"
         :can-edit="canEdit(collection)"
+        :is-mine="isMine(collection)"
         :image-paths="memberImagePaths[collection.publicId]"
         :cover-loading="coverLoading[collection.publicId]"
         @view="$emit('view', $event)"

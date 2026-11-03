@@ -1,9 +1,8 @@
 import { ref, watch, onBeforeUnmount, type Ref } from 'vue'
 import { getZarrAccess } from '@/services/zarr/api/zarrAccessApi'
 import { createClustering } from '@/services/clustering/api/clusteringApi'
-import type { ClusteringTaskResponse } from '@/services/clustering/types/clustering'
+import type { ClusteringTaskResponse, UmapEmbedding } from '@/services/clustering/types/clustering'
 import { ClusteringZarrStore } from '@/services/clustering/clusteringZarrStore'
-import type { UmapEmbedding } from '@/services/clustering/types/clustering'
 import { computeKmeansFromUmap, preloadKmeans } from '@/features/vizworkbench/utils/kmeans'
 import { kmeansColor } from '@/features/vizworkbench/utils/regionPalette'
 import { dataModeRef } from '@/features/vizworkbench/composables/useZarrIonImage'
@@ -415,9 +414,12 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
   async function runKmeans(k: number): Promise<boolean> {
     const ok = await loadClusteringData()
     if (!ok || !umapEmbedding || !dims) return false
+    const forRun = runId.value
     kmeansComputing.value = true
     try {
       const result = await computeKmeansFromUmap(umapEmbedding, dims.height, dims.width, k, 42, 30)
+      // 计算期间换了 run：结果属于旧数据集，不能进新 run 的缓存
+      if (forRun !== runId.value) return false
       kmeansRgb = result.rgb
       kmeansLabels = result.labels
       kmeansClusters.value = deriveKmeansClusters(result.labels)
@@ -431,7 +433,7 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
       return true
     } catch (e) {
       console.error('[useOverlayData] local kmeans failed:', e)
-      overlayError.value = e instanceof Error ? e.message : String(e)
+      if (forRun === runId.value) overlayError.value = e instanceof Error ? e.message : String(e)
       return false
     } finally {
       kmeansComputing.value = false
@@ -608,7 +610,6 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     clearKmeansClusters,
     /** Current KMeans labels (Int32Array, -1 = background) or null. */
     getKmeansLabels,
-    /** Set/clear a comparison overlay (region A/B highlight) that overrides UMAP/KMeans. */
     /** Export the UMAP RGB image as a standalone PNG. */
     exportUmapPng,
     /** Export the KMeans RGB image as a standalone PNG. */

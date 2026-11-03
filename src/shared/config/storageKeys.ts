@@ -16,18 +16,10 @@ export const STORAGE_KEYS = {
   locale: 'locale',
   /** GitHub 提交热力图缓存「前缀」；实际键为 前缀 + `owner/repo|branch|days`（见 features/home/api/githubApi.ts） */
   githubCommitHeatmap: 'gh-commit-heatmap:',
-  /** SXO-Harness对话历史（裁剪后的最近 N 条，见 features/assistant） */
-  assistantHistory: 'assistant_chat_history',
-  /** SXO-Harness的连接设置（端点协议、地址、密钥、模型），见 features/assistant/agentconfig/connectionConfig.ts */
-  assistantConnection: 'assistant_connection',
-  /** SXO-Harness的模型多模态测试结果，按端点保存，见 features/assistant/providers/modelCatalog.ts */
-  assistantModelCatalog: 'assistant_model_catalog',
-  /** SXO-Harness OPFS 会话 id（一次浏览器配置一个会话文件，见 features/assistant/utils/opfsStore.ts） */
-  assistantSessionId: 'assistant_chat_session_id',
-  /** 助手对话当前归属的数据集 runId（VizWorkbench 挂载时写入，用于检测数据集切换） */
-  assistantDatasetRun: 'assistant_dataset_run',
-  /** 数据集已切换、助手对话待清空的标志（VizWorkbench 写入，useAssistant 模块初始化消费） */
-  assistantPendingClear: 'assistant_pending_clear',
+  /** Agent connection credentials and model catalog preferences. */
+  agentConnection: 'assistant_connection',
+  agentModelCatalog: 'assistant_model_catalog',
+  agentModelLimits: 'assistant_model_limits_v1',
   /** 注释面板的容差 / 加合物开关 / 极性「前缀」；实际键为 前缀 + runId（见 vizworkbench/composables/useAnnotation.ts） */
   annotationSettings: 'annotation-settings:',
 } as const

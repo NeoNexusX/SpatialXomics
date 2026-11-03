@@ -1,0 +1,22 @@
+{
+ "accepted": false,
+ "logs": [
+  {
+   "datasetId": "dataset-a",
+   "mode": "temporary",
+   "events": []
+  }
+ ],
+ "calls": [],
+ "trace": [
+  "restoring",
+  "preparing",
+  "idle"
+ ],
+ "snapshot": {
+  "phase": "idle",
+  "mode": "temporary",
+  "messages": [],
+  "error": "model facts unavailable"
+ }
+}

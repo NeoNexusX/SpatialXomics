@@ -1,3 +1,4 @@
+import { useLatestRequest } from '@/shared/composables/useLatestRequest'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/shared/auth/authStore'
@@ -19,6 +20,7 @@ import type {
  * 复位后按新 source 的 fetcher 重新拉取。
  */
 export function useDatabaseList() {
+  const requests = useLatestRequest()
   const auth = useAuthStore()
 
   const sources = DATABASE_SOURCES
@@ -61,6 +63,8 @@ export function useDatabaseList() {
 
   /** 未登录 / 登出：清空列表与分页，视图层显示登录引导 */
   const clearRows = () => {
+    requests.invalidate()
+    currentPage.value = 1
     rows.value = []
     meta.current_page = 1
     meta.total_pages = 1
@@ -70,6 +74,7 @@ export function useDatabaseList() {
   }
 
   const fetchPage = async () => {
+    const isCurrent = requests.begin()
     // 页面要求登录：匿名不取数（不打扰后端、也不闪一帧样本数据）
     if (!auth.token) {
       clearRows()
@@ -84,18 +89,21 @@ export function useDatabaseList() {
         page: currentPage.value,
         size: pageSize.value,
       })
+      if (!isCurrent()) return
       rows.value = res.data
       meta.current_page = res.meta?.current_page || currentPage.value
       meta.total_pages = res.meta?.total_pages || 1
-      meta.total_records = res.meta?.total_records || rows.value.length
+      currentPage.value = meta.current_page
+      meta.total_records = res.meta?.total_records ?? rows.value.length
     } catch (e) {
+      if (!isCurrent()) return
       console.error('Failed to load database page:', e)
       error.value =
         e instanceof Error && e.message
           ? e.message
           : t('common.feedback.loadFailed', { target: t('databases.title') })
     } finally {
-      loading.value = false
+      if (isCurrent()) loading.value = false
     }
   }
 
@@ -149,6 +157,7 @@ export function useDatabaseList() {
       if (token) fetchPage()
       else clearRows()
     },
+    { flush: 'sync' },
   )
 
   return {

@@ -1,0 +1,22 @@
+{
+ "logs": [
+  {
+   "datasetId": "dataset-a",
+   "mode": "temporary",
+   "events": []
+  }
+ ],
+ "calls": [],
+ "trace": [
+  "restoring",
+  "idle",
+  "compacting",
+  "idle"
+ ],
+ "snapshot": {
+  "phase": "idle",
+  "mode": "temporary",
+  "messages": [],
+  "error": "common.agent.compactionNoProgress"
+ }
+}

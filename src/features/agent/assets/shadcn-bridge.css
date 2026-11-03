@@ -1,0 +1,126 @@
+/* ============================================================================
+   shadcn-vue 组件与全站设计体系（daisyUI + kawaru-text-*）的桥接。
+
+   助手面板里的组件来自 shadcn-vue 注册表，类名写的是 shadcn 语义色
+   （bg-muted、border-input…）和 Tailwind 原生字号（text-sm…）。这里把它们接到
+   项目已有的 token 上，组件代码不用逐个改。
+
+   ⚠ 不要跑 shadcn-vue init：它会往 CSS 入口写 --color-primary 和全局
+   `* { border-border }`，覆盖全站 daisyUI。
+   ============================================================================ */
+
+/* 只注册工具类，不输出变量（inline）：与 daisyUI 不重名的语义色全局生效，
+   没有组件用到时也不会进产物。
+   边框和弱化底色用文字色叠透明度，亮暗主题下都是一条很细的线；
+   daisy 的 base-300 在暗色主题里比背景还深，当边框看不清。 */
+@theme inline {
+  --color-background: var(--color-base-100);
+  --color-foreground: var(--color-base-content);
+  --color-popover: var(--color-base-100);
+  --color-popover-foreground: var(--color-base-content);
+  --color-primary-foreground: var(--color-primary-content);
+  --color-secondary-foreground: var(--color-base-content);
+  --color-muted: color-mix(in oklab, var(--color-base-content) 5%, var(--color-base-100));
+  --color-muted-foreground: color-mix(in oklab, var(--color-base-content) 62%, transparent);
+  --color-accent-foreground: var(--color-base-content);
+  --color-destructive: var(--color-error);
+  --color-border: color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  --color-input: color-mix(in oklab, var(--color-base-content) 18%, transparent);
+  --color-ring: var(--color-primary);
+}
+
+@theme {
+  --animate-collapsible-down: collapsible-down 180ms ease-out;
+  --animate-collapsible-up: collapsible-up 140ms ease-out;
+
+  @keyframes collapsible-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--reka-collapsible-content-height);
+    }
+  }
+  @keyframes collapsible-up {
+    from {
+      height: var(--reka-collapsible-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+}
+
+/* 进行中的步骤标题：一道光从文字上扫过 */
+@utility shimmer {
+  background-image: linear-gradient(
+    100deg,
+    color-mix(in oklab, var(--color-base-content) 62%, transparent) 40%,
+    var(--color-base-content) 50%,
+    color-mix(in oklab, var(--color-base-content) 62%, transparent) 60%
+  );
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: agent-shimmer 1.8s linear infinite;
+}
+@utility shimmer-none {
+  background-image: none;
+  color: inherit;
+  animation: none;
+}
+@keyframes agent-shimmer {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+
+/* 以下只在助手面板内生效。弹层会 Teleport 到 body，脱离面板的 DOM 树，
+   所以用到的 *Content 组件要自己带上 agent-scope。 */
+.agent-scope {
+  /* 面板的色彩：主操作用中性的文字色（亮色下近黑，暗色下近白），品牌蓝只用在选中态、
+     光标和链接上。daisy 的 primary / secondary / accent 在这里都按 shadcn 的语义重定义，
+     全站的 btn-primary 等不受影响。 */
+  --sxo-accent: oklch(55% 0.21 259);
+  --sxo-label-2: color-mix(in oklab, var(--color-base-content) 72%, transparent);
+  --sxo-label-3: color-mix(in oklab, var(--color-base-content) 52%, transparent);
+
+  --color-primary: var(--color-base-content);
+  --color-primary-content: var(--color-base-100);
+  --color-secondary: color-mix(in oklab, var(--color-base-content) 6%, var(--color-base-100));
+  --color-accent: color-mix(in oklab, var(--color-base-content) 7%, var(--color-base-100));
+
+  /* 用户气泡的底色由它取色 */
+  --primary: var(--sxo-accent);
+
+  /* daisyUI 没有 --radius，shadcn 组件里的 rounded-[calc(var(--radius)-5px)] 要用它 */
+  --radius: 0.5rem;
+
+  /* 把 Tailwind 原生字号接到全局档位：text-sm → 75（正文），text-xs → 62（元信息）。
+     text-base 只有 Input 在小屏用，与正文同档。 */
+  --text-xs: calc(var(--kawaru-fs) * 0.625);
+  --text-xs--line-height: 1.4;
+  --text-sm: calc(var(--kawaru-fs) * 0.75);
+  --text-sm--line-height: 1.5;
+  --text-base: calc(var(--kawaru-fs) * 0.75);
+  --text-base--line-height: 1.5;
+}
+
+[data-theme='dark'] .agent-scope {
+  --sxo-accent: oklch(72% 0.15 252);
+}
+
+/* shadcn 的 border 类不写颜色，依赖全局 `* { border-color }`。Tailwind v4 默认是
+   currentColor，不补这条边框会变成文字色。放进 base 层，border-* 工具类仍可覆盖。 */
+@layer base {
+  .agent-scope,
+  .agent-scope *,
+  .agent-scope ::before,
+  .agent-scope ::after {
+    border-color: color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  }
+}

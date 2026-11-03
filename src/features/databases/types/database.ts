@@ -45,7 +45,7 @@ export interface DatabaseListParams {
 }
 
 /** 数值区间值（如质量范围）；min/max 可只填一边 */
-export interface DatabaseRangeValue {
+interface DatabaseRangeValue {
   min?: number
   max?: number
 }
@@ -55,7 +55,7 @@ export type DatabaseFilterValue = string | DatabaseRangeValue
 export type DatabaseFilterValues = Record<string, DatabaseFilterValue>
 
 /** select 控件选项（origin 这类词表：值固定写死、文案走 i18n） */
-export interface DatabaseSelectOption {
+interface DatabaseSelectOption {
   value: string
   label: () => string
 }
@@ -73,7 +73,7 @@ export interface DatabaseSelectControl {
 }
 
 /** number-range 控件：数值区间（如质量），可只填一边，随「搜索」提交 */
-export interface DatabaseRangeControl {
+interface DatabaseRangeControl {
   kind: 'number-range'
   key: string
   label: () => string
@@ -94,7 +94,7 @@ export interface DatabasePageMeta {
 }
 
 /** 整库下载入口（如 SI_DB 的全量 CSV）。成功提示由 run 自理；失败抛本地化 Error，由调用方 toast */
-export interface DatabaseDownloadAction {
+interface DatabaseDownloadAction {
   label: () => string
   run: () => Promise<void>
 }
@@ -121,7 +121,7 @@ export interface DatabaseCsvImport {
   probe?: () => Promise<{ fileName: string; size: number }>
 }
 
-export interface DatabaseListResult {
+interface DatabaseListResult {
   data: DatabaseRow[]
   meta: DatabasePageMeta
 }

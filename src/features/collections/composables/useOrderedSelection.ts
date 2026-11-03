@@ -56,5 +56,5 @@ export function useOrderedSelection<T extends { publicId: string }>(initial: T[]
     selected.value = []
   }
 
-  return { selected, selectedIds, isSelected, toggle, move, moveUp, moveDown, removeById, clear }
+  return { selected, isSelected, toggle, move, moveUp, moveDown, removeById, clear }
 }

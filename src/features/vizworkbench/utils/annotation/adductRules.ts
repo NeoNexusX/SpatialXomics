@@ -14,7 +14,7 @@ import type {
   ResolvedAdduct,
 } from '@/features/vizworkbench/types/annotation'
 
-export const ADDUCT_RULES: readonly AdductRule[] = [
+const ADDUCT_RULES: readonly AdductRule[] = [
   // 正离子
   { adduct: 'M+H', fit: 1.0, reason: 'protonation' },
   { adduct: 'M+Na', fit: 0.8, reason: 'sodiumEndogenous' },
@@ -37,13 +37,13 @@ export const ADDUCT_RULES: readonly AdductRule[] = [
 ]
 
 /** 没有规则、只能手动开启的加合物，以及手动开启时的 fit */
-export const MANUAL_FIT: Partial<Record<AdductId, number>> = {
+const MANUAL_FIT: Partial<Record<AdductId, number>> = {
   'M+H-H2O': 0.4,
   'M-H-H2O': 0.4,
 }
 
 /** 其他被强制开启的加合物的 fit */
-export const FORCED_FIT = 0.5
+const FORCED_FIT = 0.5
 
 function ruleMatches(rule: AdductRule, ctx: AcquisitionContext): boolean {
   if (rule.sources && !rule.sources.includes(ctx.source)) return false

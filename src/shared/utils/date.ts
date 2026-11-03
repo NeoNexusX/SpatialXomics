@@ -3,7 +3,10 @@
  * 在 UTC+8 下会出现 8 小时偏差。这里强制按 UTC 解析。
  */
 export function parseUtcDate(s: string | null | undefined): Date | null {
-  if (!s) return null
-  const hasTz = /Z|[+-]\d{2}:?\d{2}$/.test(s)
-  return new Date(hasTz ? s : s.replace(' ', 'T') + 'Z')
+  const value = s?.trim()
+  if (!value) return null
+  const hasTz = /(?:z|[+-]\d{2}:?\d{2})$/i.test(value)
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value.replace(' ', 'T')
+  const date = new Date(hasTz ? normalized : `${normalized}Z`)
+  return Number.isNaN(date.getTime()) ? null : date
 }

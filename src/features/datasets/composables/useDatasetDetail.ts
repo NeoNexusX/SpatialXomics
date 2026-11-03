@@ -78,13 +78,7 @@ export function useDatasetDetail() {
     const targetId = dataset.value?.publicId ?? ''
     if (!targetId) return
     if (!requireAuth()) return
-    await handleDownloadRaw(targetId, {
-      getFallbackFilename: () => {
-        const filename = dataset.value?.filename || dataset.value?.name || undefined
-        if (!filename) return undefined
-        return filename.toLowerCase().endsWith('.zip') ? filename : `${filename}.zip`
-      },
-    })
+    await handleDownloadRaw(targetId)
   }
 
   // Make Public

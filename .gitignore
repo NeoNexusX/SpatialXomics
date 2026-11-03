@@ -61,23 +61,14 @@ public/data/
 
 .eslintcache
 
-# Cypress
-/cypress/videos/
-/cypress/screenshots/
-
 # Vitest
 __screenshots__/
 
 test-results/
 playwright-report/
 .auth/
-.vscode/
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
 public/说明 (1).md
+
+# Browser smoke-test artifacts
+.playwright-cli/
+output/playwright/

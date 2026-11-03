@@ -1,0 +1,253 @@
+{
+ "accepted": true,
+ "logs": [
+  {
+   "datasetId": "dataset-a",
+   "mode": "temporary",
+   "events": [
+    {
+     "type": "turn/start",
+     "turnId": "uuid-1",
+     "user": {
+      "role": "user",
+      "content": "question"
+     },
+     "binding": {
+      "datasetId": "dataset-a",
+      "generation": 0,
+      "page": {
+       "kmeans": {
+        "k": 2,
+        "clusterCount": 2,
+        "selectedCount": 1
+       },
+       "meanSpectrumAvailable": false
+      },
+      "selection": {
+       "clusters": [
+        1
+       ]
+      }
+     },
+     "baseSurface": [],
+     "seq": 0,
+     "id": "uuid-2",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "user",
+      "content": "question"
+     },
+     "seq": 1,
+     "id": "uuid-3",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "user",
+      "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[1]}}\nUse these identities for analysis. Live page state may have changed."
+     },
+     "origin": "context",
+     "seq": 2,
+     "id": "uuid-4",
+     "time": 0
+    },
+    {
+     "type": "step/start",
+     "turnId": "uuid-1",
+     "step": 1,
+     "seq": 3,
+     "id": "uuid-5",
+     "time": 0
+    },
+    {
+     "type": "request/context",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-6",
+     "request": {
+      "nodes": [
+       1,
+       2
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 1f676f49>",
+      "tools": "<tools 3d581695>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 4,
+     "id": "uuid-7",
+     "time": 0
+    },
+    {
+     "type": "attempt/start",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-6",
+     "step": 1,
+     "request": {
+      "nodes": [
+       1,
+       2
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 1f676f49>",
+      "tools": "<tools 3d581695>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 5,
+     "id": "uuid-8",
+     "time": 0
+    },
+    {
+     "type": "attempt/end",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-6",
+     "status": "committed",
+     "seq": 6,
+     "id": "uuid-9",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "tool-call",
+        "id": "c1",
+        "name": "get_kmeans_summary",
+        "arguments": "{}"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 7,
+     "id": "uuid-10",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "tool",
+      "toolCallId": "c1",
+      "name": "get_kmeans_summary",
+      "content": "TOOL_NOT_STARTED: interrupted; this operation was not automatically repeated.",
+      "isError": true
+     },
+     "callKey": "7:0",
+     "seq": 8,
+     "id": "uuid-11",
+     "time": 0
+    },
+    {
+     "type": "step/end",
+     "turnId": "uuid-1",
+     "step": 1,
+     "seq": 9,
+     "id": "uuid-12",
+     "time": 0
+    },
+    {
+     "type": "turn/end",
+     "turnId": "uuid-1",
+     "reason": "failed",
+     "error": "The selected clusters changed. Submit the question again.",
+     "seq": 10,
+     "id": "uuid-13",
+     "time": 0
+    }
+   ]
+  }
+ ],
+ "calls": [
+  {
+   "system": "<prompt 1f676f49>",
+   "tools": "<tools 3d581695>",
+   "messages": [
+    {
+     "role": "user",
+     "content": "question"
+    },
+    {
+     "role": "user",
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[1]}}\nUse these identities for analysis. Live page state may have changed."
+    }
+   ],
+   "turnStart": 0,
+   "maxTokens": 64000
+  }
+ ],
+ "trace": [
+  "restoring",
+  "preparing",
+  "generating",
+  "generating [tool:running]",
+  "executing-tools [tool:running]",
+  "executing-tools [tool:error]",
+  "idle [tool:error]"
+ ],
+ "snapshot": {
+  "phase": "idle",
+  "mode": "temporary",
+  "messages": [
+   {
+    "id": "uuid-1-user",
+    "role": "user",
+    "content": "question"
+   },
+   {
+    "id": "uuid-1",
+    "role": "assistant",
+    "content": "",
+    "parts": [
+     {
+      "type": "tool",
+      "id": "7:0",
+      "name": "get_kmeans_summary",
+      "input": {},
+      "state": "error",
+      "preview": "TOOL_NOT_STARTED: interrupted; this operation was not automatically repeated."
+     }
+    ],
+    "pending": false,
+    "interrupted": false,
+    "error": "The selected clusters changed. Submit the question again."
+   }
+  ],
+  "error": "The selected clusters changed. Submit the question again.",
+  "pressure": {
+   "inputTokens": 9660,
+   "contextWindow": 256000,
+   "outputReserve": 64000,
+   "inputBudget": 186880,
+   "ratio": 0.05169092465753425,
+   "estimated": true
+  }
+ }
+}

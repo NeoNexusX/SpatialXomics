@@ -92,7 +92,7 @@ const ALL_VOCAB_VALUES = new Set<string>(
 )
 
 /** 是否为词表内的取值。词表值是规范写法（大小写、化学式），展示时不应再做大小写变换 */
-export function isVocabValue(value: string): boolean {
+function isVocabValue(value: string): boolean {
   return ALL_VOCAB_VALUES.has(value)
 }
 

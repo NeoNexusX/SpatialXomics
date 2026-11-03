@@ -6,7 +6,7 @@
   themes: false;
 }
 @import './assets/daisy-theme.css';
-@import './features/assistant/assets/shadcn-bridge.css';
+@import './features/agent/assets/shadcn-bridge.css';
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 

@@ -86,10 +86,11 @@ import type { AdductId } from '@/shared/chem/adducts'
 import {
   registerContextProviders,
   unregisterContextProviders,
-} from '@/features/assistant/providers/analysisContext'
-import type { AnnotationRow } from '@/features/assistant/agenttypes/assistant'
+} from '@/features/agent/bridge/analysisContext'
+import type { AnnotationRow } from '@/features/agent/bridge/analysisTypes'
 import { STORAGE_KEYS } from '@/shared/config/storageKeys'
 import { downloadBlob } from '@/shared/utils/download'
+import { fnv1a } from '@/shared/utils/fnv1a'
 import { useToast } from '@/shared/composables/useToast'
 import { t } from '@/i18n'
 
@@ -148,13 +149,6 @@ function storedScoreRatio(value: ScoreWeights | undefined): ScoreWeights {
     if (isValidScoreRatio(ratio)) return ratio
   }
   return { ...DEFAULT_SCORE_RATIO }
-}
-
-/** runId → 32 位种子：同一结果页每次跑出的 decoy 相同 */
-function hashSeed(s: string): number {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
-  return h >>> 0
 }
 
 /** 搜索文本：名称、候选、分子式、加合物、m/z（小写） */
@@ -683,7 +677,8 @@ export function useAnnotation(opts: {
         ...DEFAULT_ENGINE_CONFIG,
         weights: { ...scoreWeights.value },
         spatialPct: spatialPct.value,
-        seed: hashSeed(opts.runId.value),
+        // 同一结果页每次跑出的 decoy 相同
+        seed: fnv1a(opts.runId.value),
       },
     })
   }
@@ -814,10 +809,12 @@ export function useAnnotation(opts: {
   async function computePairOnDemand(a: IonAnnotation, b: IonAnnotation): Promise<void> {
     if (pairRFor(a, b) !== undefined) return
     const key = pairKey(a.axisIndex, b.axisIndex)
+    const forRun = runKey
     const r = await spatial
       .pairOnDemand(a.axisIndex, b.axisIndex, DEFAULT_ENGINE_CONFIG.minPixels)
       .catch(() => null)
-    if (!disposed) onDemandR.value = new Map(onDemandR.value).set(key, r)
+    // 条件变了，这对峰的下标和结果都属于上一次运行
+    if (!disposed && forRun === runKey) onDemandR.value = new Map(onDemandR.value).set(key, r)
   }
 
   /** 悬停或滚动到的行：把它们所在分子组的空间任务提前 */
@@ -885,7 +882,7 @@ export function useAnnotation(opts: {
   )
 
   // ---- SXO-Harness -------------------------------------------------------------
-  function toAssistantRow(ion: IonAnnotation): AnnotationRow {
+  function toAgentRow(ion: IonAnnotation): AnnotationRow {
     const m = molecules.value.get(ion.moleculeId)
     return {
       id: ion.id,
@@ -930,7 +927,7 @@ export function useAnnotation(opts: {
       ions.value.length > 0
         ? {
             count: ions.value.length,
-            rows: () => ions.value.map(toAssistantRow),
+            rows: () => ions.value.map(toAgentRow),
             weights: { ...scoreWeights.value },
           }
         : null,

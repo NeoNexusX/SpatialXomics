@@ -129,6 +129,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onBeforeUnmount, watch, type PropType } from 'vue'
 import CollapsibleSection from '@/shared/components/CollapsibleSection.vue'
+import { upperBound } from '@/shared/utils/bisect'
 import { methodLabel } from '@/shared/utils/methodsNormalize'
 import { vocabLabel } from '@/features/datasets/constants/vocabLabels'
 import type { File } from '@/features/datasets/types/dataset'
@@ -175,15 +176,9 @@ function markerLeft(v: number) {
 function pctLabel(v: number): string {
   const arr = props.sortedValues
   if (!arr.length) return '0.00%'
-  let lo = 0,
-    hi = arr.length
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1
-    if (arr[mid]! <= v) lo = mid + 1
-    else hi = mid
-  }
-  let pct = (lo / arr.length) * 100
-  if (lo < arr.length) pct = Math.min(pct, 99.99)
+  const rank = upperBound(arr, v)
+  let pct = (rank / arr.length) * 100
+  if (rank < arr.length) pct = Math.min(pct, 99.99)
   return pct.toFixed(2) + '%'
 }
 

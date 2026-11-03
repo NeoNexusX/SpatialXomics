@@ -10,7 +10,13 @@
 
 import type { IonComparison } from '@/features/vizworkbench/composables/useRegionComparison'
 import type { IonAnnotation, Molecule } from '@/features/vizworkbench/types/annotation'
-import { adductLabel, moleculeName } from '@/features/vizworkbench/utils/annotation/format'
+import {
+  adductLabel,
+  candidateCells,
+  csvCell,
+  csvNumber,
+  moleculeName,
+} from '@/features/vizworkbench/utils/annotation/format'
 
 const CSV_HEADER = [
   'Category',
@@ -28,14 +34,6 @@ const CSV_HEADER = [
   'Total score',
   'q',
 ]
-
-function csvCell(value: string): string {
-  return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
-}
-
-function num(v: number | null | undefined, digits: number): string {
-  return v != null && Number.isFinite(v) ? v.toFixed(digits) : ''
-}
 
 /** 比值列与界面同口径：富集方做分子，值 >= 1，方向用 A/B 或 B/A 标明。 */
 function orientedPair(
@@ -93,23 +91,17 @@ export function buildComparisonCsv(
       const cells = [
         CATEGORY_LABEL[row.category] ?? row.category,
         csvCell(moleculeName(m)),
-        csvCell((m?.candidates ?? []).map((c) => c.name).join('; ')),
-        csvCell(
-          (m?.candidates ?? [])
-            .map((c) => c.id)
-            .filter(Boolean)
-            .join('; '),
-        ),
+        ...candidateCells(m),
         csvCell(m?.formula ?? ''),
         csvCell(adductLabel(ion.adduct)),
-        num(row.mz, 6),
-        num(ion.errPpm, 3),
+        csvNumber(row.mz, 6),
+        csvNumber(ion.errPpm, 3),
         det.value,
         det.direction,
         inten.value,
         inten.direction,
-        num(ion.scores.total, 4),
-        num(ion.q, 4),
+        csvNumber(ion.scores.total, 4),
+        csvNumber(ion.q, 4),
       ]
       lines.push(cells.join(','))
       count++

@@ -9,7 +9,7 @@
  */
 
 import type { Tolerance } from '@/features/vizworkbench/types/annotation'
-import { lowerBound, upperBound } from './bisect'
+import { lowerBound, upperBound } from '@/shared/utils/bisect'
 import { matchableRange, matchWindow } from './tolerance'
 
 export interface MatchAdduct {

@@ -1,0 +1,859 @@
+{
+ "accepted": true,
+ "logs": [
+  {
+   "datasetId": "dataset-a",
+   "mode": "temporary",
+   "events": [
+    {
+     "type": "turn/start",
+     "turnId": "uuid-1",
+     "user": {
+      "role": "user",
+      "content": "question"
+     },
+     "binding": {
+      "datasetId": "dataset-a",
+      "generation": 0,
+      "page": {
+       "meanSpectrumAvailable": false
+      },
+      "selection": {
+       "clusters": []
+      }
+     },
+     "baseSurface": [],
+     "seq": 0,
+     "id": "uuid-2",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "user",
+      "content": "question"
+     },
+     "seq": 1,
+     "id": "uuid-3",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "user",
+      "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+     },
+     "origin": "context",
+     "seq": 2,
+     "id": "uuid-4",
+     "time": 0
+    },
+    {
+     "type": "step/start",
+     "turnId": "uuid-1",
+     "step": 1,
+     "seq": 3,
+     "id": "uuid-5",
+     "time": 0
+    },
+    {
+     "type": "request/context",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-6",
+     "request": {
+      "nodes": [
+       1,
+       2
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 7c70871a>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 4,
+     "id": "uuid-7",
+     "time": 0
+    },
+    {
+     "type": "attempt/start",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-6",
+     "step": 1,
+     "request": {
+      "nodes": [
+       1,
+       2
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 7c70871a>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 5,
+     "id": "uuid-8",
+     "time": 0
+    },
+    {
+     "type": "attempt/end",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-6",
+     "status": "committed",
+     "seq": 6,
+     "id": "uuid-9",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "tool-call",
+        "id": "c1",
+        "name": "long_lookup",
+        "arguments": "{}"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 7,
+     "id": "uuid-10",
+     "time": 0
+    },
+    {
+     "type": "tool/start",
+     "turnId": "uuid-1",
+     "callKey": "7:0",
+     "callId": "c1",
+     "name": "long_lookup",
+     "input": {},
+     "seq": 8,
+     "id": "uuid-11",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "tool",
+      "toolCallId": "c1",
+      "name": "long_lookup",
+      "content": "<text 3901 ab7c5895 LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLL…[truncated]\n[full result archived; call read_archived_result(\"uuid-12\")]>",
+      "isError": false
+     },
+     "callKey": "7:0",
+     "archiveId": "uuid-12",
+     "seq": 9,
+     "id": "uuid-13",
+     "time": 0
+    },
+    {
+     "type": "step/end",
+     "turnId": "uuid-1",
+     "step": 1,
+     "seq": 10,
+     "id": "uuid-14",
+     "time": 0
+    },
+    {
+     "type": "step/start",
+     "turnId": "uuid-1",
+     "step": 2,
+     "seq": 11,
+     "id": "uuid-15",
+     "time": 0
+    },
+    {
+     "type": "request/context",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-16",
+     "request": {
+      "nodes": [
+       1,
+       2,
+       7,
+       9
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 7c70871a>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 12,
+     "id": "uuid-17",
+     "time": 0
+    },
+    {
+     "type": "attempt/start",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-16",
+     "step": 2,
+     "request": {
+      "nodes": [
+       1,
+       2,
+       7,
+       9
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 7c70871a>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 13,
+     "id": "uuid-18",
+     "time": 0
+    },
+    {
+     "type": "attempt/end",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-16",
+     "status": "committed",
+     "seq": 14,
+     "id": "uuid-19",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "tool-call",
+        "id": "c2",
+        "name": "read_archived_result",
+        "arguments": "{\"archiveId\":\"uuid-12\"}"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 15,
+     "id": "uuid-20",
+     "time": 0
+    },
+    {
+     "type": "tool/start",
+     "turnId": "uuid-1",
+     "callKey": "15:0",
+     "callId": "c2",
+     "name": "read_archived_result",
+     "input": {
+      "archiveId": "uuid-12"
+     },
+     "seq": 16,
+     "id": "uuid-21",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "tool",
+      "toolCallId": "c2",
+      "name": "read_archived_result",
+      "content": "<text 5044 bd4c553b LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL\n[end of archived result (5000 chars total)]>",
+      "isError": false
+     },
+     "callKey": "15:0",
+     "archiveId": "uuid-22",
+     "seq": 17,
+     "id": "uuid-23",
+     "time": 0
+    },
+    {
+     "type": "step/end",
+     "turnId": "uuid-1",
+     "step": 2,
+     "seq": 18,
+     "id": "uuid-24",
+     "time": 0
+    },
+    {
+     "type": "step/start",
+     "turnId": "uuid-1",
+     "step": 3,
+     "seq": 19,
+     "id": "uuid-25",
+     "time": 0
+    },
+    {
+     "type": "request/context",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-26",
+     "request": {
+      "nodes": [
+       1,
+       2,
+       7,
+       9,
+       15,
+       17
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 7c70871a>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 20,
+     "id": "uuid-27",
+     "time": 0
+    },
+    {
+     "type": "attempt/start",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-26",
+     "step": 3,
+     "request": {
+      "nodes": [
+       1,
+       2,
+       7,
+       9,
+       15,
+       17
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 7c70871a>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 21,
+     "id": "uuid-28",
+     "time": 0
+    },
+    {
+     "type": "attempt/end",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-26",
+     "status": "committed",
+     "seq": 22,
+     "id": "uuid-29",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "tool-call",
+        "id": "c3",
+        "name": "read_archived_result",
+        "arguments": "{\"archiveId\":\"missing-id\"}"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 23,
+     "id": "uuid-30",
+     "time": 0
+    },
+    {
+     "type": "tool/start",
+     "turnId": "uuid-1",
+     "callKey": "23:0",
+     "callId": "c3",
+     "name": "read_archived_result",
+     "input": {
+      "archiveId": "missing-id"
+     },
+     "seq": 24,
+     "id": "uuid-31",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "tool",
+      "toolCallId": "c3",
+      "name": "read_archived_result",
+      "content": "No archived result for id \"missing-id\" (archive expired, OPFS unavailable, or the id is wrong).\n[end of archived result (95 chars total)]",
+      "isError": false
+     },
+     "callKey": "23:0",
+     "archiveId": "uuid-32",
+     "seq": 25,
+     "id": "uuid-33",
+     "time": 0
+    },
+    {
+     "type": "step/end",
+     "turnId": "uuid-1",
+     "step": 3,
+     "seq": 26,
+     "id": "uuid-34",
+     "time": 0
+    },
+    {
+     "type": "step/start",
+     "turnId": "uuid-1",
+     "step": 4,
+     "seq": 27,
+     "id": "uuid-35",
+     "time": 0
+    },
+    {
+     "type": "request/context",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-36",
+     "request": {
+      "nodes": [
+       1,
+       2,
+       7,
+       9,
+       15,
+       17,
+       23,
+       25
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 7c70871a>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 28,
+     "id": "uuid-37",
+     "time": 0
+    },
+    {
+     "type": "attempt/start",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-36",
+     "step": 4,
+     "request": {
+      "nodes": [
+       1,
+       2,
+       7,
+       9,
+       15,
+       17,
+       23,
+       25
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 7c70871a>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 29,
+     "id": "uuid-38",
+     "time": 0
+    },
+    {
+     "type": "attempt/end",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-36",
+     "status": "committed",
+     "seq": 30,
+     "id": "uuid-39",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "answer"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 31,
+     "id": "uuid-40",
+     "time": 0
+    },
+    {
+     "type": "step/end",
+     "turnId": "uuid-1",
+     "step": 4,
+     "seq": 32,
+     "id": "uuid-41",
+     "time": 0
+    },
+    {
+     "type": "turn/end",
+     "turnId": "uuid-1",
+     "reason": "completed",
+     "seq": 33,
+     "id": "uuid-42",
+     "time": 0
+    }
+   ]
+  }
+ ],
+ "calls": [
+  {
+   "system": "<prompt 7c70871a>",
+   "tools": "<tools a4d11b16>",
+   "messages": [
+    {
+     "role": "user",
+     "content": "question"
+    },
+    {
+     "role": "user",
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+    }
+   ],
+   "turnStart": 0,
+   "maxTokens": 64000
+  },
+  {
+   "system": "<prompt 7c70871a>",
+   "tools": "<tools a4d11b16>",
+   "messages": [
+    {
+     "role": "user",
+     "content": "question"
+    },
+    {
+     "role": "user",
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "tool-call",
+       "id": "c1",
+       "name": "long_lookup",
+       "arguments": "{}"
+      }
+     ],
+     "source": {
+      "endpoint": "anthropic",
+      "model": "m",
+      "baseUrl": "https://llm.test/v1"
+     }
+    },
+    {
+     "role": "tool",
+     "toolCallId": "c1",
+     "name": "long_lookup",
+     "content": "<text 3901 ab7c5895 LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLL…[truncated]\n[full result archived; call read_archived_result(\"uuid-12\")]>",
+     "isError": false
+    }
+   ],
+   "turnStart": 0,
+   "maxTokens": 64000
+  },
+  {
+   "system": "<prompt 7c70871a>",
+   "tools": "<tools a4d11b16>",
+   "messages": [
+    {
+     "role": "user",
+     "content": "question"
+    },
+    {
+     "role": "user",
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "tool-call",
+       "id": "c1",
+       "name": "long_lookup",
+       "arguments": "{}"
+      }
+     ],
+     "source": {
+      "endpoint": "anthropic",
+      "model": "m",
+      "baseUrl": "https://llm.test/v1"
+     }
+    },
+    {
+     "role": "tool",
+     "toolCallId": "c1",
+     "name": "long_lookup",
+     "content": "<text 3901 ab7c5895 LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLL…[truncated]\n[full result archived; call read_archived_result(\"uuid-12\")]>",
+     "isError": false
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "tool-call",
+       "id": "c2",
+       "name": "read_archived_result",
+       "arguments": "{\"archiveId\":\"uuid-12\"}"
+      }
+     ],
+     "source": {
+      "endpoint": "anthropic",
+      "model": "m",
+      "baseUrl": "https://llm.test/v1"
+     }
+    },
+    {
+     "role": "tool",
+     "toolCallId": "c2",
+     "name": "read_archived_result",
+     "content": "<text 5044 bd4c553b LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL\n[end of archived result (5000 chars total)]>",
+     "isError": false
+    }
+   ],
+   "turnStart": 0,
+   "maxTokens": 64000
+  },
+  {
+   "system": "<prompt 7c70871a>",
+   "tools": "<tools a4d11b16>",
+   "messages": [
+    {
+     "role": "user",
+     "content": "question"
+    },
+    {
+     "role": "user",
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "tool-call",
+       "id": "c1",
+       "name": "long_lookup",
+       "arguments": "{}"
+      }
+     ],
+     "source": {
+      "endpoint": "anthropic",
+      "model": "m",
+      "baseUrl": "https://llm.test/v1"
+     }
+    },
+    {
+     "role": "tool",
+     "toolCallId": "c1",
+     "name": "long_lookup",
+     "content": "<text 3901 ab7c5895 LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLL…[truncated]\n[full result archived; call read_archived_result(\"uuid-12\")]>",
+     "isError": false
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "tool-call",
+       "id": "c2",
+       "name": "read_archived_result",
+       "arguments": "{\"archiveId\":\"uuid-12\"}"
+      }
+     ],
+     "source": {
+      "endpoint": "anthropic",
+      "model": "m",
+      "baseUrl": "https://llm.test/v1"
+     }
+    },
+    {
+     "role": "tool",
+     "toolCallId": "c2",
+     "name": "read_archived_result",
+     "content": "<text 5044 bd4c553b LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL\n[end of archived result (5000 chars total)]>",
+     "isError": false
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "tool-call",
+       "id": "c3",
+       "name": "read_archived_result",
+       "arguments": "{\"archiveId\":\"missing-id\"}"
+      }
+     ],
+     "source": {
+      "endpoint": "anthropic",
+      "model": "m",
+      "baseUrl": "https://llm.test/v1"
+     }
+    },
+    {
+     "role": "tool",
+     "toolCallId": "c3",
+     "name": "read_archived_result",
+     "content": "No archived result for id \"missing-id\" (archive expired, OPFS unavailable, or the id is wrong).\n[end of archived result (95 chars total)]",
+     "isError": false
+    }
+   ],
+   "turnStart": 0,
+   "maxTokens": 64000
+  }
+ ],
+ "trace": [
+  "restoring",
+  "preparing",
+  "generating",
+  "generating [tool:running]",
+  "executing-tools [tool:running]",
+  "executing-tools [tool:done]",
+  "generating [tool:done]",
+  "generating [tool:done,tool:running]",
+  "executing-tools [tool:done,tool:running]",
+  "executing-tools [tool:done,tool:done]",
+  "generating [tool:done,tool:done]",
+  "generating [tool:done,tool:done,tool:running]",
+  "executing-tools [tool:done,tool:done,tool:running]",
+  "executing-tools [tool:done,tool:done,tool:done]",
+  "generating [tool:done,tool:done,tool:done]",
+  "generating [tool:done,tool:done,tool:done,text:6]",
+  "idle [tool:done,tool:done,tool:done,text:6]"
+ ],
+ "snapshot": {
+  "phase": "idle",
+  "mode": "temporary",
+  "messages": [
+   {
+    "id": "uuid-1-user",
+    "role": "user",
+    "content": "question"
+   },
+   {
+    "id": "uuid-1",
+    "role": "assistant",
+    "content": "answer",
+    "parts": [
+     {
+      "type": "tool",
+      "id": "7:0",
+      "name": "long_lookup",
+      "input": {},
+      "state": "done",
+      "preview": "<text 1200 5fb602c5 LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL>"
+     },
+     {
+      "type": "tool",
+      "id": "15:0",
+      "name": "read_archived_result",
+      "input": {
+       "archiveId": "uuid-12"
+      },
+      "state": "done",
+      "preview": "<text 1200 5fb602c5 LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL>"
+     },
+     {
+      "type": "tool",
+      "id": "23:0",
+      "name": "read_archived_result",
+      "input": {
+       "archiveId": "missing-id"
+      },
+      "state": "done",
+      "preview": "No archived result for id \"missing-id\" (archive expired, OPFS unavailable, or the id is wrong).\n[end of archived result (95 chars total)]"
+     },
+     {
+      "type": "text",
+      "text": "answer"
+     }
+    ],
+    "pending": false,
+    "interrupted": false
+   }
+  ],
+  "error": null,
+  "pressure": {
+   "inputTokens": 5404,
+   "contextWindow": 256000,
+   "outputReserve": 64000,
+   "inputBudget": 186880,
+   "ratio": 0.02891695205479452,
+   "estimated": true
+  }
+ }
+}

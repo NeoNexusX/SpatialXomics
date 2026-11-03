@@ -11,10 +11,11 @@ SpatialXomics is a web platform for mass spectrometry imaging (MSI) data managem
 - **Collections**: group related public datasets into curated collections with academic metadata and an ordered member list.
 - **Upload pipeline**: MD5 in a Web Worker, server-side reuse checks, streamed ZIP64 compression, Alibaba Cloud OSS multipart upload, and same-browser resume.
 - **Analysis workspace**: compatible noise reduction, baseline correction, normalization, peak picking, and peak alignment choices based on spectrum/storage mode.
-- **Result visualization**: Continuous ion images and mean spectra; Processed TIC images and per-pixel spectra; display range, gamma, colormap, TIC normalization, and transparent PNG export.
-- **Clustering and regions**: backend-generated UMAP plus browser-local KMeans, cluster filtering, rectangular/freehand ROIs, and multi-region comparison.
+- **Result visualization**: Continuous ion images and mean spectra; Processed TIC images and per-pixel spectra; display range, gamma, colormap, TIC normalization, and JPG (default) or transparent PNG export.
+- **Clustering and regions**: backend-generated UMAP plus browser-local KMeans, cluster filtering, rectangular/freehand ROIs, multi-region comparison, and mask import/export.
 - **Annotations**: Match Continuous + Centroid mean-spectrum peaks against an annotation database CSV, with ppm/Da tolerance, scores and FDR, filtering, export, and PubChem lookup. The database is a user-provided CSV or a one-click import from the platform's reference database.
 - **Reference database**: Browse the HMDB 4.0 metabolite reference database after signing in — search by ID, name, or formula, filter by origin and mass range, open PubChem/HMDB entries, and download the full CSV; the annotation panel imports it in one click.
+- **SXO-Harness agent**: After signing in, open the floating chat panel from the nav ball on the home or visualization page. It answers questions about the current dataset by reading ion images, statistics, annotations, clustering, and page state, and can call PubChem, ChEBI, HMDB, KEGG, literature, and web-search tools; external sources render as citation cards.
 
 ## Technology
 
@@ -25,8 +26,7 @@ SpatialXomics is a web platform for mass spectrometry imaging (MSI) data managem
 | Visualization | ECharts, Canvas, vue3-calendar-heatmap |
 | MSI/Zarr | Custom chunked Zarr v3 reader, zstddec, `@zip.js/zip.js`, hash-wasm, ml-kmeans |
 | Network/storage | Axios, ali-oss with temporary STS credentials |
-| Network/storage | Axios, ali-oss with temporary STS credentials |
-| SXO-Harness | @deepseek-ai/cordis, AI SDK (@ai-sdk/anthropic), shadcn-vue AI Elements |
+| SXO-Harness | @deepseek-ai/cordis, AI SDK (@ai-sdk/anthropic), shadcn-vue AI Elements, Exa web search |
 | Testing | Vitest, Playwright |
 | Documentation | Bilingual VitePress site |
 
@@ -39,7 +39,7 @@ src/
 ├── app/                         # App shell, navigation, global entry components
 ├── assets/                      # Styles and theme assets
 ├── features/                    # Business-domain modules
-│   ├── assistant/               # SXO-Harness: floating chat panel + connection settings (on by default for signed-in users)
+│   ├── agent/                   # SXO-Harness: floating chat panel + connection settings (on by default for signed-in users)
 │   ├── auth/                    # Sign-in, registration, and recovery flows
 │   ├── collections/             # Curated dataset collections with academic metadata
 │   ├── datasets/                # Lists, details, sharing, and downloads
@@ -48,6 +48,7 @@ src/
 │   ├── users/                   # Administrator user management
 │   ├── vizworkbench/            # Ion images, spectra, clustering, ROIs, and annotations
 │   └── workspace/               # Analysis builder and task dashboard
+├── i18n/                        # vue-i18n instance and namespaced locale messages
 ├── router/                      # Routes and auth/admin guards
 ├── services/                    # Zarr (with OSS client), clustering, and PubChem services
 ├── shared/                      # Shared API, auth, components, config, and utilities
@@ -66,7 +67,7 @@ docker/                          # Docker/nginx deployment
 
 ### Requirements
 
-- Node.js `^20.19.0` or `>=22.12.0`
+- Node.js `>=22.12.0`
 - npm (the repository commits `package-lock.json`)
 
 ### Install
@@ -80,8 +81,9 @@ npm ci
 The repository already contains:
 
 - `env/.env` for shared values such as `VITE_API_BASE` and `VITE_OSS_ENDPOINT`.
-- `env/.env.development` for the development proxy target `VITE_BACKEND_URL`.
-- `env/.env.production` for production build/preview values.
+- `env/.env.development` for the development proxy target `VITE_BACKEND_URL` and the SXO-Harness defaults `VITE_LLM_PROXY_URL` / `VITE_LLM_MODEL`.
+- `env/.env.production` for production build/preview values. To ship a deployment-wide default connection, add `VITE_LLM_PROXY_URL`, `VITE_LLM_API_KEY`, and `VITE_LLM_MODEL` there or in a local override.
+- The optional `VITE_EXA_API_KEY` for SXO-Harness web search; leave it empty to use Exa's anonymous allowance.
 
 Put machine-specific overrides in the ignored `env/.env.development.local`:
 
@@ -90,6 +92,8 @@ VITE_BACKEND_URL=http://localhost:8000
 ```
 
 In development, Vite proxies `/api` to `VITE_BACKEND_URL`. In the production container, nginx proxies `/api/` to the runtime `BACKEND_HOST:BACKEND_PORT` values.
+
+Every `VITE_*` variable is compiled into the browser bundle: only put a restricted relay sub-key in `VITE_LLM_API_KEY`, and only a publishable Exa sub-key in `VITE_EXA_API_KEY`. Never place an official master key in either.
 
 ### Run
 

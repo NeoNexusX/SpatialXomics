@@ -1,3 +1,5 @@
+import { lowerBoundBy } from '@/shared/utils/bisect'
+
 export type SpectrumPoint = readonly [mz: number, intensity: number]
 
 /**
@@ -15,19 +17,10 @@ export function findClosestDisplayedMz(
 ): number | null {
   if (!data.length || !Number.isFinite(target)) return null
 
-  const lastIndex = data.length - 1
   if (target <= data[0]![0]) return data[0]![0]
-  if (target >= data[lastIndex]![0]) return data[lastIndex]![0]
+  if (target >= data[data.length - 1]![0]) return data[data.length - 1]![0]
 
-  // Lower bound: first displayed m/z greater than or equal to target.
-  let lo = 0
-  let hi = lastIndex
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1
-    if (data[mid]![0] < target) lo = mid + 1
-    else hi = mid
-  }
-
+  const lo = lowerBoundBy(data, (point) => point[0], target)
   const previousMz = data[lo - 1]![0]
   const nextMz = data[lo]![0]
   return target - previousMz <= nextMz - target ? previousMz : nextMz

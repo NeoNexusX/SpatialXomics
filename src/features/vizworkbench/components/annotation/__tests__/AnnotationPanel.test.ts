@@ -9,7 +9,7 @@ import {
   saveStoredDb,
   clearStoredDb,
 } from '@/features/vizworkbench/utils/annotation/dbStore'
-import { getAnnotationRows } from '@/features/assistant/providers/analysisContext'
+import { getAnnotationRows } from '@/features/agent/bridge/analysisContext'
 import { dataModeRef, meanSpectrumRef, mzAxisRef } from '@/services/zarr/zarrSharedState'
 import type { Acquisition } from '@/features/vizworkbench/types/acquisition'
 import { i18n, loadCoreMessages, loadFeatureMessages } from '@/i18n'

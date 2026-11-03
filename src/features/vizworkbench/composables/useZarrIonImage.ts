@@ -1,3 +1,5 @@
+import { findMzRangeIndices, loadIonSliceSum } from '@/services/zarr/ionRead'
+export { loadIonMatrixByIndex, findClosestMzIndex } from '@/services/zarr/ionRead'
 /**
  * Ion image composable — loads zarr data on demand via OSS STS.
  *
@@ -55,21 +57,17 @@ import { t } from '@/i18n'
 
 // 转发导出：feature 内既有导入路径不变（SpectrumSection / useAnnotation /
 // useRegionComparison / useResultMeta / VizWorkbench 等）；跨 feature 消费者
-// （assistant）应直接 import '@/services/zarr/zarrSharedState'
+// （agent）应直接 import '@/services/zarr/zarrSharedState'
 export {
   mzAxisRef,
   dataModeRef,
-  rowAxisRef,
   metadataAttrsRef,
   polarityRef,
   meanChartData,
   meanSpectrumRef,
   spectrumLoading,
   spectrumError,
-  nMz,
   ticMatrix,
-  ticLoading,
-  ticError,
   pixelSpectrum,
   pixelSpectrumLoading,
   pixelSpectrumError,
@@ -78,7 +76,6 @@ export {
   setSpectrumView,
   getSharedZarrContext,
 } from '@/services/zarr/zarrSharedState'
-export type { SpectrumView, SharedZarrContext } from '@/services/zarr/zarrSharedState'
 
 /**
  * Release all module-level state. Call on VizWorkbench unmount so that large
@@ -97,7 +94,6 @@ export function disposeZarrState(): void {
   normalizationCache.clear()
   normalizationPending.clear()
   resetZarrSharedState()
-  nMz.value = 0
 }
 
 // ---- Mean spectrum loading (continuous mode) ----
@@ -118,16 +114,17 @@ export function isProfileSpectrum(): boolean {
  */
 export async function loadMeanSpectrum(): Promise<void> {
   const axis = mzAxisRef.value
-  if (!store || !axis) return
+  const requestStore = store
+  if (!requestStore || !axis) return
   if (dataModeRef.value !== 'continuous') return
 
   spectrumLoading.value = true
   spectrumError.value = null
 
   try {
-    const meanData = await store.loadMeanSpectrum()
-    // store 可能在 await 期间被 disposeZarrState() 置空（用户已离开页面）
-    if (!store) return
+    const meanData = await requestStore.loadMeanSpectrum()
+    // 等待期间可能离开页面或换了 run，旧结果不能写进新会话
+    if (store !== requestStore) return
     if (!meanData) {
       spectrumLoading.value = false
       spectrumError.value = t('vizworkbench.spectrum.meanUnavailable')
@@ -141,6 +138,7 @@ export async function loadMeanSpectrum(): Promise<void> {
     meanChartData.value = buildSpectrumChartData(axis, meanData, isProfileSpectrum())
     spectrumLoading.value = false
   } catch (e) {
+    if (store !== requestStore) return
     console.error('[useZarrIonImage] loadMeanSpectrum failed:', e)
     spectrumLoading.value = false
     spectrumError.value = e instanceof Error ? e.message : String(e)
@@ -149,29 +147,23 @@ export async function loadMeanSpectrum(): Promise<void> {
 
 // ---- TIC image loading (processed mode) ----
 
-export async function loadTICImage(): Promise<void> {
-  if (!store) return
+async function loadTICImage(): Promise<void> {
+  const requestStore = store
+  if (!requestStore) return
   if (dataModeRef.value !== 'processed') return
 
   ticLoading.value = true
   ticError.value = null
 
   try {
-    // Fast path: use pre-computed stats/tic if available
-    const fastMatrix = await store.loadTIC()
-    if (!store) return
-    if (fastMatrix) {
-      ticMatrix.value = fastMatrix
-      ticLoading.value = false
-      return
-    }
-
-    // Fallback: compute TIC by summing all intensity chunks
-    const matrix = await store.computeTICImage()
-    if (!store) return
+    // Fast path: use pre-computed stats/tic if available.
+    // Fallback: compute TIC by summing all intensity chunks.
+    const matrix = (await requestStore.loadTIC()) ?? (await requestStore.computeTICImage())
+    if (store !== requestStore) return
     ticMatrix.value = matrix
     ticLoading.value = false
   } catch (e) {
+    if (store !== requestStore) return
     console.error('[useZarrIonImage] loadTICImage failed:', e)
     ticLoading.value = false
     ticError.value = e instanceof Error ? e.message : String(e)
@@ -226,101 +218,6 @@ export async function loadPixelSpectrum(pixelIndex: number): Promise<void> {
   } finally {
     if (isCurrent()) pixelSpectrumLoading.value = false
   }
-}
-
-// ---- Helper: find m/z range indices (continuous mode) ----
-
-function findMzRangeIndices(targetIdx: number, tolerance: number): number[] {
-  const mzAxis = mzAxisRef.value
-  if (!mzAxis) return []
-  const target = mzAxis[targetIdx]
-  if (target == null) return [targetIdx]
-
-  const lowerMz = target - tolerance
-  const upperMz = target + tolerance
-
-  // Lower bound: first axis value >= lowerMz.
-  let lo = 0
-  let hi = mzAxis.length
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1
-    if (mzAxis[mid]! < lowerMz) lo = mid + 1
-    else hi = mid
-  }
-  const start = lo
-
-  // Upper bound: first axis value > upperMz.
-  lo = start
-  hi = mzAxis.length
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1
-    if (mzAxis[mid]! <= upperMz) lo = mid + 1
-    else hi = mid
-  }
-  const end = lo
-
-  if (start >= end) return [targetIdx]
-  return Array.from({ length: end - start }, (_, offset) => start + offset)
-}
-
-// ---- Helper: load ion image slice sum (continuous mode) ----
-
-async function loadIonSliceSum(indices: number[]): Promise<Float32Array> {
-  const s = store
-  if (!s) throw new Error('Zarr store is unavailable')
-  if (!indices.length) throw new Error('No m/z indices were selected')
-  if (!ionDims.value) throw new Error('Ion-image dimensions are unavailable')
-  const { width, height } = ionDims.value
-  const matrix = await s.getSummedIonImageByMzIndices(indices)
-  if (matrix.length !== width * height) {
-    throw new Error(`ion matrix size mismatch: expected ${width * height}, got ${matrix.length}`)
-  }
-  return matrix
-}
-
-/**
- * Load one ion image by m/z index WITHOUT touching the single-image state
- * (`ionMatrix` / `selectedMzIndex`). Used by the multi-channel overlay, which
- * keeps its own per-channel matrices.
- *
- * Throws on any failure (missing store, non-continuous data, invalid index,
- * or a store swap while the read was in flight) — callers surface the message
- * on the channel row.
- */
-export async function loadIonMatrixByIndex(idx: number, tolerance: number): Promise<Float32Array> {
-  if (dataModeRef.value !== 'continuous') {
-    throw new Error('Multi-ion overlay is only available for continuous data')
-  }
-  const requestStore = store
-  const axis = mzAxisRef.value
-  if (!requestStore || !axis) throw new Error('Zarr store is unavailable')
-  if (idx < 0 || idx >= axis.length) throw new Error('Invalid m/z index')
-  // 钳位容差到 [min, max]，与 loadForMzIndex 保持一致的语义
-  const tol = Math.min(ZARR_STORE.maxMzTolerance, Math.max(ZARR_STORE.minMzTolerance, tolerance))
-  const matrix = await loadIonSliceSum(findMzRangeIndices(idx, tol))
-  // 读取期间 store 被 dispose/替换（换 run 或离开页面）→ 结果作废
-  if (!store || store !== requestStore) throw new Error('Zarr session changed')
-  return matrix
-}
-
-// ---- Binary search in m/z axis ----
-
-export function findClosestMzIndex(target: number): number {
-  const a = mzAxisRef.value
-  if (!a || !a.length) return -1
-  if (target <= a[0]!) return 0
-  const lastIndex = a.length - 1
-  if (target >= a[lastIndex]!) return lastIndex
-
-  let lo = 0
-  let hi = lastIndex
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1
-    if (a[mid]! < target) lo = mid + 1
-    else hi = mid
-  }
-  const prev = lo - 1
-  return Math.abs(target - a[prev]!) <= Math.abs(a[lo]! - target) ? prev : lo
 }
 
 const normalizationCache = new Map<'tic', Float32Array>()
@@ -460,12 +357,6 @@ export function useZarrIonImage() {
     normalizationLoading.value = false
   }
 
-  const onSpectrumClickByIndex = async (idx: number) => {
-    if (!mzAxisRef.value || !ready.value) return
-    if (idx < 0 || idx >= mzAxisRef.value.length) return
-    await loadForMzIndex(idx)
-  }
-
   const loadDefaultImage = async () => {
     const axis = mzAxisRef.value
     if (!axis?.length || !ready.value) return
@@ -501,21 +392,14 @@ export function useZarrIonImage() {
     error.value = null
     ready.value = false
 
-    // Reset all state. Bumping initGeneration first invalidates any init still
-    // in flight: it will abort at its next checkpoint and dispose its own
-    // orphaned store (it must NOT touch the new session's store).
-    const gen = ++initGeneration
-    store?.dispose()
-    setZarrStore(null)
-    ionImageRequestId++
-    pixelSpectrumRequestId++
-    normalizationRequestId++
-    normalizationCache.clear()
-    normalizationPending.clear()
+    // Reset all state. Bumping initGeneration invalidates any init still in
+    // flight: it will abort at its next checkpoint and dispose its own orphaned
+    // store (it must NOT touch the new session's store).
+    disposeZarrState()
+    const gen = initGeneration
     normalizationFactors.value = null
     normalizationError.value = null
     ionMatrix.value = null
-    resetZarrSharedState()
 
     /** True while this init is still the latest lifecycle (no dispose/re-init since). */
     const isCurrent = () => gen === initGeneration
@@ -563,12 +447,6 @@ export function useZarrIonImage() {
         if (!mzAxis) throw new Error('[useZarrIonImage] continuous data is missing its m/z axis')
         mzAxisRef.value = mzAxis
 
-        // Set ion shape for backward compat
-        const shape = s.getIonShape()
-        if (shape) {
-          ionDims.value = { width: shape[2]!, height: shape[1]! }
-        }
-
         ready.value = true
         await loadDefaultImage()
         if (abortIfStale(s)) return
@@ -609,7 +487,7 @@ export function useZarrIonImage() {
     init,
 
     // Continuous mode
-    onSpectrumClickByIndex,
+    onSpectrumClickByIndex: loadForMzIndex,
     loadNormalization,
     clearNormalization,
     normalizationFactors,

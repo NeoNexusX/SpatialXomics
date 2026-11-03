@@ -38,7 +38,7 @@ vi.mock('../../utils/annotation/dbStore', () => ({
   loadPlatformFile: vi.fn(async () => null),
   savePlatformFile: vi.fn(async () => {}),
 }))
-vi.mock('@/features/assistant/providers/analysisContext', () => ({
+vi.mock('@/features/agent/bridge/analysisContext', () => ({
   registerContextProviders: vi.fn(),
   unregisterContextProviders: vi.fn(),
 }))

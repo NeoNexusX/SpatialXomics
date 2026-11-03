@@ -1,14 +1,6 @@
 import { computed, ref, watch, onBeforeUnmount, type Ref } from 'vue'
 
-const GRADIENT_STOPS: Record<string, string[]> = {
-  viridis: ['#440154', '#482777', '#3f4a8a', '#31678e', '#26838f', '#1f9d8a', '#6cce5a', '#fee825'],
-  inferno: ['#000004', '#280b54', '#65156e', '#9f2a63', '#d44842', '#f57d15', '#fac127', '#fcffa4'],
-  // magma: black -> purple -> orange -> pale yellow (even samples, matches colormapLut)
-  magma: ['#000004', '#221150', '#5f187f', '#982d80', '#d3436e', '#f8765c', '#febb81', '#fcfdbf'],
-  // hot: black -> red -> yellow -> white (even samples, matches colormapLut)
-  hot: ['#000000', '#6d0000', '#db0000', '#ff4900', '#ffb600', '#ffff24', '#ffff92', '#ffffff'],
-  gray: ['#000000', '#ffffff'],
-}
+import { getColormapStops } from '@/shared/viz/colormapLut'
 
 function computeRange(matrix: Float32Array) {
   // Collect non-zero values, then sort a Float32Array copy with the native
@@ -17,7 +9,7 @@ function computeRange(matrix: Float32Array) {
   const nonZeroVals: number[] = []
   for (let i = 0; i < matrix.length; i++) {
     const v = matrix[i]!
-    if (v > 0) nonZeroVals.push(v)
+    if (Number.isFinite(v) && v > 0) nonZeroVals.push(v)
   }
   if (!nonZeroVals.length)
     return { displayMin: 0, displayMax: 1, dataMax: 1, sorted: [] as number[] }
@@ -67,7 +59,7 @@ export function useDisplayRange(
   const stripRange = computed(() => globalMax.value - globalMin.value || 1)
 
   const gradientCSS = computed(() => {
-    const stops = (GRADIENT_STOPS[colormap.value] ?? GRADIENT_STOPS.inferno)!
+    const stops = getColormapStops(colormap.value).map((color) => `rgb(${color.join(' ')})`)
     const darkest = stops[0]!
     const brightest = stops[stops.length - 1]!
     const range = stripRange.value
@@ -90,6 +82,7 @@ export function useDisplayRange(
     const range = dataMax.value || 1
     for (let i = 0; i < matrix.length; i++) {
       const value = matrix[i]!
+      if (!Number.isFinite(value)) continue
       const index = Math.min(bins - 1, Math.max(0, Math.floor((value / range) * bins)))
       hist[index] = (hist[index] ?? 0) + 1
     }
@@ -107,25 +100,33 @@ export function useDisplayRange(
     let total = 0
     for (let i = 0; i < matrix.length; i++) {
       const value = matrix[i]!
+      if (!Number.isFinite(value)) continue
       if (value > 0) nonZero++
       total += value
     }
     return {
       pixels: `${cols} × ${rows}`,
-      nonZero: ((nonZero / (rows * cols)) * 100).toFixed(1) + '%',
+      nonZero: ((nonZero / matrix.length) * 100).toFixed(1) + '%',
       totalIon: total.toExponential(2),
     }
   })
 
   // Methods
+  /** Publish a matrix's range; a manual range survives as fractions of the new span. */
   const applyRange = (range: ReturnType<typeof computeRange>) => {
     applyingProgrammatic = true
     globalMin.value = range.displayMin
     globalMax.value = range.dataMax
     dataMax.value = range.dataMax
     sortedNonZero.value = range.sorted
-    displayMin.value = range.displayMin
-    displayMax.value = range.displayMax
+    if (userRange) {
+      const span = globalMax.value - globalMin.value || 1
+      displayMin.value = globalMin.value + userRange.lo * span
+      displayMax.value = globalMin.value + userRange.hi * span
+    } else {
+      displayMin.value = range.displayMin
+      displayMax.value = range.displayMax
+    }
     applyingProgrammatic = false
   }
 
@@ -141,7 +142,7 @@ export function useDisplayRange(
     const element = stripRef.value
     if (!element) return
     const rect = element.getBoundingClientRect()
-    const topPct = Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100))
+    const topPct = clampPct(((event.clientY - rect.top) / rect.height) * 100)
     const clickedValue = globalMax.value - (topPct / 100) * stripRange.value
     const distMin = Math.abs(displayMin.value - clickedValue)
     const distMax = Math.abs(displayMax.value - clickedValue)
@@ -157,7 +158,7 @@ export function useDisplayRange(
     const height = rect.height
     const onMove = (moveEvent: MouseEvent) => {
       if (!stripDragDir) return
-      const topPct = Math.max(0, Math.min(100, ((moveEvent.clientY - rect.top) / height) * 100))
+      const topPct = clampPct(((moveEvent.clientY - rect.top) / height) * 100)
       const value = globalMax.value - (topPct / 100) * stripRange.value
       if (stripDragDir === 'min') {
         displayMin.value = Math.max(globalMin.value, Math.min(value, displayMax.value))
@@ -196,27 +197,11 @@ export function useDisplayRange(
   }
 
   // Watchers
+  // Keep the user's manual range (e.g. a max at 100%) across matrices; only Reset restores auto.
   watch(
     ionMatrix,
     (matrix) => {
-      if (!matrix) return
-      const range = computeRange(matrix)
-      applyingProgrammatic = true
-      globalMin.value = range.displayMin
-      globalMax.value = range.dataMax
-      dataMax.value = range.dataMax
-      sortedNonZero.value = range.sorted
-      if (userRange) {
-        // Keep the user's manual range (e.g. a max at 100%) by re-applying
-        // its fractions to the new data span; only Reset restores auto.
-        const span = globalMax.value - globalMin.value || 1
-        displayMin.value = globalMin.value + userRange.lo * span
-        displayMax.value = globalMin.value + userRange.hi * span
-      } else {
-        displayMin.value = range.displayMin
-        displayMax.value = range.displayMax
-      }
-      applyingProgrammatic = false
+      if (matrix) applyRange(computeRange(matrix))
     },
     { immediate: true },
   )

@@ -12,6 +12,8 @@ const COUNTRY_OVERRIDES: Record<string, string> = {
   RU: 'Russia',
   KR: 'South Korea',
   KP: 'North Korea',
+  // 只缩短显示名，提交值仍是 ISO 代码 TW；中文名来自 zh.json，不受这里影响
+  TW: 'Taiwan',
 }
 
 /**

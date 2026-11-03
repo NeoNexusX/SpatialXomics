@@ -1,0 +1,565 @@
+{
+ "recovered": [
+  {
+   "id": "t1-user",
+   "role": "user",
+   "content": "question"
+  },
+  {
+   "id": "t1",
+   "role": "assistant",
+   "content": "",
+   "parts": [
+    {
+     "type": "reasoning",
+     "text": "plan",
+     "active": false
+    },
+    {
+     "type": "tool",
+     "id": "7:1",
+     "name": "lookup",
+     "input": {},
+     "state": "error",
+     "preview": "TOOL_OUTCOME_UNKNOWN: interrupted; this operation was not automatically repeated."
+    },
+    {
+     "type": "tool",
+     "id": "7:2",
+     "name": "lookup",
+     "input": {},
+     "state": "error",
+     "preview": "TOOL_NOT_STARTED: interrupted; this operation was not automatically repeated."
+    }
+   ],
+   "pending": false,
+   "usage": {
+    "inputTokens": 100,
+    "outputTokens": 5
+   },
+   "interrupted": true
+  }
+ ],
+ "logs": [
+  {
+   "datasetId": "dataset-a",
+   "mode": "temporary",
+   "events": [
+    {
+     "type": "instructions/set",
+     "name": "AGENTS.md",
+     "text": "Old rule.",
+     "seq": 0,
+     "id": "e0",
+     "time": 0
+    },
+    {
+     "type": "turn/start",
+     "turnId": "t1",
+     "user": {
+      "role": "user",
+      "content": "question"
+     },
+     "binding": {
+      "datasetId": "dataset-a",
+      "generation": 0,
+      "page": {}
+     },
+     "baseSurface": [],
+     "seq": 1,
+     "id": "e1",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "t1",
+     "message": {
+      "role": "user",
+      "content": "question"
+     },
+     "seq": 2,
+     "id": "e2",
+     "time": 0
+    },
+    {
+     "type": "step/start",
+     "turnId": "t1",
+     "step": 1,
+     "seq": 3,
+     "id": "e3",
+     "time": 0
+    },
+    {
+     "type": "request/context",
+     "turnId": "t1",
+     "attemptId": "a1",
+     "request": {
+      "system": "<prompt 08b8765f>",
+      "tools": "<tools 741638a5>",
+      "nodes": [
+       2
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "maxTokens": 4096,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 4,
+     "id": "e4",
+     "time": 0
+    },
+    {
+     "type": "attempt/start",
+     "turnId": "t1",
+     "step": 1,
+     "attemptId": "a1",
+     "request": {
+      "system": "<prompt 08b8765f>",
+      "tools": "<tools 741638a5>",
+      "nodes": [
+       2
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "maxTokens": 4096,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 5,
+     "id": "e5",
+     "time": 0
+    },
+    {
+     "type": "attempt/end",
+     "turnId": "t1",
+     "attemptId": "a1",
+     "status": "committed",
+     "usage": {
+      "inputTokens": 100,
+      "outputTokens": 5
+     },
+     "seq": 6,
+     "id": "e6",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "t1",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "reasoning",
+        "text": "plan"
+       },
+       {
+        "type": "tool-call",
+        "id": "one",
+        "name": "lookup",
+        "arguments": "{}"
+       },
+       {
+        "type": "tool-call",
+        "id": "two",
+        "name": "lookup",
+        "arguments": "{}"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      }
+     },
+     "seq": 7,
+     "id": "e7",
+     "time": 0
+    },
+    {
+     "type": "tool/start",
+     "turnId": "t1",
+     "callKey": "7:1",
+     "callId": "one",
+     "name": "lookup",
+     "input": {},
+     "seq": 8,
+     "id": "e8",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "t1",
+     "message": {
+      "role": "tool",
+      "toolCallId": "one",
+      "name": "lookup",
+      "content": "TOOL_OUTCOME_UNKNOWN: interrupted; this operation was not automatically repeated.",
+      "isError": true
+     },
+     "callKey": "7:1",
+     "seq": 9,
+     "id": "uuid-1",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "t1",
+     "message": {
+      "role": "tool",
+      "toolCallId": "two",
+      "name": "lookup",
+      "content": "TOOL_NOT_STARTED: interrupted; this operation was not automatically repeated.",
+      "isError": true
+     },
+     "callKey": "7:2",
+     "seq": 10,
+     "id": "uuid-2",
+     "time": 0
+    },
+    {
+     "type": "step/end",
+     "turnId": "t1",
+     "step": 1,
+     "seq": 11,
+     "id": "uuid-3",
+     "time": 0
+    },
+    {
+     "type": "turn/end",
+     "turnId": "t1",
+     "reason": "interrupted",
+     "seq": 12,
+     "id": "uuid-4",
+     "time": 0
+    },
+    {
+     "type": "turn/start",
+     "turnId": "uuid-5",
+     "user": {
+      "role": "user",
+      "content": "next"
+     },
+     "binding": {
+      "datasetId": "dataset-a",
+      "generation": 0,
+      "page": {
+       "meanSpectrumAvailable": false
+      },
+      "selection": {
+       "clusters": []
+      }
+     },
+     "baseSurface": [
+      2,
+      7,
+      9,
+      10
+     ],
+     "seq": 13,
+     "id": "uuid-6",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-5",
+     "message": {
+      "role": "user",
+      "content": "next"
+     },
+     "seq": 14,
+     "id": "uuid-7",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-5",
+     "message": {
+      "role": "user",
+      "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+     },
+     "origin": "context",
+     "seq": 15,
+     "id": "uuid-8",
+     "time": 0
+    },
+    {
+     "type": "step/start",
+     "turnId": "uuid-5",
+     "step": 1,
+     "seq": 16,
+     "id": "uuid-9",
+     "time": 0
+    },
+    {
+     "type": "request/context",
+     "turnId": "uuid-5",
+     "attemptId": "uuid-10",
+     "request": {
+      "nodes": [
+       2,
+       7,
+       9,
+       10,
+       14,
+       15
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 06b608d5>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 4
+     },
+     "seq": 17,
+     "id": "uuid-11",
+     "time": 0
+    },
+    {
+     "type": "attempt/start",
+     "turnId": "uuid-5",
+     "attemptId": "uuid-10",
+     "step": 1,
+     "request": {
+      "nodes": [
+       2,
+       7,
+       9,
+       10,
+       14,
+       15
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 06b608d5>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 4
+     },
+     "seq": 18,
+     "id": "uuid-12",
+     "time": 0
+    },
+    {
+     "type": "attempt/end",
+     "turnId": "uuid-5",
+     "attemptId": "uuid-10",
+     "status": "committed",
+     "seq": 19,
+     "id": "uuid-13",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-5",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "continued"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 20,
+     "id": "uuid-14",
+     "time": 0
+    },
+    {
+     "type": "step/end",
+     "turnId": "uuid-5",
+     "step": 1,
+     "seq": 21,
+     "id": "uuid-15",
+     "time": 0
+    },
+    {
+     "type": "turn/end",
+     "turnId": "uuid-5",
+     "reason": "completed",
+     "seq": 22,
+     "id": "uuid-16",
+     "time": 0
+    }
+   ]
+  }
+ ],
+ "calls": [
+  {
+   "system": "<prompt 06b608d5>",
+   "tools": "<tools a4d11b16>",
+   "messages": [
+    {
+     "role": "user",
+     "content": "question"
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "reasoning",
+       "text": "plan"
+      },
+      {
+       "type": "tool-call",
+       "id": "one",
+       "name": "lookup",
+       "arguments": "{}"
+      },
+      {
+       "type": "tool-call",
+       "id": "two",
+       "name": "lookup",
+       "arguments": "{}"
+      }
+     ],
+     "source": {
+      "endpoint": "anthropic",
+      "model": "m",
+      "baseUrl": "https://llm.test/v1"
+     }
+    },
+    {
+     "role": "tool",
+     "toolCallId": "one",
+     "name": "lookup",
+     "content": "TOOL_OUTCOME_UNKNOWN: interrupted; this operation was not automatically repeated.",
+     "isError": true
+    },
+    {
+     "role": "tool",
+     "toolCallId": "two",
+     "name": "lookup",
+     "content": "TOOL_NOT_STARTED: interrupted; this operation was not automatically repeated.",
+     "isError": true
+    },
+    {
+     "role": "user",
+     "content": "next"
+    },
+    {
+     "role": "user",
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+    }
+   ],
+   "turnStart": 4,
+   "maxTokens": 64000
+  }
+ ],
+ "trace": [
+  "restoring",
+  "idle [reasoning:4,tool:error,tool:error]",
+  "preparing [reasoning:4,tool:error,tool:error]",
+  "preparing",
+  "generating",
+  "generating [text:9]",
+  "idle [text:9]"
+ ],
+ "snapshot": {
+  "phase": "idle",
+  "mode": "temporary",
+  "messages": [
+   {
+    "id": "t1-user",
+    "role": "user",
+    "content": "question"
+   },
+   {
+    "id": "t1",
+    "role": "assistant",
+    "content": "",
+    "parts": [
+     {
+      "type": "reasoning",
+      "text": "plan",
+      "active": false
+     },
+     {
+      "type": "tool",
+      "id": "7:1",
+      "name": "lookup",
+      "input": {},
+      "state": "error",
+      "preview": "TOOL_OUTCOME_UNKNOWN: interrupted; this operation was not automatically repeated."
+     },
+     {
+      "type": "tool",
+      "id": "7:2",
+      "name": "lookup",
+      "input": {},
+      "state": "error",
+      "preview": "TOOL_NOT_STARTED: interrupted; this operation was not automatically repeated."
+     }
+    ],
+    "pending": false,
+    "usage": {
+     "inputTokens": 100,
+     "outputTokens": 5
+    },
+    "interrupted": true
+   },
+   {
+    "id": "uuid-5-user",
+    "role": "user",
+    "content": "next"
+   },
+   {
+    "id": "uuid-5",
+    "role": "assistant",
+    "content": "continued",
+    "parts": [
+     {
+      "type": "text",
+      "text": "continued"
+     }
+    ],
+    "pending": false,
+    "interrupted": false
+   }
+  ],
+  "error": null,
+  "pressure": {
+   "inputTokens": 2385,
+   "contextWindow": 256000,
+   "outputReserve": 64000,
+   "inputBudget": 186880,
+   "ratio": 0.012762200342465753,
+   "estimated": true
+  },
+  "tokenUsage": {
+   "inputTokens": 100,
+   "outputTokens": 5
+  },
+  "instructions": {
+   "name": "AGENTS.md",
+   "text": "Old rule."
+  }
+ }
+}

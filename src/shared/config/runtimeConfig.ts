@@ -76,7 +76,7 @@ export function filterNavItems(
 }
 
 /** 分组下的二级菜单项 */
-export interface NavChild extends NavVisibility {
+interface NavChild extends NavVisibility {
   /** 路由地址 */
   to: string
   /** 图标名（对应 SvgIcon 的 IconType） */
@@ -103,7 +103,7 @@ export interface NavLinkItem extends NavVisibility {
 }
 
 /** 顶层菜单：可折叠分组 */
-export interface NavGroupItem extends NavVisibility {
+interface NavGroupItem extends NavVisibility {
   kind: 'group'
   /** 图标名 */
   icon: string
@@ -124,7 +124,7 @@ export interface NavUserLink extends NavChild {
   kind: 'link'
 }
 
-export interface NavUserAction extends NavVisibility {
+interface NavUserAction extends NavVisibility {
   kind: 'action'
   /** 动作类型 */
   action: 'logout'
@@ -144,7 +144,7 @@ export interface NavGuestLink extends NavChild {
  * 统一导航配置（config.json 的 `nav` 块）：一份菜单数据驱动多种形态，
  * 每个页面按 mode + modeByPath 在 navbar / drawer / none 之间选择。
  */
-export interface NavConfig {
+interface NavConfig {
   /** 全局默认形态；缺省 'drawer' */
   mode?: NavMode
   /** 按路由覆盖形态。key 为路径前缀（'/' 只精确匹配首页，其余按前缀匹配、最长者生效） */
@@ -196,7 +196,7 @@ export function resolveNavMode(path: string): NavMode {
  *
  * 每项都支持 NavVisibility 中的 active / requireAuth / requireAdmin / requireGuest 字段。
  */
-export interface FabMainConfig {
+interface FabMainConfig {
   /** drawer 关闭时主按钮显示的图标 */
   iconClosed: string
   /** drawer 打开时主按钮显示的图标 */
@@ -210,7 +210,7 @@ interface FabItemBase extends NavVisibility {
   label: LocalizedText
 }
 
-export interface FabLinkItem extends FabItemBase {
+interface FabLinkItem extends FabItemBase {
   kind: 'link'
   /** 跳转的路由地址 */
   to: string
@@ -219,7 +219,7 @@ export interface FabLinkItem extends FabItemBase {
 /** FAB 上动作型子项支持的动作枚举（与 NavFab 对外 emit 的事件一一对应） */
 export type FabActionKind = 'toggle-theme' | 'toggle-locale' | 'toggle-ai' | 'logout'
 
-export interface FabActionItem extends FabItemBase {
+interface FabActionItem extends FabItemBase {
   kind: 'action'
   /** 动作类型 */
   action: FabActionKind
@@ -227,7 +227,7 @@ export interface FabActionItem extends FabItemBase {
 
 export type FabItem = FabLinkItem | FabActionItem
 
-export interface FabConfig {
+interface FabConfig {
   /** 主按钮图标（必填） */
   main: FabMainConfig
   /** 子项列表，按声明顺序从外向内排列 */
@@ -238,7 +238,7 @@ export interface FabConfig {
  * 云端 zarr 读取调优参数（config.json 的 zarr 块），供按部署环境的网络/内存调整。
  * 均可缺省，非法值在 loadConfig 里回退默认。
  */
-export interface ZarrConfig {
+interface ZarrConfig {
   /**
    * spectra 组 chunk 缓存上限（LRU，按 chunk 个数计，1 chunk ≈ 1MB，100 ≈ 100MB）。
    * 缓存的价值在跨请求复用：调整区域后重新比较时，重叠部分直接命中，不重新下载。
@@ -258,7 +258,7 @@ export interface ZarrConfig {
  * 部署环境而异（测试/正式服务器不同），故域名放运行时配置：各服务器直接改
  * 服务器上的 config.json 即可切换，无需重新构建。
  */
-export interface OssConfig {
+interface OssConfig {
   /**
    * 预览图直连 base（末尾不带斜杠）。测试环境形如 https://{bucket}.oss-{region}.aliyuncs.com，
    * 正式环境为绑定该 bucket 的 CDN 域名（https://cdn.neonexus.top）。
@@ -278,6 +278,16 @@ export interface AppConfig {
   llm?: {
     /** 默认模型名（env 默认 → config.json llm 块覆盖） */
     model?: string
+    /**
+     * 模型请求失败后的自动重试；缺省：最多 5 次，退避 0.5～10 秒。
+     * maxRetries 设为 0 关闭重试。写错时忽略并在控制台警告。
+     */
+    retryPolicy?: {
+      maxRetries?: number
+      /** 哪些失败可以重试；缺省 EMPTY_RESPONSE、RATE_LIMIT、SERVER、TIMEOUT、TRANSPORT、STREAM_CLOSED */
+      retryableCodes?: string[]
+      backoff?: { initialDelayMs?: number; maxDelayMs?: number; jitterRatio?: number }
+    }
   }
   /** 云端 zarr 读取调优参数；缺省时用内置默认（100MB 缓存 / 16 并发） */
   zarr?: ZarrConfig

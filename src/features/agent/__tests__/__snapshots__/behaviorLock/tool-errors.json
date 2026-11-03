@@ -1,0 +1,575 @@
+{
+ "accepted": true,
+ "logs": [
+  {
+   "datasetId": "dataset-a",
+   "mode": "temporary",
+   "events": [
+    {
+     "type": "turn/start",
+     "turnId": "uuid-1",
+     "user": {
+      "role": "user",
+      "content": "question"
+     },
+     "binding": {
+      "datasetId": "dataset-a",
+      "generation": 0,
+      "page": {
+       "meanSpectrumAvailable": false
+      },
+      "selection": {
+       "clusters": []
+      }
+     },
+     "baseSurface": [],
+     "seq": 0,
+     "id": "uuid-2",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "user",
+      "content": "question"
+     },
+     "seq": 1,
+     "id": "uuid-3",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "user",
+      "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+     },
+     "origin": "context",
+     "seq": 2,
+     "id": "uuid-4",
+     "time": 0
+    },
+    {
+     "type": "step/start",
+     "turnId": "uuid-1",
+     "step": 1,
+     "seq": 3,
+     "id": "uuid-5",
+     "time": 0
+    },
+    {
+     "type": "request/context",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-6",
+     "request": {
+      "nodes": [
+       1,
+       2
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 7c70871a>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 4,
+     "id": "uuid-7",
+     "time": 0
+    },
+    {
+     "type": "attempt/start",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-6",
+     "step": 1,
+     "request": {
+      "nodes": [
+       1,
+       2
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 7c70871a>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 5,
+     "id": "uuid-8",
+     "time": 0
+    },
+    {
+     "type": "attempt/end",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-6",
+     "status": "committed",
+     "seq": 6,
+     "id": "uuid-9",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "tool-call",
+        "id": "a",
+        "name": "missing",
+        "arguments": "{}"
+       },
+       {
+        "type": "tool-call",
+        "id": "b",
+        "name": "needs_arg",
+        "arguments": "{}"
+       },
+       {
+        "type": "tool-call",
+        "id": "c",
+        "name": "failing",
+        "arguments": "{}"
+       },
+       {
+        "type": "tool-call",
+        "id": "d",
+        "name": "lookup",
+        "arguments": "not json"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 7,
+     "id": "uuid-10",
+     "time": 0
+    },
+    {
+     "type": "tool/start",
+     "turnId": "uuid-1",
+     "callKey": "7:0",
+     "callId": "a",
+     "name": "missing",
+     "input": {},
+     "seq": 8,
+     "id": "uuid-11",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "tool",
+      "toolCallId": "a",
+      "name": "missing",
+      "content": "Error: Unknown tool \"missing\"",
+      "isError": true
+     },
+     "callKey": "7:0",
+     "archiveId": "uuid-12",
+     "seq": 9,
+     "id": "uuid-13",
+     "time": 0
+    },
+    {
+     "type": "tool/start",
+     "turnId": "uuid-1",
+     "callKey": "7:1",
+     "callId": "b",
+     "name": "needs_arg",
+     "input": {},
+     "seq": 10,
+     "id": "uuid-14",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "tool",
+      "toolCallId": "b",
+      "name": "needs_arg",
+      "content": "Invalid arguments for \"needs_arg\": value: \"value\" is required",
+      "isError": true
+     },
+     "callKey": "7:1",
+     "archiveId": "uuid-15",
+     "seq": 11,
+     "id": "uuid-16",
+     "time": 0
+    },
+    {
+     "type": "tool/start",
+     "turnId": "uuid-1",
+     "callKey": "7:2",
+     "callId": "c",
+     "name": "failing",
+     "input": {},
+     "seq": 12,
+     "id": "uuid-17",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "tool",
+      "toolCallId": "c",
+      "name": "failing",
+      "content": "Error executing \"failing\": tool exploded",
+      "isError": true
+     },
+     "callKey": "7:2",
+     "archiveId": "uuid-18",
+     "seq": 13,
+     "id": "uuid-19",
+     "time": 0
+    },
+    {
+     "type": "tool/start",
+     "turnId": "uuid-1",
+     "callKey": "7:3",
+     "callId": "d",
+     "name": "lookup",
+     "input": null,
+     "seq": 14,
+     "id": "uuid-20",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "tool",
+      "toolCallId": "d",
+      "name": "lookup",
+      "content": "Invalid arguments for \"lookup\": (root): arguments must be a JSON object",
+      "isError": true
+     },
+     "callKey": "7:3",
+     "archiveId": "uuid-21",
+     "seq": 15,
+     "id": "uuid-22",
+     "time": 0
+    },
+    {
+     "type": "step/end",
+     "turnId": "uuid-1",
+     "step": 1,
+     "seq": 16,
+     "id": "uuid-23",
+     "time": 0
+    },
+    {
+     "type": "step/start",
+     "turnId": "uuid-1",
+     "step": 2,
+     "seq": 17,
+     "id": "uuid-24",
+     "time": 0
+    },
+    {
+     "type": "request/context",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-25",
+     "request": {
+      "nodes": [
+       1,
+       2,
+       7,
+       9,
+       11,
+       13,
+       15
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 7c70871a>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 18,
+     "id": "uuid-26",
+     "time": 0
+    },
+    {
+     "type": "attempt/start",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-25",
+     "step": 2,
+     "request": {
+      "nodes": [
+       1,
+       2,
+       7,
+       9,
+       11,
+       13,
+       15
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 7c70871a>",
+      "tools": "<tools a4d11b16>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 19,
+     "id": "uuid-27",
+     "time": 0
+    },
+    {
+     "type": "attempt/end",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-25",
+     "status": "committed",
+     "seq": 20,
+     "id": "uuid-28",
+     "time": 0
+    },
+    {
+     "type": "message",
+     "turnId": "uuid-1",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "answer"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 21,
+     "id": "uuid-29",
+     "time": 0
+    },
+    {
+     "type": "step/end",
+     "turnId": "uuid-1",
+     "step": 2,
+     "seq": 22,
+     "id": "uuid-30",
+     "time": 0
+    },
+    {
+     "type": "turn/end",
+     "turnId": "uuid-1",
+     "reason": "completed",
+     "seq": 23,
+     "id": "uuid-31",
+     "time": 0
+    }
+   ]
+  }
+ ],
+ "calls": [
+  {
+   "system": "<prompt 7c70871a>",
+   "tools": "<tools a4d11b16>",
+   "messages": [
+    {
+     "role": "user",
+     "content": "question"
+    },
+    {
+     "role": "user",
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+    }
+   ],
+   "turnStart": 0,
+   "maxTokens": 64000
+  },
+  {
+   "system": "<prompt 7c70871a>",
+   "tools": "<tools a4d11b16>",
+   "messages": [
+    {
+     "role": "user",
+     "content": "question"
+    },
+    {
+     "role": "user",
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "tool-call",
+       "id": "a",
+       "name": "missing",
+       "arguments": "{}"
+      },
+      {
+       "type": "tool-call",
+       "id": "b",
+       "name": "needs_arg",
+       "arguments": "{}"
+      },
+      {
+       "type": "tool-call",
+       "id": "c",
+       "name": "failing",
+       "arguments": "{}"
+      },
+      {
+       "type": "tool-call",
+       "id": "d",
+       "name": "lookup",
+       "arguments": "not json"
+      }
+     ],
+     "source": {
+      "endpoint": "anthropic",
+      "model": "m",
+      "baseUrl": "https://llm.test/v1"
+     }
+    },
+    {
+     "role": "tool",
+     "toolCallId": "a",
+     "name": "missing",
+     "content": "Error: Unknown tool \"missing\"",
+     "isError": true
+    },
+    {
+     "role": "tool",
+     "toolCallId": "b",
+     "name": "needs_arg",
+     "content": "Invalid arguments for \"needs_arg\": value: \"value\" is required",
+     "isError": true
+    },
+    {
+     "role": "tool",
+     "toolCallId": "c",
+     "name": "failing",
+     "content": "Error executing \"failing\": tool exploded",
+     "isError": true
+    },
+    {
+     "role": "tool",
+     "toolCallId": "d",
+     "name": "lookup",
+     "content": "Invalid arguments for \"lookup\": (root): arguments must be a JSON object",
+     "isError": true
+    }
+   ],
+   "turnStart": 0,
+   "maxTokens": 64000
+  }
+ ],
+ "trace": [
+  "restoring",
+  "preparing",
+  "generating",
+  "generating [tool:running,tool:running,tool:running,tool:running]",
+  "executing-tools [tool:running,tool:running,tool:running,tool:running]",
+  "executing-tools [tool:error,tool:running,tool:running,tool:running]",
+  "executing-tools [tool:error,tool:error,tool:running,tool:running]",
+  "executing-tools [tool:error,tool:error,tool:error,tool:running]",
+  "executing-tools [tool:error,tool:error,tool:error,tool:error]",
+  "generating [tool:error,tool:error,tool:error,tool:error]",
+  "generating [tool:error,tool:error,tool:error,tool:error,text:6]",
+  "idle [tool:error,tool:error,tool:error,tool:error,text:6]"
+ ],
+ "snapshot": {
+  "phase": "idle",
+  "mode": "temporary",
+  "messages": [
+   {
+    "id": "uuid-1-user",
+    "role": "user",
+    "content": "question"
+   },
+   {
+    "id": "uuid-1",
+    "role": "assistant",
+    "content": "answer",
+    "parts": [
+     {
+      "type": "tool",
+      "id": "7:0",
+      "name": "missing",
+      "input": {},
+      "state": "error",
+      "preview": "Error: Unknown tool \"missing\""
+     },
+     {
+      "type": "tool",
+      "id": "7:1",
+      "name": "needs_arg",
+      "input": {},
+      "state": "error",
+      "preview": "Invalid arguments for \"needs_arg\": value: \"value\" is required"
+     },
+     {
+      "type": "tool",
+      "id": "7:2",
+      "name": "failing",
+      "input": {},
+      "state": "error",
+      "preview": "Error executing \"failing\": tool exploded"
+     },
+     {
+      "type": "tool",
+      "id": "7:3",
+      "name": "lookup",
+      "input": {},
+      "state": "error",
+      "preview": "Invalid arguments for \"lookup\": (root): arguments must be a JSON object"
+     },
+     {
+      "type": "text",
+      "text": "answer"
+     }
+    ],
+    "pending": false,
+    "interrupted": false
+   }
+  ],
+  "error": null,
+  "pressure": {
+   "inputTokens": 2401,
+   "contextWindow": 256000,
+   "outputReserve": 64000,
+   "inputBudget": 186880,
+   "ratio": 0.012847816780821917,
+   "estimated": true
+  }
+ }
+}

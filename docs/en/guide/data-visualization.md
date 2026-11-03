@@ -123,7 +123,7 @@ Displays the spatial intensity distribution for the selected m/z value.
 | **Colormap** | Viridis, Inferno (default), Magma, Hot, Gray. |
 | **Intensity Scale** | Linear / Log / TIC. TIC normalization divides each pixel by its total ion current and needs pre-computed stats on Continuous data. |
 | **Reset** | Restore all controls to defaults. |
-| **PNG** | Export the current image with a transparent background. |
+| **JPG / PNG** | Export the current image. JPG (white background) is the default; hover the button to choose PNG (transparent, lossless). |
 
 ### Display Range & Gamma (Right Strip)
 

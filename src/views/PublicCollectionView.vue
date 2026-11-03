@@ -88,6 +88,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useLatestRequest } from '@/shared/composables/useLatestRequest'
 import { useRoute } from 'vue-router'
 import CollectionMetadataPanel from '@/features/collections/components/CollectionMetadataPanel.vue'
 import CollectionMemberList from '@/features/collections/components/CollectionMemberList.vue'
@@ -112,15 +113,19 @@ const error = ref('')
 
 const publicId = computed(() => String(route.params.publicId))
 
+const requests = useLatestRequest()
+
 async function fetch() {
+  const isCurrent = requests.begin()
   loading.value = true
   error.value = ''
   try {
-    detail.value = await getPublicCollection(publicId.value)
+    const next = await getPublicCollection(publicId.value)
+    if (isCurrent()) detail.value = next
   } catch (err: any) {
-    error.value = collectionErrorMessage(err, t('collections.overview.notFound'))
+    if (isCurrent()) error.value = collectionErrorMessage(err, t('collections.overview.notFound'))
   } finally {
-    loading.value = false
+    if (isCurrent()) loading.value = false
   }
 }
 

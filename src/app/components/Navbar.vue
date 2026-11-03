@@ -15,7 +15,7 @@
       @logout="logout"
     />
   </template>
-  <FloatingAIAssistant v-model:show="showAI" />
+  <FloatingAgent v-model:show="showAI" />
 </template>
 
 <script setup lang="ts">
@@ -26,7 +26,7 @@ import { useAuthStore } from '@/shared/auth/authStore'
 import NavDrawer from './NavDrawer.vue'
 import NavFab from './NavFab.vue'
 import PageNavbar from './PageNavbar.vue'
-import FloatingAIAssistant from '@/features/assistant/components/FloatingAIAssistant.vue'
+import FloatingAgent from '@/features/agent/components/FloatingAgent.vue'
 import { useTheme } from '@/shared/composables/useTheme'
 import { toggleLocale } from '@/shared/composables/useLocale'
 import { resolveNavMode } from '@/shared/config/runtimeConfig'

@@ -86,5 +86,5 @@ export function useZoomPan(
     if (activePanUp) document.removeEventListener('mouseup', activePanUp)
   })
 
-  return { zoom, panX, panY, resetZoom, zoomIn, zoomOut, setZoom, onWheel, onPanStart }
+  return { zoom, panX, panY, resetZoom, zoomIn, zoomOut, onWheel, onPanStart }
 }

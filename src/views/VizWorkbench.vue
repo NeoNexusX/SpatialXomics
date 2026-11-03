@@ -42,8 +42,8 @@ import {
 import {
   registerContextProviders,
   unregisterContextProviders,
-} from '@/features/assistant/providers/analysisContext'
-import { STORAGE_KEYS } from '@/shared/config/storageKeys'
+} from '@/features/agent/bridge/analysisContext'
+import { setAgentDataset, markAgentDatasetReady } from '@/features/agent/bridge/datasetBinding'
 import { useToast } from '@/shared/composables/useToast'
 import { t } from '@/i18n'
 import type { DataMode } from '@/services/zarr/types/zarr'
@@ -149,33 +149,14 @@ watch(hasTic, (v) => {
 // init() 期间发生 disposeZarrState() 或重新 init() 时，旧的 init 会自行
 // dispose 孤儿 store 并放弃写入模块状态。
 
-// SXO-Harness桥：数据集切换时清空助手对话。不能在此静态 import useAssistant——
-// 那会把整个 agent 栈（双适配器、工具模块、skills glob）拉进本路由 chunk，
-// 违反 plugins/index.ts 记录的懒加载契约（助手首次打开才经动态 import 加载，
-// 独立 chunk）。改为写一个待清空标志，由 useAssistant 消费（模块初始化、
-// useAssistant() 调用、每次 send() 前——覆盖面板常开跨数据集导航的场景）。
-// 桥接挂在 watch(runId) 上而非挂载快照：runId 可在不重挂组件的情况下变化
-// （同路由换参），只看快照会漏判切换；历史里的 tool 结果（旧样本的离子图
-// 统计、注释等）与新样本的 Dataset Context 会对不上，残留会误导模型。
-function syncAssistantDatasetBridge(id: string): void {
-  if (!id) return
-  let prevRun: string | null = null
-  try {
-    prevRun = localStorage.getItem(STORAGE_KEYS.assistantDatasetRun)
-    if (prevRun !== id) localStorage.setItem(STORAGE_KEYS.assistantDatasetRun, id)
-    if (prevRun != null && prevRun !== id) {
-      localStorage.setItem(STORAGE_KEYS.assistantPendingClear, '1')
-    }
-  } catch {
-    // localStorage 不可用（隐私模式等）时静默跳过
-  }
-}
-
+// The bridge contains only dataset identity and never imports the agent runtime.
 watch(
   runId,
   (id) => {
-    zarr.init(id)
-    syncAssistantDatasetBridge(id)
+    const generation = setAgentDataset(id)
+    void zarr.init(id).then(() => {
+      if (!zarr.error.value) markAgentDatasetReady(generation)
+    })
   },
   { immediate: true },
 )
@@ -187,6 +168,7 @@ watch(runId, () => {
 // 离开页面时释放模块级状态，避免大数组（mzAxis、meanChartData、ticMatrix 等）
 // 和 ZarrOssStore 缓存在 SPA 导航后仍驻留内存
 onUnmounted(() => {
+  setAgentDataset('', true)
   unregisterContextProviders()
   cmpReset()
   resetChannels()

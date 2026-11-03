@@ -20,4 +20,6 @@ export const ENV = {
   llmApiKey: env.VITE_LLM_API_KEY || '',
   /** 部署默认连接使用的模型名（用户设置 > config.json llm 块 > 此处） */
   llmModel: env.VITE_LLM_MODEL || '',
+  /** 可选 Exa 搜索子 key；留空走官方 MCP 匿名额度，与模型密钥独立。 */
+  exaApiKey: env.VITE_EXA_API_KEY || '',
 } as const

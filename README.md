@@ -11,10 +11,11 @@ SpatialXomics 是一个面向质谱成像（MSI）的 Web 数据管理与分析�
 - **数据集合**：把相关公开数据集组织成带学术元数据和有序成员列表的数据集合。
 - **上传管线**：浏览器 Worker 计算 MD5、服务端查重、流式 ZIP64 压缩、阿里云 OSS 分片上传，以及同浏览器内的断点续传。
 - **分析工作区**：按数据的 spectrum/storage mode 展示兼容的降噪、基线校正、归一化、峰提取和峰对齐方法。
-- **结果可视化**：Continuous 离子图和平均谱、Processed TIC 图和逐像素谱、显示范围/Gamma/配色/TIC 归一化、透明背景 PNG 导出。
-- **聚类与区域分析**：后端生成 UMAP，浏览器本地执行 KMeans；支持聚类筛选、矩形/自由形状 ROI、多区域组合比较。
+- **结果可视化**：Continuous 离子图和平均谱、Processed TIC 图和逐像素谱、显示范围/Gamma/配色/TIC 归一化；离子图可导出 JPG（默认）或透明背景 PNG。
+- **聚类与区域分析**：后端生成 UMAP，浏览器本地执行 KMeans；支持聚类筛选、矩形/自由形状 ROI、多区域组合比较，以及掩膜的导入/导出。
 - **注释**：Continuous + Centroid 结果使用平均谱峰与注释库 CSV 匹配，支持 ppm/Da 容差、评分与 FDR、筛选、导出和 PubChem 查询；注释库可自备 CSV 或从平台参考库一键导入。
 - **参考数据库**：登录后浏览 HMDB 4.0 代谢物参考库，支持编号/名称/分子式检索、来源与质量区间筛选、PubChem/HMDB 条目外链和整库 CSV 下载；注释面板可直接导入该库。
+- **SXO-Harness 助手**：登录后在首页或数据集可视化页的导航球中打开悬浮对话面板，围绕当前数据集提问；助手读取离子图、统计、注释、聚类与页面状态，并可调用 PubChem、ChEBI、HMDB、KEGG、文献检索和联网搜索，外部来源以引用卡片展示。
 
 ## 技术栈
 
@@ -25,8 +26,7 @@ SpatialXomics 是一个面向质谱成像（MSI）的 Web 数据管理与分析�
 | 可视化 | ECharts、Canvas、vue3-calendar-heatmap |
 | MSI/Zarr | 自研 Zarr v3 分块读取器、zstddec、`@zip.js/zip.js`、hash-wasm、ml-kmeans |
 | 网络与存储 | Axios、ali-oss（STS 临时凭证） |
-| 网络与存储 | Axios、ali-oss（STS 临时凭证） |
-| SXO-Harness | @deepseek-ai/cordis、AI SDK（@ai-sdk/anthropic）、shadcn-vue AI Elements |
+| SXO-Harness | @deepseek-ai/cordis、AI SDK（@ai-sdk/anthropic）、shadcn-vue AI Elements、Exa 联网搜索 |
 | 测试 | Vitest、Playwright |
 | 文档 | VitePress（中英文） |
 
@@ -39,7 +39,7 @@ src/
 ├── app/                         # 应用外壳、导航与全局入口组件
 ├── assets/                      # 样式和主题资源
 ├── features/                    # 按业务领域组织的功能
-│   ├── assistant/               # SXO-Harness：悬浮面板聊天 + 连接设置（对已登录用户默认开启）
+│   ├── agent/                   # SXO-Harness：悬浮面板聊天 + 连接设置（对已登录用户默认开启）
 │   ├── auth/                    # 登录、注册、找回密码表单逻辑
 │   ├── collections/             # 带学术元数据的数据集合
 │   ├── datasets/                # 数据集列表、详情、分享、下载
@@ -48,6 +48,7 @@ src/
 │   ├── users/                   # 管理员用户管理
 │   ├── vizworkbench/            # 离子图、谱图、聚类、ROI 与注释
 │   └── workspace/               # 分析构建器和任务看板
+├── i18n/                        # vue-i18n 实例与按命名空间拆分的语言包
 ├── router/                      # 路由与认证/管理员守卫
 ├── services/                    # Zarr（含 OSS client）、聚类和 PubChem 服务
 ├── shared/                      # 跨业务共享的 API、认证、组件、配置和工具
@@ -66,7 +67,7 @@ docker/                          # Docker/nginx 部署
 
 ### 环境要求
 
-- Node.js `^20.19.0` 或 `>=22.12.0`
+- Node.js `>=22.12.0`
 - npm（使用仓库中的 `package-lock.json`）
 
 ### 安装
@@ -80,8 +81,9 @@ npm ci
 仓库已提供以下文件：
 
 - `env/.env`：`VITE_API_BASE`、`VITE_OSS_ENDPOINT` 等公共值。
-- `env/.env.development`：开发服务器的 `VITE_BACKEND_URL`。
-- `env/.env.production`：生产构建/预览使用的值。
+- `env/.env.development`：开发服务器的 `VITE_BACKEND_URL`，以及 SXO-Harness 的 `VITE_LLM_PROXY_URL` / `VITE_LLM_MODEL`。
+- `env/.env.production`：生产构建/预览使用的值。如需部署级默认连接，在本地覆盖或部署环境中补 `VITE_LLM_PROXY_URL`、`VITE_LLM_API_KEY`、`VITE_LLM_MODEL`。
+- 可选的 `VITE_EXA_API_KEY`：SXO-Harness 联网搜索的 Exa 子 key，留空则使用匿名额度。
 
 本机覆盖请创建不会提交的 `env/.env.development.local`，例如：
 
@@ -90,6 +92,8 @@ VITE_BACKEND_URL=http://localhost:8000
 ```
 
 开发环境的 `/api` 请求由 Vite 代理到 `VITE_BACKEND_URL`。生产容器由 nginx 把 `/api/` 代理到运行时传入的 `BACKEND_HOST:BACKEND_PORT`。
+
+所有 `VITE_*` 变量都会编译进浏览器包：`VITE_LLM_API_KEY` 只能放中转站的受限子 key，`VITE_EXA_API_KEY` 也只能放可公开的 Exa 子 key，不要放官方主 key。
 
 ### 启动
 
@@ -125,4 +129,4 @@ npm run icons:bundle      # 更新离线图标子集
 - Docker 镜像同时包含 `dist/` 和 `dist-docs/`，nginx 分别服务 SPA 与 `/docs/`。
 - `test` 分支运行检查、文档构建和三浏览器 Playwright；`dev` 与 `main` 分支分别触发对应环境部署。
 
-文档维护流程见 [docs/zh/dev/文档维护.md](docs/zh/dev/文档维护.md)。
+文档维护流程见 [docs/zh/dev/doc-maintenance.md](docs/zh/dev/doc-maintenance.md)。

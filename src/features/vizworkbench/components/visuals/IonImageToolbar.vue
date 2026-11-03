@@ -109,14 +109,35 @@
       >
         {{ $t('common.action.reset') }}
       </button>
-      <button
-        class="btn btn-fluid btn-ghost"
-        :title="$t('vizworkbench.toolbar.exportPng')"
-        @click="$emit('download')"
-      >
-        <SvgIcon type="download" />
-        PNG
-      </button>
+      <!-- 导出：主按钮按默认格式（JPG）一键下载，悬停展开格式选择。
+           菜单贴着按钮下沿，不留 margin —— hover 菜单一旦离开按钮盒就会闪断。 -->
+      <div class="dropdown dropdown-end dropdown-hover">
+        <button
+          type="button"
+          data-testid="export-button"
+          class="btn btn-fluid btn-ghost"
+          :aria-label="$t('vizworkbench.toolbar.exportImage')"
+          @click="onPick(DEFAULT_ION_IMAGE_FORMAT)"
+        >
+          <SvgIcon type="download" />
+          JPG
+          <SvgIcon type="chevron_down" class="w-[0.8em] h-[0.8em] opacity-60" />
+        </button>
+        <ul
+          class="menu dropdown-content w-max rounded-box border border-base-300 bg-base-100 p-1 shadow-lg"
+        >
+          <li>
+            <button type="button" data-testid="export-jpg" @click="onPick('jpeg')">
+              <span class="font-mono">JPG</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" data-testid="export-png" @click="onPick('png')">
+              <span class="font-mono">PNG</span>
+            </button>
+          </li>
+        </ul>
+      </div>
     </div>
   </div>
 </template>
@@ -126,6 +147,7 @@ import { ref, watch, nextTick } from 'vue'
 import type { DataMode } from '@/services/zarr/types/zarr'
 import { ZARR_STORE } from '@/shared/config/defaults'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
+import { DEFAULT_ION_IMAGE_FORMAT, type IonImageFormat } from '../../utils/ionImageExport'
 
 /** 可选色图：value 传给 zarr 渲染，label 用于展示（色图是专有名称，各语言都显示英文原名） */
 const COLORMAPS = [
@@ -162,8 +184,18 @@ const emit = defineEmits<{
   (e: 'update:intensityScale', v: string): void
   (e: 'search-mz', v: string): void
   (e: 'reset'): void
-  (e: 'download'): void
+  /** 导出当前视图，format 由悬停菜单或默认格式决定 */
+  (e: 'download', format: IonImageFormat): void
 }>()
+
+/**
+ * 导出并收起菜单：daisyUI 的 dropdown 靠 :focus-within 展开，
+ * 不主动 blur 的话，点过的按钮会把菜单一直留在展开态。
+ */
+function onPick(format: IonImageFormat) {
+  emit('download', format)
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+}
 
 // ---- m/z 搜索框 ----
 

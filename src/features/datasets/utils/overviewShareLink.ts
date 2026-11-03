@@ -1,11 +1,5 @@
 import type { Router } from 'vue-router'
-
-/** 分享 token：16 位 public_id，明文出现在链接里 */
-export const PUBLIC_ID_RE = /^[A-Za-z0-9]{16}$/
-
-export function isValidPublicId(value: unknown): value is string {
-  return typeof value === 'string' && PUBLIC_ID_RE.test(value)
-}
+import { isValidPublicId } from './publicId'
 
 /**
  * Build the absolute, short Overview share URL /s/{public_id} from a 16-char

@@ -2,8 +2,8 @@
  * Zarr 共享状态（services 层的跨 feature API）。
  *
  * 原 vizworkbench useZarrIonImage 的模块级状态：可视化工作台写入，
- * assistant（analysisContext 的 agent 上下文工具）等跨 feature 只读消费。
- * 按 docs/dev/前端架构边界.md 的规则——跨模块复用的状态收在 services 层；
+ * agent（analysisContext 的上下文工具）等跨 feature 只读消费。
+ * 按 docs/zh/dev/frontend-architecture.md 的规则，跨模块复用的状态收在 services 层；
  * feature 内部消费者仍从 useZarrIonImage 的转发导出导入，路径不变。
  *
  * ⚠️ 模块级单例：约 20 个状态挂在模块作用域，由可视化工作台独占使用。
@@ -99,11 +99,6 @@ export interface SharedZarrContext {
   dataMode: DataMode | null
   rowAxis: 'pixel' | 'ion' | null
   meanChartData: [number, number][]
-  spectrumLoading: boolean
-  spectrumError: string | null
-  nMz: number
-  ticMatrix: Float32Array | null
-  pixelSpectrum: typeof pixelSpectrum.value
 }
 
 export function getSharedZarrContext(): SharedZarrContext {
@@ -114,11 +109,6 @@ export function getSharedZarrContext(): SharedZarrContext {
     dataMode: dataModeRef.value,
     rowAxis: rowAxisRef.value,
     meanChartData: meanChartData.value,
-    spectrumLoading: spectrumLoading.value,
-    spectrumError: spectrumError.value,
-    nMz: nMz.value,
-    ticMatrix: ticMatrix.value,
-    pixelSpectrum: pixelSpectrum.value,
   }
 }
 
@@ -138,6 +128,7 @@ export function resetZarrSharedState(): void {
   meanSpectrumRef.value = null
   spectrumLoading.value = false
   spectrumError.value = null
+  nMz.value = 0
 
   ticMatrix.value = null
   ticLoading.value = false

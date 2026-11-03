@@ -19,7 +19,7 @@ import { ConcurrencyGovernor } from './concurrencyGovernor'
 import { t } from '@/i18n'
 
 // POST /files/upload 的返回
-export interface OssUploadResponse {
+interface OssUploadResponse {
   oss_sts_token: {
     AccessKeyId: string
     AccessKeySecret: string
@@ -74,7 +74,7 @@ const mismatchedSource = () => t('upload.error.mismatchedSource')
  */
 export type FailureDisposition = 'discard-session' | 'reset-parts' | 'keep-session'
 
-export function dispositionFor(err: unknown, zipMismatch: boolean): FailureDisposition {
+function dispositionFor(err: unknown, zipMismatch: boolean): FailureDisposition {
   if (zipMismatch || (err as { message?: unknown } | null)?.message === NON_DETERMINISTIC_ZIP) {
     return 'discard-session'
   }
