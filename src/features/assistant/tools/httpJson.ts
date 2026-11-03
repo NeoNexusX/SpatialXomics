@@ -29,7 +29,7 @@ export async function getJson(url: string, init?: RequestInit): Promise<any> {
 
 /**
  * 同源离线索引的懒加载器工厂（public/data/ 下的静态 JSON：LIPID MAPS /
- * HMDB / KEGG / MassBank 索引共用此模式，别再手写第四份）。
+ * HMDB / KEGG 索引共用此模式，别再手写第四份）。
  *
  * - 模块级单次缓存：返回的函数反复调用共享同一个 Promise；
  * - 失败重置：加载失败（网络/404/中止）后清缓存，下次调用可重试；

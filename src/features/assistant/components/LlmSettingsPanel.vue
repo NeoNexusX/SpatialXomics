@@ -10,7 +10,7 @@
         :title="t('common.action.close')"
         @click="emit('done')"
       >
-        <svg-icon type="close" class="w-3 h-3" />
+        <svg-icon type="close" class="w-4 h-4" />
       </button>
     </div>
 
@@ -36,23 +36,13 @@
 
       <label class="form-control">
         <div class="label py-1">
-          <span class="label-text kawaru-text-75">{{ t('common.assistant.settings.provider') }}</span>
-        </div>
-        <select v-model="form.provider" class="select select-sm select-bordered w-full kawaru-text-87">
-          <option value="openai">{{ t('common.assistant.settings.providerOpenAi') }}</option>
-          <option value="anthropic">{{ t('common.assistant.settings.providerAnthropic') }}</option>
-        </select>
-      </label>
-
-      <label class="form-control">
-        <div class="label py-1">
           <span class="label-text kawaru-text-75">{{ t('common.assistant.settings.baseUrl') }}</span>
         </div>
         <input
           v-model="form.baseUrl"
           type="text"
           class="input input-sm input-bordered w-full kawaru-text-87"
-          :placeholder="baseUrlPlaceholder"
+          :placeholder="t('common.assistant.settings.baseUrlPlaceholder')"
         />
       </label>
 
@@ -77,7 +67,7 @@
           v-model="form.model"
           type="text"
           class="input input-sm input-bordered w-full kawaru-text-87"
-          :placeholder="modelPlaceholder"
+          :placeholder="t('common.assistant.settings.modelPlaceholder')"
         />
       </label>
 
@@ -91,7 +81,7 @@
         {{ t('common.assistant.settings.testing') }}
       </div>
       <div v-else-if="testResult === ''" class="kawaru-text-75 text-success flex items-center gap-1">
-        <svg-icon type="success" class="w-3.5 h-3.5" />
+        <svg-icon type="success" class="w-4 h-4" />
         {{ t('common.assistant.settings.testOk') }}
       </div>
       <div
@@ -105,24 +95,24 @@
     <!-- 底部按钮 -->
     <div class="shrink-0 px-3 py-2 border-t border-base-300 flex items-center gap-2">
       <button
-        class="btn btn-xs btn-outline"
+        class="btn btn-xs btn-outline kawaru-text-68"
         :disabled="testing || !form.baseUrl.trim() || !form.apiKey.trim()"
         @click="onTest"
       >
-        <svg-icon v-if="!testing" type="bolt" class="w-3 h-3" />
+        <svg-icon v-if="!testing" type="bolt" class="w-4 h-4" />
         {{ t('common.assistant.settings.test') }}
       </button>
       <div class="flex-1"></div>
       <button
         v-if="hasCustom"
-        class="btn btn-xs btn-ghost text-error"
+        class="btn btn-xs btn-ghost text-error kawaru-text-68"
         :title="t('common.assistant.settings.clearConfirm')"
         @click="onClear"
       >
-        {{ clearArmed ? '✓' : '' }}
+        <svg-icon v-if="clearArmed" type="check" class="w-3.5 h-3.5" />
         {{ t('common.action.clear') }}
       </button>
-      <button class="btn btn-xs btn-primary text-primary-content" @click="onSave">
+      <button class="btn btn-xs btn-primary text-primary-content kawaru-text-68" @click="onSave">
         {{ t('common.action.save') }}
       </button>
     </div>
@@ -131,13 +121,13 @@
 
 <script setup lang="ts">
 /**
- * BYOK 设置面板：用户自配 接口类型 / API 地址 / 密钥 / 模型
- * （openai = OpenAI 兼容端点；anthropic = Claude 原生 /v1/messages）。
+ * BYOK 设置面板：用户自配 API 地址 / 密钥 / 模型（OpenAI 兼容端点，
+ * 如 DeepSeek / GLM / Kimi / OpenAI 本家）。
  * 悬浮窗容器层组件——五套聊天框架视图共用，不随框架切换重写。
  * 保存的值经 useLlmSettings → userLlmConfig 落 localStorage；
- * 实际请求时的解析优先级见两个适配器（openaiAdapter / anthropicAdapter）的注释。
+ * 实际请求时的解析优先级见 openaiAdapter 的注释。
  */
-import { computed, reactive, ref } from 'vue'
+import { reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useLlmSettings, testLlmConnection } from '../composables/useLlmSettings'
 
@@ -147,23 +137,10 @@ const { config, hasCustom, hasEnvDefault, save, clear } = useLlmSettings()
 
 // 打开面板时以已保存值为初值（保存/清除后同步回来）
 const form = reactive({
-  provider: config.value.provider,
   baseUrl: config.value.baseUrl,
   apiKey: config.value.apiKey,
   model: config.value.model,
 })
-
-// 占位符随接口类型切换（openai: deepseek 示例；anthropic: 官方端点/模型）
-const baseUrlPlaceholder = computed(() =>
-  form.provider === 'anthropic'
-    ? t('common.assistant.settings.baseUrlPlaceholderAnthropic')
-    : t('common.assistant.settings.baseUrlPlaceholder'),
-)
-const modelPlaceholder = computed(() =>
-  form.provider === 'anthropic'
-    ? t('common.assistant.settings.modelPlaceholderAnthropic')
-    : t('common.assistant.settings.modelPlaceholder'),
-)
 
 const testing = ref(false)
 /** '' = 成功；null = 未测试；其他 = 错误信息 */
@@ -195,7 +172,6 @@ function onClear(): void {
   clearTimeout(clearTimer)
   clearArmed.value = false
   clear()
-  form.provider = 'openai'
   form.baseUrl = ''
   form.apiKey = ''
   form.model = ''

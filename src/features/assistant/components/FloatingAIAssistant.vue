@@ -3,7 +3,7 @@
   <div
     v-if="isOpen && !isMinimized"
     ref="panelRef"
-    class="fixed z-[10000] flex flex-col rounded-2xl shadow-2xl bg-base-100 border border-base-300 overflow-hidden select-none"
+    class="assistant-scope fixed z-[10000] flex flex-col rounded-2xl shadow-2xl bg-base-100 border border-base-300 overflow-hidden select-none"
     :style="panelStyle"
   >
     <!-- Header -->
@@ -28,21 +28,21 @@
           @mousedown.stop
           @click="showSettings = !showSettings"
         >
-          <svg-icon type="settings" class="w-3.5 h-3.5" />
+          <svg-icon type="settings" class="w-4 h-4" />
           <span
             v-if="hasCustom && !showSettings"
             class="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary"
           ></span>
         </button>
         <button
-          class="btn btn-xs btn-ghost btn-square kawaru-text-68"
+          class="btn btn-xs btn-ghost btn-square"
           @click="isMinimized = true"
           :title="$t('common.assistant.minimize')"
         >
-          <span class="kawaru-text-87 font-bold">—</span>
+          <svg-icon type="minus" class="w-4 h-4" />
         </button>
-        <button class="btn btn-xs btn-ghost btn-square kawaru-text-68" @click="close" :title="$t('common.action.close')">
-          <svg-icon type="close" class="w-3 h-3" />
+        <button class="btn btn-xs btn-ghost btn-square" @click="close" :title="$t('common.action.close')">
+          <svg-icon type="close" class="w-4 h-4" />
         </button>
       </div>
     </div>
@@ -238,3 +238,37 @@ function stopResize() {
   document.removeEventListener('mouseup', stopResize)
 }
 </script>
+
+<style scoped>
+/* ----------------------------------------------------------------------------
+   字号/字体统一：面板内 TDesign Chat 组件（输入框、placeholder、reasoning
+   面板头、ChatContent 容器等内部渲染的文字）默认用它自己的设计令牌
+   （12/14/16/20px + "PingFang SC, Microsoft YaHei, Arial"），完全绕开全局
+   kawaru-text 档位与 Poppins 字体栈——这是助手面板文字与主站不统一的根源。
+
+   在面板根上把 --td-font-size-* 映射到 --kawaru-fs 刻度、--td-font-family
+   对齐全局 :root 字体栈，自定义属性沿 DOM 树继承，面板内（含聊天体与设置
+   面板两个子组件）所有 TDesign 内部文字一次跟随。kawaru 档位只在 :root
+   声明 --kawaru-fs、任何地方不得覆盖（见 style.css），这里只消费不重定义。
+
+   ⚠ --td-font-body-* 是 font 简写，其 var() 引用在 :root 定义处即被替换，
+   单独覆盖 size token 不会改变已解析的简写——简写必须在此一并重声明。
+   ---------------------------------------------------------------------------- */
+.assistant-scope {
+  --td-font-family:
+    'Poppins', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC',
+    system-ui, sans-serif;
+  /* 档位对齐：medium/large 都是聊天正文级 → 同为 87（映射不同会显两种字号） */
+  --td-font-size-body-small: calc(var(--kawaru-fs) * 0.75);
+  --td-font-size-body-medium: calc(var(--kawaru-fs) * 0.875);
+  --td-font-size-body-large: calc(var(--kawaru-fs) * 0.875);
+  --td-font-size-title-medium: var(--kawaru-fs);
+  --td-font-size-title-large: calc(var(--kawaru-fs) * 1.125);
+  --td-font-size-headline-small: calc(var(--kawaru-fs) * 1.5);
+  /* font 简写（size / line-height family）；行高沿用 TDesign 比例 */
+  --td-font-body-medium: 400 var(--td-font-size-body-medium) /
+    var(--td-line-height-body-medium) var(--td-font-family);
+  --td-font-body-large: 400 var(--td-font-size-body-large) /
+    var(--td-line-height-body-large) var(--td-font-family);
+}
+</style>

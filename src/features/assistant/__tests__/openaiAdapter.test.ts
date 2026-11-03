@@ -3,8 +3,11 @@ import {
   foldToolMessagesToUser,
   inlineToolCalls,
   openaiAdapter,
+  rejectsImages,
   rejectsToolRole,
   resetStrictCompatForTests,
+  setOnImagesRejected,
+  stripImages,
   strictToolCallsError,
 } from '../agentservices/openaiAdapter'
 import { clearUserLlmConfig, saveUserLlmConfig } from '../agentconfig/userLlmConfig'
@@ -180,7 +183,6 @@ describe('openaiAdapter.stream strict-endpoint 400 retry', () => {
       baseUrl: 'http://localhost:4567/v1',
       apiKey: 'test-key',
       model: 'test-model',
-      provider: 'openai',
     })
   })
 
@@ -520,5 +522,153 @@ describe('openaiAdapter.stream strict-endpoint 400 retry', () => {
     expect(errorSpy).toHaveBeenCalledOnce()
     warnSpy.mockRestore()
     errorSpy.mockRestore()
+  })
+})
+
+// ---- 多模态图片：拒图 400 的识别与剥图重试 ----
+
+describe('rejectsImages', () => {
+  it('matches common non-vision-model image rejection phrasings', () => {
+    expect(
+      rejectsImages(
+        JSON.stringify({ error: { message: 'Invalid content type: image_url is not supported by this model' } }),
+      ),
+    ).toBe(true)
+    expect(rejectsImages('this model does not support image input')).toBe(true)
+    expect(rejectsImages('multimodal input is not supported for model deepseek-chat')).toBe(true)
+    expect(rejectsImages('image content is only supported by vision models')).toBe(true)
+  })
+
+  it('does not match unrelated 400s that merely contain common words', () => {
+    expect(rejectsImages('{"error":{"message":"model not found"}}')).toBe(false)
+    expect(rejectsImages('Invalid value for temperature')).toBe(false)
+    // "image" 出现但不带不支持/非法语义（如字段名拼写错误的普通报错）不误伤
+    expect(rejectsImages('messages.1.content.2.text: Field required')).toBe(false)
+  })
+})
+
+describe('stripImages', () => {
+  it('replaces images with an omission note and keeps the text', () => {
+    const stripped = stripImages([
+      { role: 'user', content: 'what is this', images: ['data:image/png;base64,AAA'] },
+      { role: 'assistant', content: 'a chart' },
+      { role: 'user', content: 'plain', images: ['data:image/png;base64,BBB', 'data:image/png;base64,CCC'] },
+    ])
+    expect(stripped[0]!.images).toBeUndefined()
+    expect(stripped[0]!.content).toBe('what is this\n[image omitted]')
+    expect(stripped[1]).toEqual({ role: 'assistant', content: 'a chart' })
+    expect(stripped[2]!.content).toBe('plain\n[2 images omitted]')
+  })
+
+  it('handles image-only messages (empty content becomes the note)', () => {
+    const stripped = stripImages([{ role: 'user', content: '', images: ['data:image/png;base64,AAA'] }])
+    expect(stripped[0]!.images).toBeUndefined()
+    expect(stripped[0]!.content).toBe('[image omitted]')
+  })
+})
+
+describe('openaiAdapter.stream image-rejection retry', () => {
+  beforeEach(() => {
+    resetStrictCompatForTests()
+    saveUserLlmConfig({
+      baseUrl: 'http://localhost:4567/v1',
+      apiKey: 'test-key',
+      model: 'test-model',
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    clearUserLlmConfig()
+    setOnImagesRejected(null)
+  })
+
+  const IMAGE_400 = JSON.stringify({
+    error: { message: 'Invalid content type: image_url is not supported by this model' },
+  })
+
+  /** 带图 user 消息 */
+  function imageMessages(): ChatMessage[] {
+    return [
+      { role: 'user', content: 'describe', images: ['data:image/png;base64,AAAA'] },
+    ]
+  }
+
+  it('strips images and retries once when the model rejects image parts', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const rejectedCb = vi.fn()
+    setOnImagesRejected(rejectedCb)
+    const sse = 'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n'
+    const fetchMock = vi.fn(async (_url: unknown, init: unknown) => {
+      const body = JSON.parse((init as RequestInit).body as string) as {
+        messages: Array<{ content?: unknown }>
+      }
+      const hasImagePart = body.messages.some(
+        (m) => Array.isArray(m.content) && (m.content as Array<{ type?: string }>).some((p) => p.type === 'image_url'),
+      )
+      if (hasImagePart) {
+        return new Response(IMAGE_400, { status: 400, headers: { 'content-type': 'application/json' } })
+      }
+      return new Response(sse, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    })
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
+
+    const chunks = await collect(
+      openaiAdapter.stream(
+        { model: 'test-model', messages: imageMessages() },
+        new AbortController().signal,
+      ),
+    )
+
+    // 首发（带图 400）→ 剥图重试（200）
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const retried = sentBody(fetchMock, 1).messages[0] as { content: string }
+    expect(retried.content).toContain('describe')
+    expect(retried.content).toContain('[image omitted]')
+    expect(chunks.some((c) => c.type === 'text-delta' && c.text === 'ok')).toBe(true)
+    // 拒图回调已通知（agentLoop 借此清理持久历史）
+    expect(rejectedCb).toHaveBeenCalledOnce()
+    warnSpy.mockRestore()
+  })
+
+  it('remembers the rejection for the page session and notifies the callback once', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const rejectedCb = vi.fn()
+    setOnImagesRejected(rejectedCb)
+    const sse = 'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n'
+    const fetchMock = vi.fn(async (_url: unknown, init: unknown) => {
+      const body = JSON.parse((init as RequestInit).body as string) as {
+        messages: Array<{ content?: unknown }>
+      }
+      const hasImagePart = body.messages.some(
+        (m) => Array.isArray(m.content) && (m.content as Array<{ type?: string }>).some((p) => p.type === 'image_url'),
+      )
+      if (hasImagePart) {
+        return new Response(IMAGE_400, { status: 400, headers: { 'content-type': 'application/json' } })
+      }
+      return new Response(sse, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    })
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
+
+    // 第一次：400 → 剥图重试成功（回调一次）
+    await collect(
+      openaiAdapter.stream(
+        { model: 'test-model', messages: imageMessages() },
+        new AbortController().signal,
+      ),
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(rejectedCb).toHaveBeenCalledTimes(1)
+
+    // 第二次：会话开关已置位，直接剥图首发——1 次请求即 200，回调不再重复
+    await collect(
+      openaiAdapter.stream(
+        { model: 'test-model', messages: imageMessages() },
+        new AbortController().signal,
+      ),
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(rejectedCb).toHaveBeenCalledTimes(1)
+    warnSpy.mockRestore()
   })
 })

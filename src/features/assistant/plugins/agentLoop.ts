@@ -8,9 +8,9 @@
 import { Context, Service } from 'cordis'
 import type { ChatMessage, ToolCall } from '../agenttypes/assistant'
 import type { ToolCategory } from '../tools/defineTool'
-import { MAX_AGENT_STEPS, MAX_HISTORY_MESSAGES, MAX_EMPTY_STREAM_RETRIES, TOOL_RESULT_CHARS, TOOL_STUB_KEEP, HISTORY_CHAR_BUDGET } from '../agentconfig/defaults'
+import { MAX_AGENT_STEPS, MAX_HISTORY_MESSAGES, MAX_EMPTY_STREAM_RETRIES, TOOL_RESULT_CHARS, TOOL_STUB_KEEP, HISTORY_CHAR_BUDGET, COMPACT_TRIGGER_CHARS, COMPACT_SUMMARY_MAX_TOKENS } from '../agentconfig/defaults'
 import { writeArchive } from '../utils/opfsStore'
-import { isLlmConfigured, sanitizeToolName } from '../agentservices/openaiAdapter'
+import { isLlmConfigured, sanitizeToolName, setOnImagesRejected } from '../agentservices/openaiAdapter'
 import { buildDatasetOverview } from '../providers/analysisContext'
 import { renderDataset } from '../tools/frontendContextTools'
 import { t } from '@/i18n'
@@ -49,37 +49,11 @@ export interface AgentEvents {
   'assistant/message-done': (message: ChatMessage) => void
   /** turn 结束 */
   'assistant/turn-end': (aborted: boolean) => void
+  /** 历史 compact 完成（摘要替换了旧历史）。参数：压缩前字符总量、摘要长度 */
+  'assistant/compacted': (beforeChars: number, afterChars: number) => void
   /** 错误 */
   'assistant/error': (message: string) => void
 }
-
-// ---- 快捷问题模板 ----
-
-export interface QuickPrompt {
-  /** i18n key 后缀（common.assistant.quick.<tKey>），按钮文案按界面语言显示 */
-  tKey: 'summarize' | 'explain' | 'preprocess' | 'report'
-  /** 发给模型的实际提问（英文，与界面语言无关） */
-  text: string
-}
-
-export const QUICK_PROMPTS: QuickPrompt[] = [
-  {
-    tKey: 'summarize',
-    text: 'Please summarize the current dataset — its dimensions, instrument, data mode, and key characteristics.',
-  },
-  {
-    tKey: 'explain',
-    text: 'Explain the currently selected ion image: what spatial patterns do you see in the statistics, and what might they indicate biologically?',
-  },
-  {
-    tKey: 'preprocess',
-    text: 'Based on the current dataset characteristics, what preprocessing and analysis methods would you recommend?',
-  },
-  {
-    tKey: 'report',
-    text: 'Write a brief analysis report for this dataset, including data quality, key ions found, spatial patterns, and biological interpretation.',
-  },
-]
 
 // ---- AgentLoop 服务 ----
 
@@ -107,14 +81,33 @@ export class AgentLoop extends Service {
 
   constructor(ctx: Context) {
     super(ctx, 'agent')
+    // 拒图降级的善后：openaiAdapter 识别出「模型不吃图片」的 400 并剥图重试时，
+    // 持久 history 里 user 消息的 images 必须同步清掉——否则带图消息留在历史里，
+    // 之后每条纯文字提问都重发同一张图，会话每轮 400 直到手动清空（刷新也救不回：
+    // localStorage 恢复逻辑会把 images 一并回灌）。替换为占位文字而非删除消息，
+    // 保持对话轮次完整。
+    setOnImagesRejected(() => this.stripHistoryImages())
+  }
+
+  /** 清掉持久历史里所有 user 消息的 images（换成占位文字，保留轮次结构） */
+  private stripHistoryImages(): void {
+    for (const m of this.history) {
+      if (m.role === 'user' && m.images?.length) {
+        const note = m.images.length > 1 ? `[${m.images.length} images omitted]` : '[image omitted]'
+        m.content = m.content ? `${m.content}\n${note}` : note
+        m.images = undefined
+      }
+    }
   }
 
   /**
    * 发送 user 消息，启动一个 turn。
    * 不注入任何数据快照——页面状态一律由模型按需调用 get_page_state 等
    * 工具实时读取（避免历史中残留过时快照，且兼容纯工具调用模型）。
+   * @param images 多模态：附带的图片 base64 dataURL（仅视觉模型可消费；
+   *  非 vision 模型 400 后适配器会剥图重试并回调清掉历史里的 images）
    */
-  async send(userText: string): Promise<void> {
+  async send(userText: string, images?: string[]): Promise<void> {
     if (this.abortController) {
       // 已有进行中的 turn → 先 abort
       this.stop()
@@ -138,6 +131,11 @@ export class AgentLoop extends Service {
 
     try {
       const userMsg: ChatMessage = { role: 'user', content: userText }
+      if (images && images.length > 0) userMsg.images = images
+      // 自动 Compact（先于新 user 入列——此刻历史尾部必是完整消息边界，
+      // 不存在悬空 tool_calls；compact 把整段旧历史换成「标记 user + 摘要
+      // assistant」，失败静默降级走下方 trimHistory 兜底）
+      await this.maybeCompact(signal)
       this.history.push(userMsg)
       // 裁剪历史
       await this.trimHistory()
@@ -293,8 +291,8 @@ export class AgentLoop extends Service {
 
         // 中止后不回填工具结果：send() 对旧 turn 只等 50ms，writeArchive 的
         // 串行 OPFS 链路可能远超之——迟到的 tool 消息会排到下一 turn 的
-        // user 消息之后（其配对的 tool_calls 在更早处），OpenAI/Anthropic
-        // 两种协议都对此 400 且现有折梯/裁剪均无法修复，会话将持续报错
+        // user 消息之后（其配对的 tool_calls 在更早处），OpenAI 兼容端点
+        // 对此 400 且现有折梯/裁剪均无法修复，会话将持续报错
         // 直到清空。execute 内部已把中止转成正常返回，这里必须显式重查。
         if (signal.aborted) return
 
@@ -489,7 +487,7 @@ export class AgentLoop extends Service {
     }
 
     // 工具列表（按 category 分组：页面数据 → 文件/账户 → 化学信息 → 生物信息
-    // → 谱库搜索 → 文献 → 系统，帮助模型按问题域选工具）
+    // → 文献 → 系统，帮助模型按问题域选工具）
     const defs = this.ctx.tools.list()
     if (defs.length > 0) {
       const lines = [
@@ -501,7 +499,6 @@ export class AgentLoop extends Service {
         { key: 'files', heading: 'Files & account (backend)' },
         { key: 'chemistry', heading: 'Chemical information (PubChem / offline library / ChEBI)' },
         { key: 'biology', heading: 'Biology (HMDB metabolites / KEGG pathways)' },
-        { key: 'spectral', heading: 'Spectral library search (reference MS/MS)' },
         { key: 'literature', heading: 'Literature (PubMed / Europe PMC / OpenAlex)' },
         { key: 'system', heading: 'Assistant internals' },
         { key: undefined, heading: 'Other' },
@@ -528,10 +525,118 @@ export class AgentLoop extends Service {
   }
 
   /**
-   * 裁剪历史：条数上限（MAX_HISTORY_MESSAGES）+ 字符预算（HISTORY_CHAR_BUDGET）。
-   * 预算从最旧开始吃：超长 tool 结果替换为「截断 + OPFS 存档」存根（模型可
-   * 用 read_archived_result 取回），更早的长 assistant 回复压成前缀。最近
-   * 4 条始终完整保留（当前正在推理的上下文）。
+   * 自动 Compact：历史总量超过 COMPACT_TRIGGER_CHARS 时，用一次独立的
+   * 无工具 LLM 请求把整段对话压成结构化摘要，替换全部旧历史。
+   *
+   * 只在 send() 内、新 user 消息入列前调用（turn 边界）：
+   * - 此刻历史里不存在悬空 tool 消息（上一 turn 已完整收口），摘要请求
+   *   不会携带 tool_calls 配对问题；
+   * - 压缩后的新历史以 user 开头（压缩标记），满足「首条必须 user」的
+   *   端点约束。
+   *
+   * 任何失败（abort / 空流 / 异常）都静默返回 false：调用方（send）接着走
+   * trimHistory 被动兜底，绝不能因为压缩失败阻断用户消息。
+   */
+  private async maybeCompact(signal: AbortSignal): Promise<boolean> {
+    let total = 0
+    for (const m of this.history) total += this.historyCost(m)
+    if (total <= COMPACT_TRIGGER_CHARS) return false
+
+    const summary = await this.summarizeForCompact(signal)
+    if (!signal.aborted && summary) {
+      const before = total
+      this.history = [
+        {
+          role: 'user',
+          content:
+            '[system: the earlier conversation has been compacted to save context. ' +
+            'The summary below replaces everything before the next user message. ' +
+            'Tool results mentioned there are still retrievable via read_archived_result.]',
+        },
+        { role: 'assistant', content: summary },
+      ]
+      let after = 0
+      for (const m of this.history) after += this.historyCost(m)
+      this.ctx.emit('assistant/compacted', before, after)
+      return true
+    }
+    return false
+  }
+
+  /** compact 摘要请求：一次无工具、限长的独立调用（走 ctx.llm 流式管道，
+   *  但不 emit message-delta——这是内部压缩，不是面向用户的回复） */
+  private async summarizeForCompact(signal: AbortSignal): Promise<string | null> {
+    const summaryMessages: ChatMessage[] = [
+      {
+        role: 'system',
+        content:
+          'You compress conversation histories for an MSI data-analysis assistant. ' +
+          'Summarize the conversation so the assistant can continue seamlessly with ' +
+          'no loss of operational facts. Keep it under 2000 tokens. Structure:\n' +
+          '## Confirmed findings\n(concrete conclusions with numbers/molecule names, and how confident)\n' +
+          '## Tools & data touched\n(which tools were called with what key results; note "archived" ' +
+          'pointers — those can be re-fetched with read_archived_result by id)\n' +
+          '## User intent & open questions\n(what the user wants next, unresolved threads)\n' +
+          'Write in the conversation language. Facts only — no pleasantries.',
+      },
+      { role: 'user', content: this.renderHistoryForSummary() },
+    ]
+
+    let summary = ''
+    try {
+      for await (const chunk of this.ctx.llm.stream(
+        {
+          model: '',
+          messages: summaryMessages,
+          // 不带 tools：摘要请求绝不能触发工具调用；maxTokens 限长防摘要膨胀
+          maxTokens: COMPACT_SUMMARY_MAX_TOKENS,
+        },
+        signal,
+      )) {
+        if (signal.aborted) return null
+        if (chunk.type === 'text-delta') summary += chunk.text
+        if (chunk.type === 'finish' && chunk.reason === 'error') return null
+      }
+    } catch {
+      return null
+    }
+    const trimmed = summary.trim()
+    return trimmed.length > 0 ? trimmed : null
+  }
+
+  /** 历史渲染给摘要模型：工具调用压成「调用名(参数摘要) → 结果首行」，
+   *  长内容截断（摘要只需要事实线索，不需要全文） */
+  private renderHistoryForSummary(): string {
+    const lines: string[] = []
+    for (const m of this.history) {
+      switch (m.role) {
+        case 'user': {
+          const imgs = m.images?.length ? ` [${m.images.length} image(s) attached]` : ''
+          lines.push(`USER: ${m.content ?? ''}${imgs}`)
+          break
+        }
+        case 'assistant': {
+          const calls = (m.tool_calls ?? [])
+            .map((tc) => `    ${tc.name}(${tc.arguments.slice(0, 120)})`)
+            .join('\n')
+          const body = m.content ? `ASSISTANT: ${m.content.slice(0, 1_500)}` : 'ASSISTANT: (tool calls)'
+          lines.push(calls ? `${body}\n${calls}` : body)
+          break
+        }
+        case 'tool':
+          lines.push(`  -> ${m.name ?? 'tool'}: ${(m.content ?? '').slice(0, 400)}`)
+          break
+      }
+    }
+    return lines.join('\n')
+  }
+
+  /**
+   * 裁剪历史：条数上限（MAX_HISTORY_MESSAGES）+ 图片只留最近一条 user 消息
+   * （旧图换占位，dataURL 几百 KB 一张，留在历史里每轮全量重传）+ 字符预算
+   * （HISTORY_CHAR_BUDGET，图片计入）。预算从最旧开始吃：超长 tool 结果替换为
+   * 「截断 + OPFS 存档」存根（模型可用 read_archived_result 取回），更早的长
+   * assistant 回复压成前缀。最近 4 条始终完整保留（当前正在推理的上下文）。
    */
   private async trimHistory(): Promise<void> {
     if (this.history.length > MAX_HISTORY_MESSAGES) {
@@ -542,7 +647,7 @@ export class AgentLoop extends Service {
       while (start < this.history.length && this.history[start]!.role === 'tool') start++
       // 两个必须回退到 user 起点的情形（窗口略超条数上限无害，token 上限
       // 由字符预算兜底）：
-      // 1) 跳过 tool 后窗口以 assistant 开头——Anthropic 端点要求首条消息
+      // 1) 跳过 tool 后窗口以 assistant 开头——部分端点要求首条消息
       //    必须 user，assistant-first 一律 400 且此后每轮都炸（整会话报废）；
       // 2) 单步并行工具调用 ≥ MAX_HISTORY_MESSAGES 时 start 会越过尾端，
       //    slice 出空窗口（两家端点都 400）。
@@ -551,9 +656,32 @@ export class AgentLoop extends Service {
       this.history = this.history.slice(start)
     }
 
+    // 图片先剥（无条件，不看预算）：base64 dataURL 单张几百 KB，即使整段历史
+    // 文本远低于字符预算，旧图片也会让每轮请求全量重传（体积/延迟/网关 body
+    // 上限三重坑）。只保留最近 keepRecent 条消息里最后一条带图 user 消息的
+    // 图片——视觉追问通常紧跟着发图的那轮；更早的一律换占位文字。
+    {
+      const keepRecent = 4
+      let lastImageIdx = -1
+      for (let i = this.history.length - 1; i >= this.history.length - keepRecent && i >= 0; i--) {
+        if (this.history[i]!.role === 'user' && this.history[i]!.images?.length) {
+          lastImageIdx = i
+          break
+        }
+      }
+      for (let i = 0; i < this.history.length; i++) {
+        const m = this.history[i]!
+        if (i === lastImageIdx || !(m.role === 'user' && m.images?.length)) continue
+        const note =
+          m.images.length > 1 ? `[${m.images.length} images omitted]` : '[image omitted]'
+        m.images = undefined
+        m.content = m.content ? `${m.content}\n${note}` : note
+      }
+    }
+
     // 字符预算（条数裁剪后仍可能超：一批接近截断线的工具结果 + 长回复）
     let total = 0
-    for (const m of this.history) total += m.content?.length ?? 0
+    for (const m of this.history) total += this.historyCost(m)
     if (total <= HISTORY_CHAR_BUDGET) return
 
     const keepRecent = 4
@@ -583,6 +711,13 @@ export class AgentLoop extends Service {
         m.content = stub
       }
     }
+  }
+
+  /** 消息占用预算的字符量：正文 + 图片 dataURL（不把图片计入的话每轮全量重传） */
+  private historyCost(m: ChatMessage): number {
+    let cost = m.content?.length ?? 0
+    if (m.images) for (const d of m.images) cost += d.length
+    return cost
   }
 }
 

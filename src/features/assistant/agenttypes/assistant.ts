@@ -21,6 +21,12 @@ export interface ToolCall {
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string | null
+  /**
+   * user 消息附带的图片（多模态）：base64 dataURL（`data:image/png;base64,…`）。
+   * 仅 user 消息使用；wire 序列化时转成 OpenAI content-parts（text + image_url）。
+   * 不随 tool/system/assistant 上 wire（这些角色不支持图片）。
+   */
+  images?: string[]
   /** assistant 消息：本轮要调用的工具 */
   tool_calls?: ToolCall[]
   /** tool 消息：对应的调用 id */
@@ -249,6 +255,8 @@ export interface UiChatItem {
   id: string
   role: 'user' | 'assistant'
   content: string
+  /** user 消息附带的图片缩略（base64 dataURL），气泡内展示 */
+  images?: string[]
   /** 推理模型（如 mimo/deepseek-r1）的思考过程；思考中或思考完均可有值 */
   reasoning?: string
   /** 思考进行中（reasoning 仍在增长，content 未开始） */
@@ -259,6 +267,9 @@ export interface UiChatItem {
   interrupted?: boolean
   /** 连接中途断开：内容已保留但可能不完整 */
   truncated?: boolean
+  /** 系统 compact 提示条（非模型产出；渲染为居中灰色提示而非气泡，
+   *  历史恢复注入时被过滤，不会回灌模型） */
+  compacted?: boolean
   /** 错误态（可重试） */
   error?: string
   /** 本条目产生期间发生的工具调用记录（折叠卡展示） */
