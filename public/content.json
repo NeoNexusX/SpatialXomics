@@ -55,6 +55,27 @@
   "timeline": [
     {
       "date": {
+        "en": "November 3",
+        "zh-CN": "11月3日"
+      },
+      "version": "0.7.6",
+      "features": [
+        {
+          "en": "Downloads now require a complete research profile (institution, position, field, region)",
+          "zh-CN": "下载前需补全研究者身份信息（机构、职位、研究领域、地区）"
+        },
+        {
+          "en": "Shared collection pages now require sign-in; downloads use authenticated endpoints",
+          "zh-CN": "集合分享页统一为登录后查看，下载改走认证接口"
+        },
+        {
+          "en": "Homepage features section now bilingual with auto-fitted gallery words",
+          "zh-CN": "首页功能展示支持中英双语，悬浮词字号自适应"
+        }
+      ]
+    },
+    {
+      "date": {
         "en": "October 21",
         "zh-CN": "10月21日"
       },
@@ -108,31 +129,6 @@
         {
           "en": "Documentation overhaul: unified guides and account pages",
           "zh-CN": "文档大更新：指南统一与账号管理重写"
-        }
-      ]
-    },
-    {
-      "date": {
-        "en": "September 24",
-        "zh-CN": "9月24日"
-      },
-      "version": "0.7.3",
-      "features": [
-        {
-          "en": "Collections v2 revamp with metadata vocabulary",
-          "zh-CN": "集合中心 v2 改版，元数据接入词表"
-        },
-        {
-          "en": "One-click share link copy",
-          "zh-CN": "分享链接一键复制"
-        },
-        {
-          "en": "Private datasets shareable without going public",
-          "zh-CN": "私有数据集可直接分享，无需设公开"
-        },
-        {
-          "en": "Unified loading skeletons and UI polish",
-          "zh-CN": "加载骨架统一与界面优化"
         }
       ]
     }
