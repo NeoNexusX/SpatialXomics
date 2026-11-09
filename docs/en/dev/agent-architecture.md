@@ -4,11 +4,15 @@ SXO-Harness runs in the browser. Vue consumes the `ctx.agent` facade; Cordis plu
 
 The production composition is `src/features/agent/bundles/base.ts`. For user operations, see [SXO-Harness Agent](../guide/sxo-harness); for verification, see [Testing and E2E](./testing).
 
+<ArchDiagram name="agent.architecture" title="Agent architecture" />
+
 ## Entry and composition
 
 `Navbar.vue` statically imports the lightweight `FloatingAgent.vue` shell for visibility, dragging, and resizing. `AgentWorkspace.vue` is an async component, also prefetched during browser idle time. Async splitting therefore does not imply that downloading waits for a click. `whenAgentReady()` lazily creates and caches the module-level runtime singleton. Closing the panel does not dispose the runtime or stop its active turn.
 
 `bootstrap.ts` creates a Cordis root context and installs the production bundle with `ctx.plugin()`. Row order is not dependency order: class plugins use `static inject`, and module plugins use `inject`. Readiness waits for every fiber to become active, reports failing plugin IDs, and disposes the root fiber during HMR.
+
+<ArchDiagram name="cordis-relationships.architecture" title="Cordis and the project" />
 
 | Layer | Modules | Responsibility |
 | --- | --- | --- |
@@ -19,6 +23,7 @@ The production composition is `src/features/agent/bundles/base.ts`. For user ope
 | Facts and read models | `session`, `session-projection`, `session-transcript` | Commit events, maintain model-visible history, derive UI and statistics |
 | Storage | `session-persistence`, `session-persistence-opfs`, `attachments`, `session-archive` | Storage contract, OPFS implementation, artifact references, ZIP migration |
 | Models and policies | `connection`, `llm`, `llm-anthropic`, `model-catalog`, `llm-retry`, `token-meter`, `compaction` | Connection resolution, protocol isolation, vision probing, retries, budgets |
+| Prompt and analysis binding | `system-prompt`, `persona`, `agent-instructions`, `analysis-binding` | Compose the system prompt and session instructions; capture and verify the dataset binding |
 | Domain capabilities | `tools`, `tool-*`, `skill`, `skill-bundled` | Registration, execution pipeline, result archives, skill catalog and text |
 
 ## Facade and turn driver

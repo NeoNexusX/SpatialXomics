@@ -116,6 +116,7 @@ beforeAll(async () => {
   i18n.global.locale.value = 'en'
   await loadCoreMessages('en')
   await loadFeatureMessages('vizworkbench')
+  await loadFeatureMessages('databases')
 })
 
 beforeEach(() => {

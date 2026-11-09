@@ -35,7 +35,7 @@ const dataset = {
 } as File
 
 const mountDialog = (open = false) =>
-  mount(FileMetadataDialog, { props: { open, dataset }, global: { plugins: [i18n] } })
+  mount(FileMetadataDialog, { props: { open, dataset }, global: { plugins: [i18n], stubs: { SvgIcon: true } } })
 
 
 // 组件模板用 $t：挂载时装上 i18n 实例，并预先加载英文语言包（断言保持英文原文）

@@ -1,6 +1,6 @@
 # 图标使用规范
 
-应用图标统一通过 Iconify 渲染，并把使用到的图标子集打进仓库，避免生产环境依赖 Iconify 公共 API。
+应用图标通过 Iconify 渲染，并把使用到的图标子集打进仓库，避免生产环境依赖 Iconify 公共 API。SXO-Harness 界面是例外，见下文。
 
 ## 使用方式
 
@@ -35,6 +35,10 @@ import { Icon } from '@iconify/vue'
 - `lucide`：目前用于 `lasso` 和 `square`。
 
 不要在未更新离线清单的情况下使用其他集合。
+
+### SXO-Harness 组件
+
+`src/features/agent/components` 下的组件沿用 shadcn-vue 的写法，直接从 `@lucide/vue` 引入图标。它随代码打包，不发网络请求，也不需要进离线清单。只在这个目录使用，其他界面继续用 `SvgIcon`。
 
 ## 离线 bundle
 

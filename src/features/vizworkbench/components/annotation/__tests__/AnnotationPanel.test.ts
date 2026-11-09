@@ -73,20 +73,21 @@ const acquisition: Acquisition = {
   storageMode: 'continuous',
 }
 
-// 本文件是重集成测试（真实 worker harness + settle() 的固定 220ms 等待）：
-// 最重用例单独跑约 3.8s，在 coverage / 全量并行的负载下会超过默认 5s 上限。
-// 统一放宽到 15s——超时只是失败上限，不影响正常用例的耗时。
-vi.setConfig({ testTimeout: 15_000 })
-
 /** 测试数据当作对齐数据集：平均轴 + 平均谱 */
 const spectrum = parseTestSpectrum(positiveCsv)
 
 beforeAll(async () => {
-  await Promise.all([loadCoreMessages('en'), loadFeatureMessages('vizworkbench')])
+  await Promise.all([
+    loadCoreMessages('en'),
+    loadFeatureMessages('vizworkbench'),
+    loadFeatureMessages('databases'),
+  ])
   dataModeRef.value = 'continuous'
 })
 
 beforeEach(() => {
+  // 只接管 setTimeout：结果批量刷新和防抖不用真等，worker 和 Promise 仍然走真实调度
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   vi.clearAllMocks()
   vi.mocked(loadStoredDb).mockResolvedValue(null)
   vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected database download'))
@@ -95,7 +96,10 @@ beforeEach(() => {
   meanSpectrumRef.value = spectrum.mean
 })
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 afterAll(() => {
   mzAxisRef.value = null
@@ -106,7 +110,7 @@ afterAll(() => {
 const settle = async () => {
   for (let i = 0; i < 2; i++) {
     await flushPromises()
-    await new Promise((r) => setTimeout(r, 220))
+    await vi.advanceTimersByTimeAsync(220)
   }
 }
 

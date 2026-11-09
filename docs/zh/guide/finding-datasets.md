@@ -1,10 +1,10 @@
-# 数据查找
+# 查找数据集
 
 本文介绍SpatialXomics的公开数据集与个人数据集的搜索、筛选方式，以及数据集列表的排序模式。
 
 作者：陈柯江
 
-问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
+问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
 
 
 
@@ -45,7 +45,6 @@
 | **Filename**             | 平台生成的数据集文件名 | 文本输入 | 0e75ee_Human_Brain_MALDI_20_Positive                         |
 | **Experiment Type**      | 实验/数据类型          | 多选     | imzML、Other                                                 |
 | **提交者**               | 数据提交者的用户名     | 文本输入 | —                                                            |
-| **Owner**                | 数据集拥有者           | 文本输入 | —（仅公开数据集列表显示）                                    |
 | **Organism**             | 样本物种               | 多选     | Human (Homo sapiens)、Mouse (Mus musculus)、Rat、Zebrafish…  |
 | **Organism Part**        | 取材部位/组织          | 多选     | Brain、Heart、Liver、Tumor、Whole organism…                  |
 | **Condition**            | 样本状态/实验条件      | 多选     | Control、Disease、Cancer、Drug-treated、Genetic modification… |
@@ -59,7 +58,7 @@
 | **Ionisation Source**    | 离子源                 | 多选     | MALDI、DESI、SIMS、AP-MALDI、LDI…                            |
 | **Analyzer**             | 质量分析器             | 多选     | Orbitrap Exploris 480、Q Exactive HF、timsTOF fleX、TOF…     |
 
-「多选」字段为标签式输入：既可从词表下拉中勾选，也可自由输入；同一字段的多个取值之间为"或"的关系。「我的数据集」页不显示 Owner 筛选——该列表始终只显示你自己上传的数据集。
+「多选」字段为标签式输入：既可从词表下拉中勾选，也可自由输入；同一字段的多个取值之间为"或"的关系。
 
 
 

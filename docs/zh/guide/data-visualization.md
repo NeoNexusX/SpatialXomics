@@ -4,7 +4,7 @@
 
 作者：陈柯江
 
-问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
+问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
 
 
 
@@ -16,7 +16,7 @@
 
 ![image-20260909211924082](https://cdn.neonexus.top/docs/20260909211924161.jpg_view)
 
-当数据集处在”Explore“时，此时数据集还在待处理阶段，还无法查看可视化结果，需点击`Explore`后再选择`Generate`创建数据预处理任务，创建成功后，将自动跳转至Workspace页面，页面具体信息见[工作区](./workspace)。
+当数据集处在”Explore“时，此时数据集还在待处理阶段，还无法查看可视化结果，需点击`Explore`后再选择`Generate`创建数据预处理任务，创建成功后，将自动跳转至Workspace页面，页面具体信息见[工作台](./workspace)。
 
 ![image-20260909212549202](https://cdn.neonexus.top/docs/20260909212549240.jpg_view)
 
@@ -159,7 +159,7 @@ Continuous 数据可将多个离子同时叠加为多个颜色通道显示。开
 
 **仅 Centroid 数据可用**，用于比较两个区域（A vs B）的谱图差异。主要有两类数据来源，KMeans 聚类产生的 clusters或用户绘制的 ROIs，现就以上两类数据比较做一流程介绍。
 
-设置最低检出率（Minimum detection rate）与强度阈值（Intensity threshold）后点击`Compare`进行比较。比较时同一组的多个成员先合并（并集），结果分为五类：**仅 A（A only）**、**仅 B（B only）**、**A 富集（A enriched）**、**B 富集（B enriched）**、**共有（Shared）**，并显示两边的检出率与平均强度。
+设置最低检出率（Min detection rate）与强度阈值（Intensity threshold）后点击`Compare`进行比较。比较时同一组的多个成员先合并（并集），结果分为五类：**仅 A（A only）**、**仅 B（B only）**、**A 富集（A enriched）**、**B 富集（B enriched）**、**共有（Shared）**，并显示两边的检出率与平均强度。
 
 ##### 2.4.1 KMeans 聚类产生的 clusters
 
@@ -241,9 +241,9 @@ Continuous 数据可将多个离子同时叠加为多个颜色通道显示。开
 
 | 部分 | 默认权重 | 含义 |
 | --- | --- | --- |
-| 质量 | 0.6 | 质量误差越小越高（误差为 0 时为 1，到容差边缘约 0.14） |
-| 加合适配度 | 0.1 | 该加合物与采集条件的匹配程度 |
-| 空间 | 0.3 | 0.2 × 空间混乱度 + 0.8 × 同分子共定位（见下） |
+| 质量 | 0.4 | 质量误差越小越高（误差为 0 时为 1，到容差边缘约 0.14） |
+| 加合适配度 | 0.2 | 该加合物与采集条件的匹配程度 |
+| 空间 | 0.4 | 0.2 × 空间混乱度 + 0.8 × 同分子共定位（见下） |
 
 FDR 用 target-decoy 方法估计：给每个分子式配上化学上不可能出现的加合物（如 [M+Pt]⁺）作为 decoy，走同样的匹配和打分，得到每行的 q 值，越小越可信。
 

@@ -12,7 +12,7 @@
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "test:unit": "vitest",
-    "test:unit:run": "vitest run --coverage --passWithNoTests",
+    "test:unit:run": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:offline": "playwright test --project=\"offline-*\"",
     "build-only": "vite build",

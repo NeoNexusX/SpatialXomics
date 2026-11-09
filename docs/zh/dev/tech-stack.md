@@ -20,12 +20,12 @@ npm run dev
 |---|---|
 | 应用框架 | Vue 3、TypeScript、Pinia、Vue Router |
 | 构建与样式 | Vite 7、Tailwind CSS 4、DaisyUI 5 |
-| 图标 | Iconify，构建前抽取 `heroicons`、`simple-icons`、`lucide` 子集并离线注册 |
+| 图标 | Iconify，构建前抽取 `heroicons`、`simple-icons`、`lucide` 子集并离线注册；SXO-Harness 界面使用 `@lucide/vue` |
 | 图表 | ECharts、`vue3-calendar-heatmap` |
 | HTTP | Axios |
 | 国际化 | `vue-i18n`（Composition 模式），语言包按命名空间拆分为 JSON 并随路由懒加载；`@intlify/unplugin-vue-i18n` 构建优化，`@intlify/eslint-plugin-vue-i18n` 检查缺失/多余 key |
 | 上传 | `hash-wasm` 计算 MD5，`@zip.js/zip.js` 生成 ZIP64，`ali-oss` 分片上传 |
-| Zarr | 项目内的 Zarr v3/OSS Range reader，`zstddec` 解压；兼容 MassFlow layout 1.0/1.1 |
+| Zarr | 项目内的 Zarr v3/OSS reader（按对象读取，不发 Range 请求），`zstddec` 解压；兼容 MassFlow layout 1.0/1.1 |
 | PubChem | 注释结果的化合物查询 |
 | 聚类 | 后端生成 UMAP；浏览器通过 `ml-kmeans` 在 UMAP embedding 上计算 KMeans |
 | 注释 | 无第三方依赖：元素与加合物质量表在 `src/shared/chem`；浏览器端（Worker）完成特征峰匹配、质量 / 加合适配度 / 空间（METASPACE 混乱度 + 同分子共定位）打分与 target-decoy FDR |
@@ -67,8 +67,8 @@ src/
 | `npm run lint` / `lint:check` | ESLint 自动修复 / 只检查 |
 | `npm run format` / `format:check` | 仅格式化/检查 `src/` |
 | `npm run test:unit` / `test:unit:run` | Vitest watch / 单次运行 |
-| `npm run test:e2e` | 全部 Playwright 项目，真实后端组需要账号 |
-| `npm run test:e2e:offline` | 三浏览器固定响应回归，无需后端与密钥 |
+| `npm run test:e2e` | 默认 Playwright 项目（不含 WebKit），真实后端组需要账号 |
+| `npm run test:e2e:offline` | Chromium 和 Firefox 固定响应回归，无需后端与密钥 |
 | `npm run check` | 并行执行类型检查、lint 和单元测试 |
 | `npm run icons:bundle` | 重新生成离线图标 bundle |
 | `npm run docs:dev` / `docs:build` / `docs:preview` | 开发、构建、预览文档站 |
@@ -79,8 +79,9 @@ src/
 - Vite 环境文件位于 `env/`。本地覆盖可使用 `env/.env.development.local`；运行时业务配置由 `public/config.json` 提供，并在应用挂载前加载。
 - `config.json` 可配置站点名称、导航与悬浮按钮、分页、验证码、Zarr 读取参数等全站设置。SXO-Harness 没有独立开关：悬浮按钮的 `toggle-ai` 入口走通用 `active` / `requireAuth` 规则，当前对已登录用户开启。对话需要提供 `/v1/messages` 的端点：可以是部署级默认（`VITE_LLM_PROXY_URL` / `VITE_LLM_API_KEY` / `VITE_LLM_MODEL`），也可以由用户在连接设置里填写地址和密钥，再选一个通过多模态测试的模型。两者皆无时，面板会直接落在连接设置。联网搜索使用 Exa 托管的 MCP，可用 `VITE_EXA_API_KEY` 提高额度，留空走匿名额度。`VITE_LLM_API_KEY` 和 `VITE_EXA_API_KEY` 都会打进前端包，只能放受限的子 key，不要放官方主 key。
 - 首页展示内容（Hero 文案、功能展示、时间线、团队、联系信息、提交热力图）拆在 `public/content.json`，由 `/` 路由在进入首页时加载，与首页 chunk 并行；这样它的体积不会压在全站启动的关键路径上。取不到时首页降级为不显示这些区块，不影响其他页面。
+- SXO-Harness 的 KEGG 工具请求同源 `/kegg-rest/`，由 Vite（开发和 `vite preview`）或 nginx（Docker 部署）转发到 `https://rest.kegg.jp/`，自定义托管要配置同样的转发。HMDB 工具读取 `public/data/hmdb-index.json`，这个索引不入库，按 `scripts/build-hmdb-index.mjs` 的文件头说明生成。
 - 上传表单的下拉选项与 ion source 必填规则不再走 JSON，已编译进代码（`datasetMetadata.ts` / `ionSourceRules.ts`），随路由 chunk 长缓存，修改后需重新构建。
-- `test` 分支先执行 `npm run check` 和文档构建，再分别运行无需 secrets 的三浏览器离线回归，以及需要账号的真实后端三浏览器测试和中文冒烟。
+- `test` 分支先执行 `npm run check` 和文档构建，再运行 Chromium 和 Firefox 的 E2E：无需 secrets 的离线回归、需要账号的真实后端测试和中文冒烟。
 - 推送 `dev` 或 `main` 会分别触发对应部署 workflow。Docker 多阶段构建同时生成 `dist/` 和 `dist-docs/`，Nginx 在 `/docs/` 提供文档站。
 
 私有配置值是否提交由仓库策略决定；前端 `VITE_*`、`public/config.json` 和 `public/content.json` 最终都会进入浏览器，不能作为真正的服务端秘密。

@@ -5,6 +5,7 @@ import IconSelect from '../IconSelect.vue'
 const mountSelect = (props: Record<string, unknown> = {}) =>
   mount(IconSelect, {
     props: { modelValue: '', options: ['profile', 'centroid'], placeholder: 'Select...', ...props },
+    global: { stubs: { SvgIcon: true } },
   })
 
 const placeholderOption = (wrapper: ReturnType<typeof mountSelect>) => wrapper.find('option')

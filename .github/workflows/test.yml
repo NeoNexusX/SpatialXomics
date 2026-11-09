@@ -6,9 +6,8 @@
 #   - 代码推送到 test 分支时触发（PR 合并后执行完整测试）
 #
 # 流程：
-#   1. 代码检查（type-check + lint + unit test）
-#   2. 构建（test 环境变量）
-#   3. e2e 测试（Playwright，CI 模式）
+#   1. 代码检查（type-check + lint + unit test + 文档构建）
+#   2. E2E（构建生产 SPA 后跑默认 Playwright 项目，不含 WebKit）
 #   （合并到 dev 由开发者手动操作 PR）
 # ============================================================
 
@@ -43,37 +42,14 @@ jobs:
       # 与部署阶段 docker build 内的 `RUN npm run docs:build` 行为一致，提前到 PR 阶段拦截
       - run: npm run docs:build
 
-  # 固定 HTTP 响应的浏览器回归独立运行，不依赖账号和 LLM secrets。
-  e2e-offline:
-    needs: check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps
-      - run: npm run build
-        env:
-          VITE_API_BASE: /api
-      - run: npm run test:e2e:offline
-        env:
-          CI: 'true'
-      - uses: actions/upload-artifact@v5
-        if: always()
-        with:
-          name: playwright-offline-report
-          path: |
-            playwright-report/
-            test-results/
-          retention-days: 7
-
-  # ---- 真实后端 E2E（依赖 check 通过）----
+  # ---- Job 2: E2E（依赖 check 通过）----
+  # 同一次 Playwright 运行里先跑离线组和登录 setup，再跑真实后端组和中文冒烟，报告只有一份。
   e2e:
     needs: check
     runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # 真实后端组共用一个账号，还会删除并重传数据集，多个运行同时跑会互相干扰，只能排队
+    concurrency: e2e-live-backend
     steps:
       - uses: actions/checkout@v5
 
@@ -84,29 +60,26 @@ jobs:
 
       - run: npm ci
 
-      # 安装 Playwright 浏览器（chromium / firefox / webkit 全装，与 config 中 3 个 project 对齐）
-      - run: npx playwright install --with-deps
+      # 安装 Playwright 浏览器（与 config 的默认 project 对齐；WebKit 需 E2E_WEBKIT=1 才启用）
+      - run: npx playwright install --with-deps chromium firefox
 
       # 构建（test 环境变量，需存在 env/.env.production 或 CI 注入）
       - run: npm run build
         env:
           VITE_API_BASE: /api
 
-      # 真实后端组（CI 模式：headless + retry + 单 worker）；离线组由独立 job 执行
-      # 登录账号密码从 GitHub Secrets 注入，避免硬编码（见 e2e/auth.setup.ts）
-      - run: npm run test:e2e -- --project=chromium --project=firefox --project=webkit --project=chromium-zh
+      # CI 模式：headless + retry + 单 worker。账号密码从 GitHub Secrets 注入（见 e2e/auth.setup.ts）；
+      # 外部 fork 的 PR 拿不到 secrets，只跑不需要账号的离线组
+      - run: npm run ${{ github.event.pull_request.head.repo.fork && 'test:e2e:offline' || 'test:e2e' }}
         env:
           CI: 'true'
           E2E_USERNAME: ${{ secrets.E2E_USERNAME }}
           E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
 
-      # 保留测试报告以便排查
-      - uses: actions/upload-artifact@v5
+      # 保留测试报告以便排查（失败截图和 trace 都在 HTML 报告里）
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report
-          path: |
-            playwright-report/
-            test-results/
+          path: playwright-report/
           retention-days: 7
-

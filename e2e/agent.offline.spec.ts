@@ -1,4 +1,21 @@
-import { test, expect, openAgent, fulfillSse, sseText, sseTool, MODEL, API_KEY, PNG } from './fixtures/offline.js'
+import type { Page } from '@playwright/test'
+import { test, expect, openAgent, fulfillSse, sseText, sseTool, MODEL, API_KEY, PNG, type OfflineBackend } from './fixtures/offline.js'
+
+/** 选一张图发出去，并确认它进了模型请求；结束时输入区已清空 */
+async function sendImage(page: Page, backend: OfflineBackend) {
+  const panel = await openAgent(page)
+  const chooser = page.waitForEvent('filechooser')
+  await panel.getByRole('button', { name: 'Add images' }).click()
+  await (await chooser).setFiles({ name: 'pixel.png', mimeType: 'image/png', buffer: Buffer.from(PNG, 'base64') })
+  await expect(panel.getByRole('button', { name: 'Remove image' })).toBeVisible()
+  await panel.getByPlaceholder('Message SXO Harness Agent').fill('Describe this image')
+  await panel.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect(panel.getByText('E2E answer ready.', { exact: true })).toBeVisible()
+  await expect.poll(() => backend.requests.length).toBe(1)
+  await expect(panel.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0)
+  expect(backend.requests[0]!.messages.at(-1)!.content).toContainEqual(expect.objectContaining({ type: 'image' }))
+  await expect(panel.getByRole('button', { name: 'Remove image' })).toHaveCount(0)
+}
 
 test.describe('Agent connection', () => {
   test.use({ connectionModel: '' })
@@ -114,7 +131,8 @@ test.describe('Agent browser journeys', () => {
     expect(JSON.stringify(backend.requests[1]!.messages)).not.toContain('Wait for cancellation')
   })
 
-  test('restores OPFS messages and makes the same conversation read-only in a second tab', async ({ page, context }) => {
+  test('restores OPFS messages and makes the same conversation read-only in a second tab', async ({ page, context, opfs }) => {
+    test.skip(!opfs, 'Linux WebKit has no navigator.storage')
     await page.goto('/vizworkbench')
     const panel = await openAgent(page)
     await panel.getByPlaceholder('Message SXO Harness Agent').fill('Remember this conversation')
@@ -138,20 +156,15 @@ test.describe('Agent browser journeys', () => {
     await other.close()
   })
 
-  test('sends image attachments through the adapter and restores their OPFS artifacts', async ({ page, backend }) => {
+  test('sends image attachments through the adapter', async ({ page, backend }) => {
     await page.goto('/vizworkbench')
-    const panel = await openAgent(page)
-    const chooser = page.waitForEvent('filechooser')
-    await panel.getByRole('button', { name: 'Add images' }).click()
-    await (await chooser).setFiles({ name: 'pixel.png', mimeType: 'image/png', buffer: Buffer.from(PNG, 'base64') })
-    await expect(panel.getByRole('button', { name: 'Remove image' })).toBeVisible()
-    await panel.getByPlaceholder('Message SXO Harness Agent').fill('Describe this image')
-    await panel.getByRole('button', { name: 'Send', exact: true }).click()
-    await expect(panel.getByText('E2E answer ready.', { exact: true })).toBeVisible()
-    await expect.poll(() => backend.requests.length).toBe(1)
-    await expect(panel.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0)
-    expect(backend.requests[0]!.messages.at(-1)!.content).toContainEqual(expect.objectContaining({ type: 'image' }))
-    await expect(panel.getByRole('button', { name: 'Remove image' })).toHaveCount(0)
+    await sendImage(page, backend)
+  })
+
+  test('restores image artifacts from OPFS after reopening', async ({ page, backend, opfs }) => {
+    test.skip(!opfs, 'Linux WebKit has no navigator.storage')
+    await page.goto('/vizworkbench')
+    await sendImage(page, backend)
     await page.goto('about:blank')
     await page.goto('/vizworkbench')
     const restored = await openAgent(page)

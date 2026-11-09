@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 import { ALGO_DATASET_NAMES } from './utils.js'
 
 /**
@@ -9,13 +9,12 @@ import { ALGO_DATASET_NAMES } from './utils.js'
  * 纯 UI 用例在 workspace.spec.ts。
  *
  * 核心链路：submit 在 chromium 上用真实数据集创建 Peak Alignment 任务并等它完成
- * → 两个用例进入 vizworkbench 验证渲染与交互 → 末尾 Cleanup 删除任务。
+ * → 查看用例进入 vizworkbench 验证渲染与交互 → 末尾 Cleanup 删除任务。
  * 链路在同一文件内按声明顺序执行（查看用例包在 test.describe.serial 里，
- * 组内某用例失败时后续查看用例自动 skip，不再各自傻等 180s 超时）。
+ * 组内某用例失败时后续查看用例自动 skip）。
  *
- * 状态传递：submit 在任务创建成功（表格出现该数据集的 Running 行）后，
- * 把数据集名记入模块变量 createdDataset；后续用例与 Cleanup 只按它定位本轮
- * 创建的任务（Peak Alignment + 数据集名双重过滤，排除历史任务）。submit 被
+ * 状态传递：submit 从 POST /processes 的响应拿到任务 id，记入模块变量
+ * createdProcessId；后续用例与 Cleanup 只按它定位本轮创建的任务。submit 被
  * skip（数据集缺失 / 不支持 align / 非 chromium）或创建前失败时变量保持 null，
  * 依赖用例随之 skip、Cleanup 不删任何行——不会误删 Workspace 里的历史任务。
  *
@@ -41,24 +40,19 @@ async function clickSpectrum(page: Page, xRatio = 0.6) {
 }
 
 /**
- * 定位 Workspace 表格里的 Peak Alignment 任务行。
- * - 必须按 Methods 列 "Peak Alignment" 过滤，不能取第一条 Completed——
- *   残留的 raw-convert（processed）任务没有 selected-mz（仅 continuous 模式渲染），
- *   取错行会让 ion-image/谱图交互断言全部超时。
- * - `dataset`（submit 记录的数据集名）进一步排除历史 Peak Alignment 任务。
+ * Workspace 表格里的这条任务。负向前瞻防止 Process #12 命中 Process #123；
+ * 不能用 \b：相邻单元格的文本之间没有空格（"Process #12Brain_1"）。
  */
-function peakAlignmentRow(page: Page, dataset?: string) {
-  let row = page.locator('table tbody tr').filter({ hasText: 'Peak Alignment' })
-  if (dataset) row = row.filter({ hasText: dataset })
-  return row.first()
+function processRow(page: Page, id: number) {
+  return page.locator('table tbody tr').filter({ hasText: new RegExp(`Process #${id}(?!\\d)`) }).first()
 }
 
 /**
- * 本轮 submit 创建的 Peak Alignment 任务的数据集名（见文件头"状态传递"）。
- * 模块变量只在同一 worker 进程内有效——三个浏览器项目各自重新加载本文件，
+ * 本轮 submit 创建的 Peak Alignment 任务 id（见文件头"状态传递"）。
+ * 模块变量只在同一 worker 进程内有效——每个浏览器项目各自重新加载本文件，
  * chromium 之外的项目的值不会被读到（链路用例先被 browserName skip 拦下）。
  */
-let createdDataset: string | null = null
+let createdProcessId: number | null = null
 
 /**
  * Peak Alignment 后端任务的最长等待时间。
@@ -74,33 +68,32 @@ let createdDataset: string | null = null
 const ALIGN_WAIT_MS = 300_000
 /** 轮询预算 + 页面加载/断言余量。 */
 const ALIGN_TEST_TIMEOUT_MS = ALIGN_WAIT_MS + 120_000
+/** 查看用例不再等后端任务（submit 已确认完成），只等结果页加载。 */
+const VIEW_TEST_TIMEOUT_MS = 180_000
 
-/**
- * 等待 submit 创建的 Peak Alignment 任务从 Running 变为 Completed 可查看。
- * 任务创建后要排队+计算，不会立刻 Completed，10s 内的 toBeVisible 断言会误报。
- * 轮询刷新（与 Cleanup 的等待逻辑一致），直到该行 Status 列变成 Completed。
- * 只等"可查看"（status !== 'processing'）是不够的——Failed 任务也有 View 按钮，
- * 这里要求真正 Completed，进入 viz-workbench 后离子图/谱图断言才成立。
- * 本轮 submit 没有创建任务（skip / 创建前失败）时直接 skip；
- * 找不到时抛错，跳过静默地把定位失败吞掉——这能让「submit 被 skip / 后端无此数据集」这类真实原因暴露出来。
- */
-async function waitForPeakAlignmentReady(page: Page) {
-  if (!createdDataset) {
+/** 轮询刷新，直到该任务不再是 Running；预算用尽仍未结束时由调用方的断言报错。 */
+async function waitUntilFinished(page: Page, row: Locator) {
+  const deadline = Date.now() + ALIGN_WAIT_MS
+  while (Date.now() < deadline) {
+    await page.reload()
+    // 行本身就是加载完成的信号：骨架和 Loading 占位都匹配不到 Process #id
+    await expect(row).toBeVisible({ timeout: 15_000 })
+    if ((await row.getByText('Running').count()) === 0) return
+    await page.waitForTimeout(10_000)
+  }
+}
+
+/** 打开 Workspace 并返回 submit 创建且已完成的任务行；本轮没有创建任务时直接 skip。 */
+async function completedProcessRow(page: Page) {
+  if (!createdProcessId) {
     // test.skip(true, ...) 抛出 skip 异常结束测试；throw 只为让 TS 收窄类型
     test.skip(true, '本轮 submit 未创建 Peak Alignment 任务（skip / 创建前失败）')
     throw new Error('skipped')
   }
-  const deadline = Date.now() + ALIGN_WAIT_MS
-  while (Date.now() < deadline) {
-    const row = peakAlignmentRow(page, createdDataset)
-    if ((await row.getByText('Completed').count()) > 0) return row
-    await page.reload()
-    await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 15_000 })
-    await expect(page.locator('table tbody tr').first().locator('td').first())
-      .not.toHaveText('Loading...', { timeout: 15_000 })
-    await page.waitForTimeout(5_000)
-  }
-  throw new Error(`Peak Alignment task did not become Completed within ${ALIGN_WAIT_MS / 1000}s`)
+  await page.goto('/workspace')
+  const row = processRow(page, createdProcessId)
+  await expect(row.getByText('Completed')).toBeVisible({ timeout: 15_000 })
+  return row
 }
 
 // ============================================================
@@ -204,11 +197,10 @@ test.describe('New Analysis', () => {
 // ============================================================
 
 test.describe.serial('Peak Alignment journey', () => {
+  // 重后端 Peak Alignment 任务只在 chromium 创建（firefox/webkit 后端完成时间不可控，还拖长 CI）。
+  test.skip(({ browserName }) => browserName !== 'chromium', 'Peak Alignment 任务只在 chromium 创建一次')
 
-  // 重后端 Peak Alignment 任务只在 chromium 创建（firefox/webkit 后端完成时间不可控，
-  // 180s 等不到位，还拖长 CI）。后续查看用例与 Cleanup 做了同样的 chromium-only skip。
-  test('submit — creates Peak Alignment task and waits for completion', async ({ page, browserName }) => {
-    test.skip(browserName !== 'chromium', 'Peak Alignment 任务只在 chromium 创建一次（后端完成时间不可控）')
+  test('submit — creates Peak Alignment task and waits for completion', async ({ page }) => {
     test.setTimeout(ALIGN_TEST_TIMEOUT_MS)
     await page.goto('/workspace/new')
     await page.locator('.tab:has-text("My Datasets")').click()
@@ -255,56 +247,25 @@ test.describe.serial('Peak Alignment journey', () => {
     }
     await alignMethod.click()
 
-    await page.getByRole('button', { name: 'Start Analysis' }).click()
+    const [created] = await Promise.all([
+      page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname.endsWith('/processes')),
+      page.getByRole('button', { name: 'Start Analysis' }).click(),
+    ])
+    expect(created.ok(), `POST /processes → HTTP ${created.status()}: ${await created.text()}`).toBe(true)
+    createdProcessId = ((await created.json()) as { id: number }).id
 
-    await expect(page).toHaveURL(/\/workspace(?:\?|#|$)?/, { timeout: 30_000 })
+    await expect(page).toHaveURL(/\/workspace(?:[?#]|$)/, { timeout: 30_000 })
     await expect(page.locator('h1:has-text("Workspace")')).toBeVisible()
 
-    // 等刚创建的进程出现在表格里（状态为 Running）。
-    // 按数据集名锁定行——Workspace 表可能同时有别人/并发留下的 Running 任务，
-    // 裸等 'Running'.first() 会锁定到错误的行（Dataset 列显示去扩展名的数据集名）。
-    const runningRow = page.locator('table tr')
-      .filter({ hasText: name })
-      .filter({ hasText: 'Running' })
-      .first()
-    await expect(runningRow).toBeVisible({ timeout: 15_000 })
-
-    // 任务创建成功：记录数据集名，后续查看用例与 Cleanup 只认它（见文件头"状态传递"）
-    createdDataset = name
-
-    // 轮询刷新，等本次任务（按数据集名定位，不依赖"第一行=最新"的假设）
-    // Running 消失。locator 是惰性的，reload 后无需重新构造。
-    const myRow = page.locator('table tbody tr').filter({ hasText: name }).first()
-    const deadline = Date.now() + ALIGN_WAIT_MS
-    while (Date.now() < deadline) {
-      await page.reload()
-      await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 15_000 })
-      // 等表格数据真正加载完（不再是 "Loading..."）
-      await expect(myRow.locator('td').first())
-        .not.toHaveText('Loading...', { timeout: 15_000 })
-      if ((await myRow.getByText('Running').count()) === 0) break
-      await page.waitForTimeout(10_000)
-    }
-    // 轮询用尽仍未结束才算失败（给足等待，避免刚过 deadline 就断言、差几秒误判）
-    await expect(myRow.getByText('Running')).not.toBeVisible({ timeout: 10_000 })
+    const row = processRow(page, createdProcessId)
+    await waitUntilFinished(page, row)
+    // 只等 Running 消失不够：Failed 任务后面的查看用例没法成立，在这里就要报出来
+    await expect(row.getByText('Completed'), `Process #${createdProcessId} should complete`).toBeVisible({ timeout: 10_000 })
   })
 
-  test('vizworkbench — loads ion image, spectrum, metadata, and responds to click', async ({ page, browserName }) => {
-    // 依赖上一用例在 chromium 提交的 Peak Alignment 任务；非 chromium 下任务不创建，skip 一致
-    test.skip(browserName !== 'chromium', 'Peak Alignment 任务只在 chromium 创建，依赖它的断言不跨浏览器')
-    test.setTimeout(ALIGN_TEST_TIMEOUT_MS)
-    await page.goto('/workspace')
-    await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 10_000 })
-    await expect(page.locator('table tbody tr').first().locator('td').first()).not.toHaveText(
-      'Loading...',
-      { timeout: 10_000 },
-    )
-
-    // 定位 submit 创建的 Peak Alignment 任务（continuous 模式，有 selected-mz）。
-    // 任务创建后要排队+计算，不会立刻 Completed，用轮询等它可查看（见 waitForPeakAlignmentReady）。
-    const completedRow = await waitForPeakAlignmentReady(page)
-    await expect(completedRow).toBeVisible({ timeout: 10_000 })
-
+  test('vizworkbench — loads ion image, spectrum, metadata, and responds to click', async ({ page }) => {
+    test.setTimeout(VIEW_TEST_TIMEOUT_MS)
+    const completedRow = await completedProcessRow(page)
     await completedRow.getByRole('button', { name: 'View' }).click()
     await expect(page).toHaveURL(/\/vizworkbench/)
 
@@ -346,20 +307,9 @@ test.describe.serial('Peak Alignment journey', () => {
     await expect(page.getByRole('heading', { name: 'Spectrum View' })).toBeVisible()
   })
 
-  test('vizworkbench — switches colormap and keeps ion image stable', async ({ page, browserName }) => {
-    // 同上：依赖 chromium 提交的 Peak Alignment 任务，skip 保持一致
-    test.skip(browserName !== 'chromium', 'Peak Alignment 任务只在 chromium 创建，依赖它的断言不跨浏览器')
-    test.setTimeout(ALIGN_TEST_TIMEOUT_MS)
-    await page.goto('/workspace')
-    await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 10_000 })
-    await expect(page.locator('table tbody tr').first().locator('td').first()).not.toHaveText(
-      'Loading...',
-      { timeout: 10_000 },
-    )
-
-    // 同上一个测试：锁定 Peak Alignment（continuous）任务，等它可查看
-    const completedRow = await waitForPeakAlignmentReady(page)
-    await expect(completedRow).toBeVisible({ timeout: 10_000 })
+  test('vizworkbench — switches colormap and keeps ion image stable', async ({ page }) => {
+    test.setTimeout(VIEW_TEST_TIMEOUT_MS)
+    const completedRow = await completedProcessRow(page)
     await completedRow.getByRole('button', { name: 'View' }).click()
     await expect(page).toHaveURL(/\/vizworkbench/)
 
@@ -375,20 +325,11 @@ test.describe.serial('Peak Alignment journey', () => {
     await expect(page.getByText(/^Loading ion image/)).toBeHidden()
   })
 
-  test('vizworkbench — multi-ion overlay grays Gamma and Display Range while active', async ({ page, browserName }) => {
-    // 同上：依赖 chromium 提交的 Peak Alignment 任务，skip 保持一致。
+  test('vizworkbench — multi-ion overlay grays Gamma and Display Range while active', async ({ page }) => {
     // 覆盖 14abcc8：overlayActive（enabled && 有已加载通道）时 Gamma 滑块与
     // Display Range 输入框不参与叠加渲染，置灰禁用；关闭后恢复。
-    test.skip(browserName !== 'chromium', 'Peak Alignment 任务只在 chromium 创建，依赖它的断言不跨浏览器')
-    test.setTimeout(ALIGN_TEST_TIMEOUT_MS)
-    await page.goto('/workspace')
-    await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 10_000 })
-    await expect(page.locator('table tbody tr').first().locator('td').first()).not.toHaveText(
-      'Loading...',
-      { timeout: 10_000 },
-    )
-
-    const completedRow = await waitForPeakAlignmentReady(page)
+    test.setTimeout(VIEW_TEST_TIMEOUT_MS)
+    const completedRow = await completedProcessRow(page)
     await completedRow.getByRole('button', { name: 'View' }).click()
     await expect(page).toHaveURL(/\/vizworkbench/)
     await expect(page.getByText(/^Loading ion image/)).not.toBeVisible({ timeout: 30_000 })
@@ -429,44 +370,30 @@ test.describe.serial('Peak Alignment journey', () => {
 // ============================================================
 // Cleanup（serial 组之外：查看用例失败不挡清理）
 // ============================================================
-// 删除 submit 创建的任务。按"Methods 列 Peak Alignment + createdDataset 的
-// 数据集名"定位——不能用"第一条 Completed"，工作区里可能残留 raw-convert
-// （processed，无 selected-mz）等其它任务，也可能有历史 Peak Alignment 任务。
+// 删除 submit 创建的任务（按 createdProcessId 定位，不会碰到历史任务）。
 
 test.describe('Cleanup', () => {
   test('delete completed result', async ({ page, browserName }) => {
     // 与 submit 对应：任务只在 chromium 建，这里也只在 chromium 删
     test.skip(browserName !== 'chromium', 'Peak Alignment 任务只在 chromium 创建，清理也只在 chromium')
-    // 之前这里没设全局超时 → 用配置默认 30s，而轮询预算就有 120s，任务没提前跑完必炸
     test.setTimeout(ALIGN_TEST_TIMEOUT_MS)
     // submit 没有创建任务（skip / 创建前失败）时不删任何行——
     // 宁可留下未清理的任务，也不误删历史数据
-    if (!createdDataset) {
+    if (!createdProcessId) {
       test.skip(true, '本轮 submit 未创建 Peak Alignment 任务，不删除任何行以免误删历史数据')
       throw new Error('skipped')
     }
     await page.goto('/workspace')
-    await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 10_000 })
 
-    // 等本次 Peak Alignment 任务跑完（那行 Running 消失）
-    const row = peakAlignmentRow(page, createdDataset)
-    const deadline = Date.now() + ALIGN_WAIT_MS
-    while (Date.now() < deadline) {
-      await page.reload()
-      await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 15_000 })
-      await expect(page.locator('table tbody tr').first().locator('td').first())
-        .not.toHaveText('Loading...', { timeout: 15_000 })
-      if ((await row.getByText('Running').count()) === 0) break
-      await page.waitForTimeout(10_000)
-    }
+    // 等本次任务跑完（查看用例失败时它可能还在 Running，运行中的任务没有 Delete 按钮）
+    const row = processRow(page, createdProcessId)
+    await waitUntilFinished(page, row)
 
     const openModal = page.locator('dialog.modal-open')
     if (await openModal.isVisible().catch(() => false)) {
       await openModal.getByRole('button').first().click()
     }
 
-    // 删除本次创建的 Peak Alignment 任务（Completed）
-    await expect(row).toBeVisible({ timeout: 10_000 })
     await row.getByRole('button', { name: 'Delete' }).click()
 
     await page.locator('.modal-box').getByRole('button', { name: 'Delete' }).click()

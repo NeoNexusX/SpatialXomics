@@ -4,7 +4,7 @@
 
 作者：陈柯江
 
-问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
+问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
 
 ::: tip 注释服务不可用时
 页面数据来自后端注释服务。服务不可用时页面会显示错误提示，点击「重试」即可重新加载；服务恢复后重试即回到完整数据库。
@@ -38,5 +38,5 @@
 
 本库可直接接入[数据可视化](./data-visualization)的注释功能：
 
-- **直接导入**：注释面板的 **从平台库导入** 按钮下拉选择本库，在线拉取整库并完成导入，无需手动下载文件。
+- **直接导入**：在注释面板的 **平台库** 下拉中选择本库，整库 CSV 保存为本地文件后导入（Chrome/Edge 的保存对话框默认定位到下载文件夹）；再次导入时复用已保存的文件，不重新下载。
 - **手动导入**：工具栏右侧的 **下载整库 CSV** 按钮下载完整数据库（约 38.5 MB），文件表头为 `ID,Name,Formula,InChI,Mass,Origin`，与注释库模板一致，可作为注释 CSV 导入。

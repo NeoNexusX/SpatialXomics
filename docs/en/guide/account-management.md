@@ -4,7 +4,7 @@ Register, sign in, recover your password, and manage your profile on SpatialXomi
 
 **Author:** Chen Kejiang
 
-**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) or email **jydong@xmu.edu.cn**.
+**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) or email **jydong@xmu.edu.cn**.
 
 ## Register
 
@@ -38,6 +38,8 @@ Forgot your password? Click **Forgot Password?** on the sign-in page. The flow h
 Click your avatar in the top-right corner, then select **Profile**. From there you can update your email, password, and academic profile details. Your username and identity are fixed and cannot be changed. Click **Save All Changes** when you are done.
 
 Changing your email requires a verification code sent to the new address. Saving a new password signs you out automatically — sign back in with the new password.
+
+Your institution, position, research field, and region must all be filled in before you can download datasets (see [Dataset Overview](./dataset-overview)).
 
 ![Profile page](https://cdn.neonexus.top/docs/20260908160212186.jpg_view)
 

@@ -6,7 +6,10 @@ import SelectWithOther from '../SelectWithOther.vue'
 
 describe('SelectWithOther blur', () => {
   it('forwards blur from the select', async () => {
-    const wrapper = mount(SelectWithOther, { props: { modelValue: '', options: ['a', 'b'] } })
+    const wrapper = mount(SelectWithOther, {
+      props: { modelValue: '', options: ['a', 'b'] },
+      global: { stubs: { SvgIcon: true } },
+    })
 
     await wrapper.find('select').trigger('blur')
 

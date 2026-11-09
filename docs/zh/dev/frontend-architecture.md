@@ -1,5 +1,7 @@
 # 前端架构边界
 
+<ArchDiagram name="spatialxomics.architecture" title="系统总览" />
+
 ## 目录职责
 
 - `src/app`：应用外壳和全局入口组件。
@@ -16,7 +18,7 @@
 - `shared` 不应依赖具体 `features`。
 - feature 可以依赖 `shared` 和跨模块 `services`。
 - 避免直接引用另一 feature 的内部实现；确需跨模块复用时，先抽到合适的 `shared` 或 `services` API。
-- `views` 和工作区页面可组合多个 feature，但请求、计算和副作用优先沉到 composable/service。
+- `views` 和工作台页面可组合多个 feature，但请求、计算和副作用优先沉到 composable/service。
 - **语言包必须放在 `src/i18n/locales/`，不能放 `src/shared/`**。`vite.config.ts` 的 `manualChunks` 把 `src/shared/**`（除 `config/`）合并成一个 eager chunk；语言包落进去会导致所有语言和命名空间的文案全部打进首屏，懒加载失效。
 
 这些是维护约定，不是全部由工具强制的规则。当前 ESLint 的架构规则只明确禁止旧根目录别名，如 `@/components/*`、`@/composables/*`、`@/utils/*`、`@/stores/*`、`@/types/*`、`@/constants/*`；它不会自动阻止所有跨 feature 引用。`src/features/agent` 另有一组插件边界规则，见下文。
@@ -29,12 +31,28 @@
 - 服务端数据由 API/composable 管理，除非确有跨页面缓存需求，不要默认放进 Pinia。
 - 结果页的大数据数组和 reader 实例由 composable/service 持有，并在 run 切换或组件卸载时释放。
 
+<ArchDiagram name="auth.architecture" title="认证与权限" />
+
 ## 后台任务与大数据
 
 - 上传 ZIP/MD5 在 `src/workers/zip-compress.worker.ts` 执行。
 - 注释（库 CSV 解析、特征峰匹配、打分、FDR、空间评分计算）和 KMeans 分别在 `vizworkbench` 的 Worker 中执行（`utils/annotation/annotation.worker.ts`、`kmeans.worker.ts`）；注释用到的离子图由主线程从 Zarr 读取后交给 Worker。
-- Zarr 通过 OSS Range 请求按元数据和 chunk 读取，访问凭证过期时由 OSS client 刷新。
+- Zarr 通过 OSS client 按元数据和 chunk 读取完整对象（`client.get(key)`，没有发送 Range 请求），访问凭证过期时由 OSS client 刷新。
 - UMAP 由后端生成；KMeans 是基于 UMAP embedding 的本地计算。不要把两者描述为同一个后端任务。
+
+<ArchDiagram name="upload-architecture" title="上传与续传" />
+
+<ArchDiagram name="workspace.architecture" title="分析任务与工作空间" />
+
+<ArchDiagram name="vizworkbench.architecture" title="可视化工作台" />
+
+<ArchDiagram name="zarr-service.architecture" title="Zarr 读取服务" />
+
+## 字号与语言适配
+
+字号从 `--kawaru-fs` 基准出发，分为 `kawaru-text-*` 数字档位和具名曲线；界面语言通过 `html lang` 影响中文字体合成。
+
+<ArchDiagram name="text-size-architecture" title="字号与语言适配" />
 
 ## SXO-Harness 的插件结构
 
@@ -57,7 +75,7 @@ ESLint 限制插件之间只经 `index.ts` 引用，插件不能依赖界面，A
 - `npm run test:unit:run`：单元测试单次运行。
 - `npm run check`：并行执行前三项。
 - `npm run format:check`：只检查 `src/` 的 Prettier 格式，不包含在 `check` 中。
-- `npm run test:e2e:offline`：三个浏览器的固定响应回归，无需测试账号；运行方式与真实后端测试边界见 [测试与 E2E](./testing)。
+- `npm run test:e2e:offline`：Chromium 和 Firefox 的固定响应回归，无需测试账号；运行方式与真实后端测试边界见 [测试与 E2E](./testing)。
 - `npm run docs:type-check` / `npm run docs:build`：单独验证文档类型、生产构建和大多数站内链接。
 
 新增代码应以现有目录职责和相邻实现为准；文档描述与代码冲突时，先确认运行行为，再同步更新两者。

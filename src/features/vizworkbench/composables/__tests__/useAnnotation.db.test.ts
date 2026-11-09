@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { createApp, ref } from 'vue'
 import { useAnnotation } from '../useAnnotation'
 import type { Acquisition } from '@/features/vizworkbench/types/acquisition'
+import { loadFeatureMessages } from '@/i18n'
 import {
   installFakeAnnotationWorker,
   type FakeWorkerHarness,
@@ -96,6 +97,8 @@ async function drain() {
     fake.harness!.deliver()
   }
 }
+
+beforeAll(() => Promise.all([loadFeatureMessages('databases'), loadFeatureMessages('vizworkbench')]))
 
 beforeEach(async () => {
   fake.harness = await installFakeAnnotationWorker()

@@ -1,10 +1,10 @@
-# 数据分析
+# 数据集分析
 
 本文介绍如何根据数据的 spectrum/storage mode 选择兼容的预处理方法，配置参数并提交分析任务。
 
 作者：陈柯江
 
-问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
+问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
 
 
 
@@ -175,6 +175,6 @@
 
 ![image-20260909170806803](https://cdn.neonexus.top/docs/20260909170806890.jpg_view)
 
-创建成功后，自动跳转至`Workspace`,可在Workspace中查看处理进度，详细介绍见[工作区](./workspace)。
+创建成功后，自动跳转至`Workspace`,可在Workspace中查看处理进度，详细介绍见[工作台](./workspace)。
 
 ![image-20260909170958405](https://cdn.neonexus.top/docs/20260909170958484.jpg_view)

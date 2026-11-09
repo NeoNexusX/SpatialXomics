@@ -1,6 +1,6 @@
 # Icon Guidelines
 
-Application icons are rendered through Iconify. The repository bundles the used subset so production does not depend on Iconify's public API.
+Application icons are rendered through Iconify. The repository bundles the used subset so production does not depend on Iconify's public API. The SXO-Harness interface is an exception; see below.
 
 ## Usage
 
@@ -35,6 +35,10 @@ The currently bundled sets are:
 - `lucide`: currently used for `lasso` and `square`.
 
 Do not use another set without adding it to the offline manifest and dependencies.
+
+### SXO-Harness components
+
+Components under `src/features/agent/components` follow shadcn-vue and import icons directly from `@lucide/vue`. It is bundled with the code, makes no network requests, and needs no offline manifest entry. Use it only in that directory; the rest of the interface stays on `SvgIcon`.
 
 ## Offline Bundle
 

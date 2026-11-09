@@ -4,7 +4,7 @@
 
 作者：陈柯江
 
-问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
+问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
 
 
 
@@ -47,6 +47,8 @@
 点击页面右上角头像后点击 `Profile` 即可进入账户管理页面，功能包括更改邮箱、更改密码等，除用户名和身份（Identity）外其余信息均可修改，修改后点击 `Save All Changes`进行保存。
 
 更改邮箱时需向新邮箱发送验证码并填写后提交；更改密码保存后会自动退出登录，需使用新密码重新登录。
+
+机构、职位、研究领域和地区必须填写完整才能下载数据集（见[数据集总览](./dataset-overview)）。
 
 ![账户管理页面](https://cdn.neonexus.top/docs/20260908160212186.jpg_view)
 

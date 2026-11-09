@@ -1,4 +1,4 @@
-import { test as setup } from '@playwright/test'
+import { test as setup, expect } from '@playwright/test'
 
 /**
  * Auth Setup — 全局登录初始化
@@ -29,9 +29,10 @@ setup('authenticate', async ({ page }) => {
 
   await page.click('button:has-text("Sign In")')
 
-  // 等待登录完成，跳转到默认落地页 /datasets（或 /profile）
+  // 等待登录完成，跳转到默认落地页 /datasets（或 /profile）。login() 在跳转前就写好了 token，
+  // 不等 networkidle：落地页有远程预览图，卡住会让所有依赖 setup 的用例一起不运行
   await page.waitForURL(/\/(datasets|profile)/)
-  await page.waitForLoadState('networkidle')
+  await expect(page.locator('h1').first()).toBeVisible({ timeout: 10_000 })
 
   // 保存浏览器状态（token、localStorage、cookie）供后续测试复用
   await page.context().storageState({ path: '.auth/user.json' })

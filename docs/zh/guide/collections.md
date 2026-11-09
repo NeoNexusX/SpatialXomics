@@ -4,7 +4,7 @@
 
 作者：陈柯江
 
-问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
+问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
 
 
 
@@ -95,13 +95,13 @@
 
 - **成员上限**：每个集合最多包含 300 个数据集。
 
-- **下载**：每个成员可单独下载原始文件。
+- **下载**：每个成员可单独下载原始文件，规则见[数据集总览](./dataset-overview)。
 
 
 
 ### 7. 分享数据集合
 
-点击详情页的`Share`即可复制集合的公开链接，链接为 `/collections/` 开头、由集合 public id 构成的地址。收到链接的任何人**无需登录**即可查看该集合的只读页面（成员列表与元数据）；集合不存在或已不再公开时，页面会给出统一提示。
+点击详情页的`Share`即可复制集合的公开链接，链接为 `/collections/` 开头、由集合 public id 构成的地址。收到链接的人**登录后**可查看该集合的只读页面（成员列表与元数据）；未登录时会先跳转登录页，登录后自动返回。集合不存在或已不再公开时，页面会给出统一提示。
 
 由于数据集合创建即公开，无需也无法单独设置集合的可见性。
 

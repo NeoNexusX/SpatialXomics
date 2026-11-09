@@ -4,11 +4,15 @@ SXO-Harness 是运行在浏览器内的分析助手。Vue 界面通过 `ctx.agen
 
 本文以 `src/features/agent/bundles/base.ts` 的生产组合表为入口。用户操作说明见 [SXO-Harness 助手](../guide/sxo-harness)，测试方法见 [测试与 E2E](./testing)。
 
+<ArchDiagram name="agent.architecture" title="Agent 架构" />
+
 ## 入口与依赖装配
 
 `Navbar.vue` 静态引用轻量的 `FloatingAgent.vue`。外壳负责打开、关闭、拖拽和缩放；`AgentWorkspace.vue` 是异步组件，浏览器空闲时会预取它，因此“异步分包”并不表示必须等点击才下载。运行时由 `whenAgentReady()` 懒创建并缓存为模块级单例，关闭面板不会销毁它或中止正在执行的轮次。
 
 `bootstrap.ts` 创建 Cordis 根 context，将 `baseBundle` 中的插件交给 `ctx.plugin()`。组合表行序不表达启动依赖，服务的 `static inject` 和模块插件的 `inject` 才决定何时启动。`whenAgentReady()` 等待所有插件处于 active，失败时报告插件 ID；HMR 时释放根 fiber。
+
+<ArchDiagram name="cordis-relationships.architecture" title="Cordis 与项目的关系" />
 
 | 层 | 模块 | 职责与消费方 |
 | --- | --- | --- |
@@ -19,6 +23,7 @@ SXO-Harness 是运行在浏览器内的分析助手。Vue 界面通过 `ctx.agen
 | 会话事实与读取模型 | `session`、`session-projection`、`session-transcript` | 提交事件、维护模型可见历史、从已提交日志生成 UI 和统计 |
 | 存储 | `session-persistence`、`session-persistence-opfs`、`attachments`、`session-archive` | 存储契约、OPFS 实现、附件引用与 ZIP 迁移 |
 | 模型与策略 | `connection`、`llm`、`llm-anthropic`、`model-catalog`、`llm-retry`、`token-meter`、`compaction` | 连接解析、协议隔离、模型探测、重试与上下文预算 |
+| 提示词与分析绑定 | `system-prompt`、`persona`、`agent-instructions`、`analysis-binding` | 组合系统提示词和会话指令，捕获并校验数据集绑定 |
 | 领域能力 | `tools`、`tool-*`、`skill`、`skill-bundled` | 工具注册、执行管线、结果存档、技能目录与正文 |
 
 ## Agent 门面与循环分离

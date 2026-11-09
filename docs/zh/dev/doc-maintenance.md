@@ -7,8 +7,8 @@
 ```text
 docs/
 ├── .vitepress/config.ts     # 站点、语言、导航、侧边栏和构建配置
-├── .vitepress/theme/        # 自定义主题
-├── archit_image/            # 独立架构图（自包含 HTML）
+├── .vitepress/theme/        # 自定义主题（含 ArchDiagram 组件）
+├── archit_image/            # 架构图（自包含 HTML，嵌入文章显示）
 ├── en/                      # 默认英文源文件
 │   ├── guide/
 │   └── dev/
@@ -48,7 +48,7 @@ outline: [2, 3]
 - 英文绝对站内路径不带 `/en`；中文路径需要 `/zh`。
 - 当前 `ignoreDeadLinks` 只豁免以 `/mydatasets` 和 `/datasets` 开头的 SPA 路径；其他死链仍会让构建失败。它不是全局关闭死链检查。
 - 截图等文档专用资源应放在 `docs/` 下明确的资源目录并使用相对链接，或使用稳定的外部地址。不要放进根 `public/`，否则会作为 SPA 静态文件发布且不属于文档导航。
-- 架构图放在 `docs/archit_image/`，是自包含 HTML。每个节点标签在 `data-node-label`、`aria-label`、`<title>` 和 SVG `<text>` 里各存一份，改动时四处要一起改，信息卡备注也要同步对照代码。注意 `npm run docs:build` 不会把这些文件输出到 `dist-docs/`，因此线上 `/docs/` 站点访问不到它们——请从仓库直接打开；若需随文档发布，要另加构建步骤。
+- 架构图放在 `docs/archit_image/`，是自包含 HTML。每个节点标签在 `data-node-label`、`aria-label`、`<title>` 和 SVG `<text>` 里各存一份，改动时四处要一起改，信息卡备注也要同步对照代码。在文章里用 `<ArchDiagram name="agent.architecture" title="Agent 架构" />` 插入，`name` 是不含 `.html` 的文件名，写错时构建失败。图会像图片一样显示在正文里，点击打开完整视图；`npm run docs:build` 会把它们原样输出到 `dist-docs/assets/`。
 - 不要在文档中复制已失效接口或推测未来行为。以当前代码、运行时配置和接口契约为准。
 
 VitePress 还支持提示容器、数学公式、emoji、`[[toc]]` 和代码导入。示例：
@@ -72,7 +72,7 @@ npm run docs:preview     # 预览生产构建
 
 ## CI 和部署
 
-- `test` 分支先运行 `npm run check` 和文档构建，随后由独立 job 执行无需 secrets 的三浏览器离线回归，以及需要账号的真实后端三浏览器 E2E 和中文冒烟；入口与覆盖边界见 [测试与 E2E](./testing)。
+- `test` 分支先运行 `npm run check` 和文档构建，随后运行 Chromium 和 Firefox 的 E2E：无需 secrets 的离线回归、需要账号的真实后端测试和中文冒烟；入口与覆盖边界见 [测试与 E2E](./testing)。
 - `docker/Dockerfile` 会在镜像构建中再次构建 SPA 和文档，并把 `dist-docs/` 复制到 Nginx 的 `/docs` 目录。
 - `base: '/docs/'` 必须和 `docker/nginx.conf.template` 的路由保持一致。
 - `.dockerignore` 默认排除根目录 `*.md`，但显式保留 `docs/**`，所以正式文档必须放在 `docs/` 内。

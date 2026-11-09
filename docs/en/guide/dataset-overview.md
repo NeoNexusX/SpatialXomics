@@ -4,7 +4,7 @@ Inspect dataset metadata, download raw files, share links, and make datasets pub
 
 **Author:** Chen Kejiang
 
-**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) or email **jydong@xmu.edu.cn**.
+**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) or email **jydong@xmu.edu.cn**.
 
 ## Open the Detail Page
 
@@ -71,6 +71,12 @@ You can download the raw .imzML/.ibd pair in two places.
 
 ![Download from detail](https://cdn.neonexus.top/docs/20260914195006583.jpg_view)
 
+Before downloading:
+
+- You must be signed in, and your profile must include your institution, position, research field, and region. Otherwise a message asks you to complete it first (see [Account Management](./account-management)).
+- A download consists of two files, .imzML and .ibd, which the browser saves separately.
+- After a download starts, you must wait 60 seconds before starting another. When your account's download quota runs out, you see **Download limit reached**; check your quota on the profile page.
+
 ## Share
 
 Both public and private datasets can be shared. Sharing does not change the dataset's visibility.
@@ -78,7 +84,7 @@ Both public and private datasets can be shared. Sharing does not change the data
 1. Open the detail page and click **Share**.
 2. The link is copied to your clipboard automatically.
 
-The link uses the short `/s/` form built from the dataset's 16-character public id.
+The link uses the short `/s/` form built from the dataset's 16-character public id. Recipients must sign in to see the content; signed-out visitors see sign-in and registration options instead.
 
 ![Share button](https://cdn.neonexus.top/docs/20260914195044165.jpg_view)
 

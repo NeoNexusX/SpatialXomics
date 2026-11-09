@@ -109,7 +109,7 @@ npm run build             # 类型检查 + SPA 构建，输出 dist/
 npm run check             # 类型检查 + ESLint + 单元测试
 npm run test:unit:run     # 单次运行单元测试
 npm run test:e2e          # Playwright E2E
-npm run test:e2e:offline  # 三浏览器回归，无需账号、后端和模型密钥
+npm run test:e2e:offline  # Chromium + Firefox 回归，无需账号、后端和模型密钥
 npm run docs:build        # 文档构建，输出 dist-docs/
 npm run icons:bundle      # 更新离线图标子集
 ```
@@ -136,7 +136,7 @@ HMDB 工具的离线索引按 `scripts/build-hmdb-index.mjs` 的文件头说明�
 
 - 用户与开发文档位于 `docs/`，本地地址为 `http://localhost:5174/docs/`。
 - Docker 镜像同时包含 `dist/` 和 `dist-docs/`，nginx 分别服务 SPA 与 `/docs/`。
-- `test` 分支运行检查、文档构建和三浏览器 Playwright；`dev` 与 `main` 分支分别触发对应环境部署。
+- `test` 分支运行检查、文档构建和 Playwright（Chromium + Firefox）；`dev` 与 `main` 分支分别触发对应环境部署。
 
 文档维护流程见 [docs/zh/dev/doc-maintenance.md](docs/zh/dev/doc-maintenance.md)。
 

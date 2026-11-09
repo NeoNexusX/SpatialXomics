@@ -109,7 +109,7 @@ npm run build             # type-check + SPA build to dist/
 npm run check             # type-check + ESLint + unit tests
 npm run test:unit:run     # one-shot unit tests
 npm run test:e2e          # Playwright E2E
-npm run test:e2e:offline  # Three-browser regression without account, backend, or LLM key
+npm run test:e2e:offline  # Chromium + Firefox regression without account, backend, or LLM key
 npm run docs:build        # docs build to dist-docs/
 npm run icons:bundle      # regenerate the offline icon subset
 ```
@@ -136,7 +136,7 @@ Form dropdown vocabularies and ion-source requirement rules are no longer JSON â
 
 - User and contributor docs live under `docs/` and are served locally at `http://localhost:5174/docs/`.
 - The Docker image contains both `dist/` and `dist-docs/`; nginx serves the SPA and `/docs/` separately.
-- The `test` branch runs checks, the docs build, and three-browser Playwright tests. `dev` and `main` trigger their respective deployments.
+- The `test` branch runs checks, the docs build, and Playwright tests in Chromium and Firefox. `dev` and `main` trigger their respective deployments.
 
 See [docs/en/dev/doc-maintenance.md](docs/en/dev/doc-maintenance.md) for the documentation workflow.
 

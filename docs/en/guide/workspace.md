@@ -4,7 +4,7 @@ Track analysis tasks, follow their progress, and open finished results.
 
 **Author:** Chen Kejiang
 
-**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) or email **jydong@xmu.edu.cn**.
+**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) or email **jydong@xmu.edu.cn**.
 
 ## Open the Workspace
 
@@ -36,7 +36,7 @@ The summary bar at the top counts your tasks by state — for example, "0 analyz
 
 ![Task list](https://cdn.neonexus.top/docs/20260909174322612.jpg_view)
 
-The table below lists every task. You can also search it by dataset name.
+The table below lists every task. To filter by dataset name, type in the search box and press Enter; clearing the box shows all tasks again. Use the footer to change pages and page size.
 
 | Column | Description |
 |---|---|
@@ -46,7 +46,5 @@ The table below lists every task. You can also search it by dataset name.
 | **Created** | When the task was submitted |
 | **Finished** | When the task finished (blank while it is still running) |
 | **Status** | Running, Completed, or Failed |
-| **View** | Opens the result in the visualization workbench |
-| **Delete** | Removes the result after confirmation |
-
-A failed task exposes an error-details panel so you can see why it stopped.
+| **View** | Opens the result in the visualization workbench; for a failed task, shows the failure reason in a dialog. Not shown while a task is running |
+| **Delete** | Removes the result after confirmation. Not shown while a task is running, unless it has shown as running for over 3 hours |

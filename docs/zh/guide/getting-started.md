@@ -4,7 +4,7 @@ SpatialXomics 是一个对质谱成像（MSI）数据进行管理、分析与可
 
 作者：陈柯江
 
-问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
+问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
 
 
 
@@ -26,7 +26,7 @@ SpatialXomics 将常用的 MSI 数据管理与分析功能整合到同一套 Web
 
 - **账号与权限** —— 支持注册、登录、找回密码和个人资料维护，管理员可管理平台用户。
 - **数据上传** —— 导入配对的 .imzML 和 .ibd 文件，自动查重、压缩并分片上传，支持断点续传。
-- **数据集管理** —— 浏览公开数据集、管理个人数据集，查看元数据、分享公开详情页并下载原始文件。
+- **数据集管理** —— 浏览公开数据集、管理个人数据集，查看元数据、分享详情页链接并下载原始文件。
 - **数据集合** —— 把相关公开数据集组织成带学术元数据和有序成员列表的数据集合。
 - **预处理分析** —— 按数据的 spectrum/storage mode 展示兼容的噪声抑制、基线校正、强度归一化、峰提取和峰对齐方法，配置参数后提交任务。
 - **结果可视化** —— Continuous 数据查看离子图与平均谱，Processed 数据查看 TIC 图与逐像素谱；支持调节显示范围、Gamma、配色与 TIC 归一化，可导出离子图（默认 JPG，悬停导出按钮可选 PNG）。
@@ -64,7 +64,7 @@ SpatialXomics 将常用的 MSI 数据管理与分析功能整合到同一套 Web
 
 ### 4. 查看数据基本信息并下载
 
-点击所需数据的状况栏可查看数据的基本信息；
+点击数据集卡片可查看数据的基本信息；
 
 ![image-20260907175815083](https://cdn.neonexus.top/docs/20260907175815189.jpg_view)
 
@@ -72,7 +72,7 @@ SpatialXomics 将常用的 MSI 数据管理与分析功能整合到同一套 Web
 
 （“Mouse”：生物体信息；“Brain”：有机体部分；“MALDI”：离子源；“30”：像素尺寸；“Positive”：极性；“7d5b0c”：识别码）用户可根据需求快速搜索查找。
 
-特别指出点击该页面`Download`按钮可下载该数据集，点击`Share`可分享该数据集链接。
+特别指出点击该页面`Download`按钮可下载该数据集（需要登录并补全个人资料，详见[数据集总览](./dataset-overview)），点击`Share`可分享该数据集链接。
 
 ![image-20260907180028409](https://cdn.neonexus.top/docs/20260907180028501.jpg_view)
 
@@ -110,9 +110,9 @@ SpatialXomics 将常用的 MSI 数据管理与分析功能整合到同一套 Web
 
 ![新建分析页面](https://cdn.neonexus.top/docs/20260908141557982.jpg_view)
 
-点击`Start Analysis`后会自动进入`Workspace`—`Workspace`页面，也可自行手动操作进入该页面，查看数据处理情况(具体细节见[工作区](./workspace))。
+点击`Start Analysis`后会自动进入`Workspace`—`Workspace`页面，也可自行手动操作进入该页面，查看数据处理情况(具体细节见[工作台](./workspace))。
 
-![工作区页面](https://cdn.neonexus.top/docs/20260908142155682.jpg_view)
+![工作台页面](https://cdn.neonexus.top/docs/20260908142155682.jpg_view)
 
 
 
@@ -129,7 +129,7 @@ SpatialXomics 将常用的 MSI 数据管理与分析功能整合到同一套 Web
 | [SXO-Harness 助手](./sxo-harness) | 对话式数据集问答、连接与模型配置、可用工具与技能、对话管理 |
 | [上传数据集](./upload-data) | imzML/ibd 上传流程、元数据表单、查重、断点续传 |
 | [数据集分析](./dataset-analysis) | 选择兼容的预处理方法、参数配置、提交任务 |
-| [工作区](./workspace) | 任务面板、状态跟踪、查看结果 |
+| [工作台](./workspace) | 任务面板、状态跟踪、查看结果 |
 | [导航说明](./navigation) | 导航栏与悬浮导航球 |
 | [数据集合](./collections) | 浏览与创建数据集合、成员管理、公开分享 |
 

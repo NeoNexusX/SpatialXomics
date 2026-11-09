@@ -7,7 +7,9 @@ import { test as base, expect, type Page, type Route } from '@playwright/test'
 export const MODEL = 'e2e-vision'
 export const API_KEY = 'e2e-fake-key'
 export const LLM_ORIGIN = 'https://llm.e2e.invalid'
-export const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII='
+export const OSS_ORIGIN = 'https://oss.e2e.invalid'
+/** 1x1 PNG。Firefox 严格校验 chunk CRC，Chromium 不校验，改动后要确认 CRC 仍然正确。 */
+export const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII='
 
 export interface ModelRequest {
   model: string
@@ -34,6 +36,32 @@ export function processRecord(id: number, overrides: Partial<ProcessRecord> = {}
     created_at: new Date().toISOString(), started_at: null,
     finished_at: new Date().toISOString(), error_message: null,
     source_file_public_id: 'E2eDataset0000001', params_json: '{}', ...overrides,
+  }
+}
+
+export interface FileRecord {
+  public_id: string
+  filename: string
+  size: number
+  status: string
+  is_public: boolean
+  uploaded_at: string
+  first_uploaded_by: string
+  organism: string
+  organism_part: string
+  polarity: string
+  image_path: string | null
+  default_run_id: number | null
+  spectrum_mode?: string
+  storage_mode?: string
+}
+
+export function fileRecord(publicId: string, overrides: Partial<FileRecord> = {}): FileRecord {
+  return {
+    public_id: publicId, filename: `${publicId}_Brain.imzML`, size: 1_048_576, status: 'completed',
+    is_public: true, uploaded_at: new Date().toISOString(), first_uploaded_by: 'e2e-user',
+    organism: 'Human (Homo sapiens)', organism_part: 'Brain', polarity: 'Positive', image_path: null, default_run_id: null,
+    ...overrides,
   }
 }
 
@@ -80,6 +108,14 @@ export interface OfflineBackend {
   deleted: number[]
   deleteStatus: number
   userStatus: number
+  /** 覆盖 GET /user 的身份字段，用来制造资料不完整的账号 */
+  profile: Record<string, string>
+  files: FileRecord[]
+  /** 每次 POST /processes 的请求体 */
+  created: { file_public_id: string; algorithms: Record<string, unknown> }[]
+  /** 每次 GET /files/{id}/download_raw 请求的 public_id */
+  rawDownloads: string[]
+  rawDownloadStatus: number
   requests: ModelRequest[]
   reply: (route: Route, request: ModelRequest) => Promise<void>
 }
@@ -89,9 +125,14 @@ export const test = base.extend<{
   connectionModel: string
   signedIn: boolean
   temporaryStorage: boolean
+  /** Linux WebKit 没有 navigator.storage，依赖 OPFS 落盘的用例在那里跳过 */
+  opfs: boolean
 }>({
-  context: async ({ context, browserName, playwright, headless, baseURL, locale, viewport, temporaryStorage }, use) => {
-    if (browserName !== 'webkit' || temporaryStorage) {
+  opfs: async ({ browserName }, use) => {
+    await use(browserName !== 'webkit' || process.platform === 'darwin')
+  },
+  context: async ({ context, browserName, playwright, headless, baseURL, locale, viewport, temporaryStorage, opfs }, use) => {
+    if (browserName !== 'webkit' || !opfs || temporaryStorage) {
       await use(context)
       return
     }
@@ -127,7 +168,8 @@ export const test = base.extend<{
   temporaryStorage: [false, { option: true }],
   backend: [async ({ context, connectionModel, signedIn, temporaryStorage }, use) => {
     const backend: OfflineBackend = {
-      processes: [], lists: [], deleted: [], deleteStatus: 200, userStatus: 200, requests: [],
+      processes: [], lists: [], deleted: [], deleteStatus: 200, userStatus: 200, profile: {},
+      files: [], created: [], rawDownloads: [], rawDownloadStatus: 200, requests: [],
       reply: (route) => fulfillSse(route, sseText('E2E answer ready.')),
     }
     const unexpected: string[] = []
@@ -142,7 +184,7 @@ export const test = base.extend<{
           endpoint: 'anthropic', baseUrl: origin, apiKey: key, model: connectionModel,
         }))
       }
-      if (temporaryStorage) {
+      if (temporaryStorage && navigator.storage) {
         Object.defineProperty(Object.getPrototypeOf(navigator.storage), 'getDirectory', {
           configurable: true,
           value: undefined,
@@ -162,7 +204,11 @@ export const test = base.extend<{
       const path = url.pathname.replace(/^\/api/, '')
       if (path === '/user') {
         await route.fulfill({ status: backend.userStatus, json: backend.userStatus === 200
-          ? { id: 1, username: 'e2e-user', identity: 'user', email: 'e2e@example.invalid' }
+          ? {
+              id: 1, username: 'e2e-user', identity: 'user', email: 'e2e@example.invalid',
+              institution: 'E2E Institute', position: 'Researcher', research_field: 'Imaging', region: 'CN',
+              ...backend.profile,
+            }
           : { detail: 'Token expired' } })
       } else if (path === '/stats/processing') {
         const counts = (status: string) => backend.processes.filter((p) => p.status === status).length
@@ -177,11 +223,37 @@ export const test = base.extend<{
           data: matches.slice((page - 1) * size, page * size),
           meta: { current_page: page, total_pages: Math.max(1, Math.ceil(matches.length / size)), total_records: matches.length },
         } })
+      } else if (path === '/processes' && request.method() === 'POST') {
+        const body = request.postDataJSON() as OfflineBackend['created'][number]
+        backend.created.push(body)
+        const process = processRecord(backend.processes.length + 1, {
+          status: 'processing', finished_at: null, source_file_public_id: body.file_public_id,
+          filename: backend.files.find((f) => f.public_id === body.file_public_id)?.filename ?? 'unknown',
+          params_json: JSON.stringify(body.algorithms),
+        })
+        backend.processes.unshift(process)
+        await route.fulfill({ json: process })
       } else if (/^\/processes\/\d+$/.test(path) && request.method() === 'DELETE') {
         const id = Number(path.split('/').pop())
         backend.deleted.push(id)
         if (backend.deleteStatus === 200) backend.processes = backend.processes.filter((p) => p.id !== id)
         await route.fulfill({ status: backend.deleteStatus, json: { detail: 'E2E delete result' } })
+      } else if (path === '/files/list_files' || path === '/files/list_user_files') {
+        const size = Number(url.searchParams.get('size')) || backend.files.length
+        await route.fulfill({ json: {
+          data: backend.files.slice(0, size),
+          meta: { current_page: 1, total_pages: 1, total_records: backend.files.length },
+        } })
+      } else if (path === '/users/quota') {
+        await route.fulfill({ json: {} })
+      } else if (/^\/files\/\w+\/download_raw$/.test(path) && request.method() === 'GET') {
+        const publicId = path.split('/')[2]!
+        backend.rawDownloads.push(publicId)
+        await route.fulfill(backend.rawDownloadStatus === 200
+          ? { json: { files: ['imzML', 'ibd'].map((ext) => ({
+              filename: `${publicId}.${ext}`, url: `${OSS_ORIGIN}/${publicId}.${ext}?signature=e2e`, size: 1024,
+            })) } }
+          : { status: backend.rawDownloadStatus, json: { detail: 'E2E download refused' } })
       } else if (path === '/logout') {
         await route.fulfill({ json: {} })
       } else {
@@ -189,6 +261,9 @@ export const test = base.extend<{
         await route.fulfill({ status: 501, json: { detail: 'Unconfigured E2E endpoint' } })
       }
     })
+    await context.route(`${OSS_ORIGIN}/**`, (route) => route.fulfill({
+      contentType: 'application/octet-stream', headers: { 'content-disposition': 'attachment' }, body: 'e2e',
+    }))
     // Same adapter in dev (relay) and production (direct fetch).
     await context.route(/(?:llm\.e2e\.invalid|\/llm-relay\/|\/llm-proxy\/)/, async (route) => {
       const request = route.request()

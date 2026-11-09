@@ -1,4 +1,4 @@
-import { test, expect, processRecord } from './fixtures/offline.js'
+import { test, expect, fileRecord, processRecord } from './fixtures/offline.js'
 
 test('searches on submit, resets pagination, and clears the filename filter', async ({ page, backend }) => {
   backend.processes = [processRecord(1), processRecord(2), processRecord(3, { filename: 'Kidney.imzML' })]
@@ -77,6 +77,7 @@ test('shows failed-task details and limits actions on running tasks', async ({ p
   await expect(page).toHaveURL(/\/workspace$/)
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
   const running = page.getByRole('row').filter({ hasText: 'Brain_2' })
+  await expect(running.getByText('Running', { exact: true })).toBeVisible()
   await expect(running.getByRole('button', { name: 'View', exact: true })).toHaveCount(0)
   await expect(running.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0)
 })
@@ -87,4 +88,27 @@ test('expires authentication in the store and redirects to login with the origin
   await expect(page).toHaveURL(/\/login\?redirect=\/workspace$/)
   await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toBeVisible()
   expect(await page.evaluate(() => localStorage.getItem('access_token'))).toBeNull()
+})
+
+test('creates a Peak Alignment task from a dataset and follows it to completion', async ({ page, backend }) => {
+  backend.files = [fileRecord('E2eDataset000001', { filename: 'Brain_Align.imzML', spectrum_mode: 'centroid', storage_mode: 'processed' })]
+  await page.goto('/workspace/new')
+  await expect(page.getByRole('button', { name: 'Start Analysis', exact: true })).toBeDisabled()
+  await page.locator('.tab:has-text("My Datasets")').click()
+  await page.locator('li').filter({ hasText: 'Brain_Align' }).click()
+  await page.locator('details[open] label').filter({ hasText: 'Python Backend' }).click()
+  await page.getByRole('button', { name: 'Start Analysis', exact: true }).click()
+
+  await expect(page).toHaveURL(/\/workspace$/)
+  expect(backend.created).toEqual([{ file_public_id: 'E2eDataset000001', algorithms: { peak_align: expect.anything() } }])
+  const row = page.getByRole('row').filter({ hasText: /Process #1(?!\d)/ })
+  await expect(row.getByText('Running', { exact: true })).toBeVisible()
+  await expect(row).toContainText('Peak Alignment')
+  await expect(row.getByRole('button', { name: 'View', exact: true })).toHaveCount(0)
+
+  backend.processes[0]!.status = 'completed'
+  backend.processes[0]!.finished_at = new Date().toISOString()
+  await page.reload()
+  await expect(row.getByText('Completed', { exact: true })).toBeVisible()
+  await expect(row.getByRole('button', { name: 'View', exact: true })).toBeVisible()
 })

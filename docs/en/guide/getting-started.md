@@ -4,7 +4,7 @@ SpatialXomics is a web-based platform for managing, analyzing, and visualizing m
 
 **Author:** Chen Kejiang
 
-**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) or email **jydong@xmu.edu.cn**.
+**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) or email **jydong@xmu.edu.cn**.
 
 ## Overview
 
@@ -24,7 +24,7 @@ SpatialXomics brings the most common MSI data management and analysis tasks into
 |---|---|
 | **Accounts & Permissions** | Registration, login, password recovery, profile editing. Admins can manage all users. |
 | **Data Upload** | Upload paired .imzML/.ibd files with automatic deduplication, ZIP compression, chunked upload, and resume. |
-| **Dataset Management** | Browse public datasets, manage your own, inspect metadata, share public pages, and download originals. |
+| **Dataset Management** | Browse public datasets, manage your own, inspect metadata, share detail-page links, and download originals. |
 | **Collections** | Group related public datasets into curated collections with academic metadata and an ordered member list. |
 | **Preprocessing** | Compatible methods shown automatically based on your data's spectrum/storage mode: noise reduction, baseline correction, normalization, peak picking, peak alignment. |
 | **Visualization** | Continuous mode: ion images + mean spectra. Processed mode: TIC images + per-pixel spectra. Adjustable range, gamma, colormap, TIC normalization, and JPG (default) / PNG ion-image export. |
@@ -56,11 +56,11 @@ Search by name or use filters to narrow down results (see [Finding Datasets](./f
 
 ### 4. Inspect & Download
 
-Click any dataset row to view its metadata.
+Click a dataset card to view its metadata.
 
 ![Dataset info](https://cdn.neonexus.top/docs/20260907175815189.jpg_view)
 
-The detail page shows biological info, acquisition parameters, and file details (see [Dataset Overview](./dataset-overview)). Use **Download** to get the raw files, or **Share** to copy the dataset's link.
+The detail page shows biological info, acquisition parameters, and file details (see [Dataset Overview](./dataset-overview)). Use **Download** to get the raw files (this requires signing in and a complete profile), or **Share** to copy the dataset's link.
 
 ![Download & Share](https://cdn.neonexus.top/docs/20260907180028501.jpg_view)
 

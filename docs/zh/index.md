@@ -48,7 +48,7 @@ features:
     details: 按 spectrum/storage mode 选择兼容的预处理方法，配置参数并提交分析任务。
     link: /zh/guide/dataset-analysis
     linkText: 查看指南
-  - title: 工作区
+  - title: 工作台
     details: 查看分析任务面板与状态跟踪，打开或删除结果并排查失败原因。
     link: /zh/guide/workspace
     linkText: 查看指南
