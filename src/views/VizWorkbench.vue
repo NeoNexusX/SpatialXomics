@@ -17,6 +17,8 @@ import {
   loadPixelSpectrum,
   dataModeRef,
   mzAxisRef,
+  metadataAttrsRef,
+  spectrumView,
   getSharedZarrContext,
   disposeZarrState,
   loadIonMatrixByIndex,
@@ -345,6 +347,10 @@ const {
   kmeansComputing,
   selectedKmeansIds,
   getKmeansLabels,
+  getKmeansRgb,
+  getUmapRgb,
+  getOverlayDims,
+  getUmapOccupancyMask,
   exportUmapPng,
   exportKmeansPng,
   toggleOverlay,
@@ -431,27 +437,91 @@ function handleRemoveImportedMask(id: string) {
   removeImportedMaskEntry(id)
 }
 
-// ---- SXO-Harness上下文注册（selectedIon + kmeans） ----
+// ---- SXO-Harness上下文注册（selectedIon + kmeans + umap + datasetInfo） ----
+
+/** zarr attrs 的实时引用（provider 里展开为普通对象） */
+const metadataAttrs = computed(() => metadataAttrsRef.value)
+
 // 把实例级数据以惰性 getter 形式注册给 assistant 的分析上下文采集器；
 // 页面卸载时成对注销（采集器对缺失 provider 优雅降级）。
 registerContextProviders({
   selectedIon: () => {
-    const matrix = ionMatrix.value
-    if (!matrix || selectedMz.value == null) return null
+    const matrix = currentIonMatrix.value
+    if (!matrix) return null
+    const selectedMzValue = isProcessed.value ? 0 : selectedMz.value
+    if (selectedMzValue == null) return null
     return {
-      mz: selectedMz.value,
-      tolerance: mzTolerance.value,
+      mz: selectedMzValue,
+      tolerance: isProcessed.value ? 0 : mzTolerance.value,
       matrix,
       width: ionCols.value,
       height: ionRows.value,
+      // get_ion 的完整视图：显示参数 / 谱图区 / 通道列表 / ROI / 掩膜（实时值）
+      view: {
+        mz: selectedMzValue,
+        tolerance: isProcessed.value ? 0 : mzTolerance.value,
+        dataMode: dataModeRef.value ?? 'continuous',
+        display: {
+          colormap: colormap.value,
+          intensityScale: intensityScale.value,
+          gamma: gamma.value,
+          displayMin: displayMin.value,
+          displayMax: displayMax.value,
+          globalMin: globalMin.value,
+          globalMax: globalMax.value,
+        },
+        spectrum: {
+          view: spectrumView.value,
+          selectedPixel: pixelSpectrum.value
+            ? { x: pixelSpectrum.value.x, y: pixelSpectrum.value.y }
+            : null,
+        },
+        channels: {
+          enabled: channelsEnabled.value,
+          overlayActive: channelsMode.value,
+          list: ionChannels.value.map((c) => ({
+            id: c.id,
+            mz: c.mz,
+            color: [c.color.r, c.color.g, c.color.b],
+            visible: c.visible,
+            opacity: c.opacity ?? 1,
+            loading: c.loading,
+            error: c.error,
+          })),
+        },
+        roi: {
+          confirmed: confirmedROIs.value.length,
+          // selectedRoiIds: null = 全选；空 Set = 全不选
+          selected:
+            selectedRoiIds.value == null
+              ? confirmedROIs.value.length
+              : confirmedROIs.value.filter((r) => selectedRoiIds.value!.has(r.id)).length,
+        },
+        masks: { imported: importedMasks.value.length },
+      },
     }
   },
   kmeans: () => {
-    if (kmeansClusters.value.length === 0 || kmeansK.value == null) return null
+    const computing = kmeansComputing.value
+    if (kmeansClusters.value.length === 0 && kmeansK.value == null && !computing) return null
     return {
       k: kmeansK.value,
       clusterSizes: kmeansClusters.value.map((c) => c.count),
       selectedIds: [...(selectedKmeansIds.value ?? kmeansClusters.value.map((c) => c.id))],
+      // get_kmeans 的完整视图与叠加栅格
+      view: {
+        clusters: kmeansClusters.value.map((c) => ({
+          id: c.id,
+          color: [...c.color] as [number, number, number],
+          count: c.count,
+        })),
+        labelsAvailable: kmeansLabelsAvailable.value,
+        computing: kmeansComputing.value,
+        visible: kmeansVisible.value,
+        labels: () => getKmeansLabels(),
+        rgb: () => getKmeansRgb(),
+        dims: () => getOverlayDims(),
+      },
     }
   },
   umap: () => ({
@@ -460,7 +530,33 @@ registerContextProviders({
     computing: clusteringComputing.value,
     error: overlayError.value,
     grid: { width: ionCols.value, height: ionRows.value },
+    rgb: () => getUmapRgb(),
+    occupancyMask: () => getUmapOccupancyMask(),
   }),
+  // 右侧数据集信息面板整体（get_dataset；bridge 侧做 raw 展开 + 双命名排除投影）
+  datasetInfo: () => {
+    if (!datasetName.value && !sourceFile.value) return null
+    return {
+      attrs: { ...(metadataAttrs.value ?? {}) },
+      acquisition: { ...acquisition.value },
+      sourceFile: sourceFile.value as unknown as Record<string, unknown> | null,
+      methods: [...methods.value],
+      displayRange: {
+        globalMin: globalMin.value,
+        globalMax: globalMax.value,
+        displayMin: displayMin.value,
+        displayMax: displayMax.value,
+      },
+      imageInfo: {
+        pixels: imageInfo.value.pixels === '--' ? null : imageInfo.value.pixels,
+        nonZero: imageInfo.value.nonZero === '--' ? null : imageInfo.value.nonZero,
+        totalIon: imageInfo.value.totalIon === '--' ? null : imageInfo.value.totalIon,
+        pixelSize: pixelSize.value || null,
+      },
+    }
+  },
+  // 页头（get_page.header）：数据集名 + 处理状态徽章
+  pageHeader: () => ({ datasetName: datasetName.value, status: status.value }),
 })
 
 async function handleExportMasks(payload: MaskExportPayload) {

@@ -1,21 +1,21 @@
 [
   {
     "name": "chebi_lookup",
-    "description": "Look up compounds in the ChEBI ontology (online, EBI OLS4): what a molecule IS in biological role terms (e.g. \"antioxidant\", \"xenobiotic metabolite\") — labels, synonyms, definitions, CHEBI ids. Use for the semantic/biological role layer of an identification. BATCHING: for several compounds pass \"queries\" (array) in ONE call. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
+    "description": "Search the ChEBI ontology (online, EBI OLS4) when a compound's ontology label, biological role, definition or related terms are needed. Returns relevance-ranked terms with labels, synonyms, definition excerpts, CHEBI ids and official page links. Review the returned labels: relevance ranking is not identity verification, and the first hit may be a derivative or related compound. For identity checks compare formula and exact mass via kegg_compound or pubchem_compound_lookup. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
     "parameters": {
       "type": "object",
       "properties": {
         "offset": {
           "type": "integer",
-          "description": "First input query index, default 0. Continue with nextOffset."
+          "description": "Zero-based start into the batch query inputs (default 0); continue with nextOffset."
         },
         "limit": {
           "type": "integer",
-          "description": "Queries per page. Evidence default 5, max 8."
+          "description": "Queries processed per page, default 5, max 8; pages inputs."
         },
         "query": {
           "type": "string",
-          "description": "Single compound name or CHEBI id fragment; for multiple use \"queries\""
+          "description": "Single compound name or CHEBI id fragment; use \"queries\" for several."
         },
         "queries": {
           "type": "array",
@@ -23,28 +23,28 @@
             "type": "string"
           },
           "maxItems": 25,
-          "description": "Batch form of \"query\": many names in one call"
+          "description": "Batch names or id fragments, each searched independently."
         },
         "maxResults": {
           "type": "integer",
-          "description": "Max terms per query (default 5, max 10)"
+          "description": "Max ChEBI terms per query, default 5, clamped 1–10."
         }
       }
     }
   },
   {
     "name": "europepmc_search",
-    "description": "Search Europe PMC (a PubMed superset including preprints and PMC full texts). Returns title/journal/year/DOI plus the ABSTRACT TEXT excerpt — the first choice when you need published evidence to support or challenge an interpretation. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
+    "description": "Search Europe PMC (a PubMed superset including preprints and PMC full texts) — the first choice when abstract text is needed to support or challenge an interpretation. Returns title, journal, year, available identifiers (PMID/PMCID/DOI), an abstract excerpt of up to 600 characters, and a full-text link for open-access entries with a PMCID. Verify the excerpt actually supports any claim you cite; abstracts may be truncated. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
     "parameters": {
       "type": "object",
       "properties": {
         "query": {
           "type": "string",
-          "description": "Search query (English works best)"
+          "description": "Europe PMC search expression; English works best; must be non-empty."
         },
         "maxResults": {
           "type": "integer",
-          "description": "Max papers (default 5, max 10)"
+          "description": "Max papers returned, default 5, clamped 1–10."
         }
       },
       "required": [
@@ -53,22 +53,22 @@
     }
   },
   {
-    "name": "get_annotation_detail",
-    "description": "Get the FULL evidence for annotation rows (get_annotation_top abbreviates): score breakdown, chaos and co-localization, the other adduct ions of the same molecule with their Pearson r, enabled adducts that were not detected, other annotations on the same peak, and all candidate names. Identify rows by rowId, or by observed m/z (the best-ranked row on the closest peak is returned). BATCHING: pass \"mzs\" or \"rowIds\" (arrays) to fetch several rows in ONE call instead of one call per row.",
+    "name": "get_annotation",
+    "description": "Read annotation rows from the current page. Window mode (default): offset/limit page through the FULL result set in stable rank order — zero-based, default offset 0 / limit 10, any rank reachable (rank 20–30 = offset 19 + limit 11); windowing ignores the panel's current filters/sorting, which the panel header reports separately. Exact mode: mz/mzs (nearest peak, best-ranked row within 0.5 Da) or rowId/rowIds fetch specific full rows; exact selectors conflict with offset/limit. One row = one adduct ion. The character budget may return fewer rows than limit — follow the returned paging/nextOffset.",
     "parameters": {
       "type": "object",
       "properties": {
         "offset": {
           "type": "integer",
-          "description": "First input query index, default 0. Continue with nextOffset."
+          "description": "Zero-based window start into the full rank order (any rank; default 0). Window mode only."
         },
         "limit": {
           "type": "integer",
-          "description": "Queries per page. Evidence default 5, max 8."
+          "description": "Window size, default 10, page cap 25; the character budget may return fewer."
         },
         "mz": {
           "type": "number",
-          "description": "Observed m/z of the row (from get_annotation_top)"
+          "description": "Observed m/z to locate the row (exact mode); choose one selector form."
         },
         "mzs": {
           "type": "array",
@@ -76,11 +76,11 @@
             "type": "number"
           },
           "maxItems": 25,
-          "description": "Batch form of \"mz\": many m/z values in one call"
+          "description": "Batch observed m/z values (exact mode); each value independently resolves its nearest best-ranked row."
         },
         "rowId": {
           "type": "integer",
-          "description": "Row id if known (takes precedence over mz)"
+          "description": "Known annotation row id (exact mode)."
         },
         "rowIds": {
           "type": "array",
@@ -88,101 +88,14 @@
             "type": "integer"
           },
           "maxItems": 25,
-          "description": "Batch form of \"rowId\": many row ids in one call"
+          "description": "Batch annotation row ids (exact mode); one full row each."
         }
       }
     }
   },
   {
-    "name": "get_annotation_images",
-    "description": "View ion heatmaps for annotation rowIds or the topN ranked rows. Labels preserve annotation identities.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "tolerance": {
-          "type": "number",
-          "description": "Integration half-window in Da, defaults to the current tolerance"
-        },
-        "colormap": {
-          "type": "string",
-          "enum": [
-            "viridis",
-            "inferno",
-            "magma",
-            "hot",
-            "gray"
-          ]
-        },
-        "scale": {
-          "type": "string",
-          "enum": [
-            "linear",
-            "log"
-          ]
-        },
-        "gamma": {
-          "type": "number",
-          "description": "0.2–3, default 1"
-        },
-        "display": {
-          "type": "string",
-          "enum": [
-            "p1p95",
-            "p99",
-            "max"
-          ]
-        },
-        "width": {
-          "type": "integer",
-          "description": "Panel maximum edge, default 384, maximum 640"
-        },
-        "rowIds": {
-          "type": "array",
-          "items": {
-            "type": "integer"
-          }
-        },
-        "topN": {
-          "type": "integer",
-          "description": "Default 4, maximum 6"
-        },
-        "normalize": {
-          "type": "string",
-          "enum": [
-            "shared",
-            "per-image"
-          ]
-        },
-        "layout": {
-          "type": "string",
-          "enum": [
-            "separate",
-            "montage"
-          ]
-        },
-        "columns": {
-          "type": "integer",
-          "description": "Montage columns, 1–3, default 2"
-        }
-      }
-    }
-  },
-  {
-    "name": "get_annotation_top",
-    "description": "Get the top annotations ranked by total score (mass error + adduct fit + spatial chaos with same-molecule co-localization) with target-decoy FDR q-values. One row = one adduct ion. Tokens: s=total q=FDR m=mass fit=adduct fit ch=chaos col=co-localization sib=other adducts of the same molecule samePeak=other annotations on the same peak origin=provenance label of the named compound from the database (endo / expected / exo; exo means every candidate is exogenous), a prior that orders candidates, not evidence.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "topN": {
-          "type": "integer",
-          "description": "Number of matches to return (default 10, max 20)"
-        }
-      }
-    }
-  },
-  {
-    "name": "get_dataset_overview",
-    "description": "Get an overview of the currently loaded MSI dataset: dimensions, data mode, m/z range, instrument metadata. Note: static sample metadata is already in the system prompt (Dataset Context section) — use this only to verify or when the user asks about it explicitly.",
+    "name": "get_dataset",
+    "description": "Read the dataset info panel as JSON when the user asks about acquisition settings, source file, preprocessing or image statistics. Zarr attrs pass through as-is, so new backend fields appear automatically; the source-file record omits technical/registration fields. Processing status is NOT here — get it from get_page's header.",
     "parameters": {
       "type": "object",
       "properties": {}
@@ -190,13 +103,13 @@
   },
   {
     "name": "get_file_metadata",
-    "description": "Get metadata of a dataset by public_id (instrument, sample, upload info; requires login). Use after list_files / list_my_files to inspect one file.",
+    "description": "Retrieve metadata for one dataset by its exact public_id from a file list: a bounded single-level field summary of instrument, sample and upload information. Requires login; pass public_id as a string, preserving leading zeros.",
     "parameters": {
       "type": "object",
       "properties": {
         "fileId": {
           "type": "string",
-          "description": "Exact public_id from the file list; preserve the string, including leading zeros"
+          "description": "Exact public_id from the file list; keep it a string including leading zeros."
         }
       },
       "required": [
@@ -205,17 +118,49 @@
     }
   },
   {
+    "name": "get_ion",
+    "description": "Read the selected-ion view as JSON when the user asks about its display parameters, spectrum area, ROI counts, multi-ion channels or intensity statistics. With withImage (default true) attaches the ion raster re-rendered with the CURRENT display parameters (including range) — not a canvas screenshot: ROI highlights, channel blending and KMeans/UMAP overlays are absent. Processed data falls back to TIC. For arbitrary m/z images use get_ion_image.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "withImage": {
+          "type": "boolean",
+          "description": "Attach the re-rendered ion image (default true); set false for state JSON only."
+        }
+      }
+    }
+  },
+  {
     "name": "get_ion_image",
-    "description": "View the selected ion or any specified mz as an image with quantitative statistics. Processed data returns labeled TIC when mz is omitted.",
+    "description": "View spatial ion heatmaps for the selected ion, a single mz, up to 9 mzs, or annotation rowIds (rows sharing an observed m/z are grouped and keep their labels). The three selectors mz/mzs/rowIds are mutually exclusive — passing more than one errors. Up to 4 targets render as separate images, more as a montage; the color range is shared by default for comparison. Each target returns grid dimensions and quantitative statistics alongside its image. Processed data only returns a labeled TIC when no target is given and rejects explicit m/z values. Without a target the image is the ion captured at question time, immune to mid-turn selection changes.",
     "parameters": {
       "type": "object",
       "properties": {
+        "mz": {
+          "type": "number",
+          "description": "Single target m/z; mutually exclusive with mzs/rowIds; continuous mode only."
+        },
+        "mzs": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "1–9 m/z values to view; mutually exclusive with mz/rowIds."
+        },
+        "rowIds": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Annotation row ids; mutually exclusive with mz/mzs; rows sharing an obsMz are grouped into one labeled target."
+        },
         "tolerance": {
           "type": "number",
-          "description": "Integration half-window in Da, defaults to the current tolerance"
+          "description": "Integration half-window in Da; defaults to the captured/current tolerance, clamped to configured bounds."
         },
         "colormap": {
           "type": "string",
+          "description": "viridis | inferno | magma | hot | gray; default viridis.",
           "enum": [
             "viridis",
             "inferno",
@@ -226,6 +171,7 @@
         },
         "scale": {
           "type": "string",
+          "description": "linear | log; default linear.",
           "enum": [
             "linear",
             "log"
@@ -233,10 +179,11 @@
         },
         "gamma": {
           "type": "number",
-          "description": "0.2–3, default 1"
+          "description": "Gamma adjustment, default 1, clamped to 0.2–3."
         },
         "display": {
           "type": "string",
+          "description": "Display range strategy: p1p95 | p99 | max; default p1p95.",
           "enum": [
             "p1p95",
             "p99",
@@ -245,13 +192,11 @@
         },
         "width": {
           "type": "integer",
-          "description": "Panel maximum edge, default 384, maximum 640"
-        },
-        "mz": {
-          "type": "number"
+          "description": "Maximum panel edge in pixels, default 384, clamped 64–640."
         },
         "normalize": {
           "type": "string",
+          "description": "shared | per-image intensity normalization; default shared for comparison.",
           "enum": [
             "shared",
             "per-image"
@@ -259,6 +204,7 @@
         },
         "layout": {
           "type": "string",
+          "description": "separate | montage; default by target count (montage above 4).",
           "enum": [
             "separate",
             "montage"
@@ -266,185 +212,118 @@
         },
         "columns": {
           "type": "integer",
-          "description": "Montage columns, 1–3, default 2"
+          "description": "Montage columns 1–3, default 2."
         }
       }
     }
   },
   {
-    "name": "get_ion_image_stats",
-    "description": "Get ion-image statistics for the current selection, mz, or up to 6 mzs. Includes intensities, nonzero ratio, percentiles and hotspots.",
+    "name": "get_kmeans",
+    "description": "Read the KMeans clustering state when the user asks about clusters, selection or the overlay. Returns k, clusters with colors and pixel counts, selected ids, label availability, computing state and overlay visibility. With withImage (default true) attaches the overlay PNG with a color legend (cluster id, pixel count), transparent background, unselected clusters hidden, nearest-neighbor upscaled — same logic as the export button. Images may be omitted when labels or dimensions are unusable.",
     "parameters": {
       "type": "object",
       "properties": {
-        "mz": {
-          "type": "number"
-        },
-        "mzs": {
-          "type": "array",
-          "items": {
-            "type": "number"
-          }
-        },
-        "tolerance": {
-          "type": "number"
+        "withImage": {
+          "type": "boolean",
+          "description": "Attach the KMeans overlay PNG (default true); false returns state JSON only."
         }
       }
-    }
-  },
-  {
-    "name": "get_ion_images",
-    "description": "View 1–9 ion heatmaps. Up to 4 separate images, otherwise a montage. Shared color range by default for comparison.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "tolerance": {
-          "type": "number",
-          "description": "Integration half-window in Da, defaults to the current tolerance"
-        },
-        "colormap": {
-          "type": "string",
-          "enum": [
-            "viridis",
-            "inferno",
-            "magma",
-            "hot",
-            "gray"
-          ]
-        },
-        "scale": {
-          "type": "string",
-          "enum": [
-            "linear",
-            "log"
-          ]
-        },
-        "gamma": {
-          "type": "number",
-          "description": "0.2–3, default 1"
-        },
-        "display": {
-          "type": "string",
-          "enum": [
-            "p1p95",
-            "p99",
-            "max"
-          ]
-        },
-        "width": {
-          "type": "integer",
-          "description": "Panel maximum edge, default 384, maximum 640"
-        },
-        "mzs": {
-          "type": "array",
-          "items": {
-            "type": "number"
-          }
-        },
-        "normalize": {
-          "type": "string",
-          "enum": [
-            "shared",
-            "per-image"
-          ]
-        },
-        "layout": {
-          "type": "string",
-          "enum": [
-            "separate",
-            "montage"
-          ]
-        },
-        "columns": {
-          "type": "integer",
-          "description": "Montage columns, 1–3, default 2"
-        }
-      },
-      "required": [
-        "mzs"
-      ]
-    }
-  },
-  {
-    "name": "get_kmeans_summary",
-    "description": "Get KMeans clustering summary: k, cluster sizes, currently selected cluster ids.",
-    "parameters": {
-      "type": "object",
-      "properties": {}
     }
   },
   {
     "name": "get_mean_spectrum_top_peaks",
-    "description": "Get the top-N peaks of the mean spectrum (continuous mode only).",
+    "description": "Read mean-spectrum peaks ranked by descending intensity (continuous mode only), paged by a zero-based rank window. Default window is rank 1–10; offset reaches any rank (rank 20–30 = offset 19 + limit 11). mzMin/mzMax filter the spectrum before ranking (inclusive bounds). Returns {window:{total,offset,returned,nextOffset},peaks}; continue with nextOffset.",
     "parameters": {
       "type": "object",
       "properties": {
+        "offset": {
+          "type": "integer",
+          "description": "Zero-based start into the intensity ranking (any rank; default 0)."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Window size, default 10, page cap 25."
+        },
         "mzMin": {
           "type": "number",
-          "description": "Inclusive lower m/z bound"
+          "description": "Inclusive lower m/z bound applied before ranking."
         },
         "mzMax": {
           "type": "number",
-          "description": "Inclusive upper m/z bound"
-        },
-        "topN": {
-          "type": "integer",
-          "description": "Number of peaks to return (default 10, max 20)"
+          "description": "Inclusive upper m/z bound; must be ≥ mzMin."
         }
       }
     }
   },
   {
-    "name": "get_page_state",
-    "description": "Get the live state of the current page: dataset overview (dimensions, data mode, m/z range), currently selected ion, clustering summary, annotation match count. Lightweight and always current. Call this FIRST for any question about the loaded data, then use specialized get_* tools for detailed statistics.",
+    "name": "get_page",
+    "description": "Get a live JSON snapshot of the current workbench page when you need overall context or need to check whether the dataset, selected ion, clustering and annotations are ready. Reads the page header (dataset name, processing status), dataset info panel, selected-ion view, KMeans/UMAP readiness, and an annotation preview covering rank 1–10 only. For more annotation rows call get_annotation(offset, limit). With withImage (default true) it attaches the ion captured at question time; the snapshot reflects call time, not a live subscription.",
     "parameters": {
       "type": "object",
-      "properties": {}
+      "properties": {
+        "withImage": {
+          "type": "boolean",
+          "description": "Attach the ion image captured at question time (default true); set false when text-only state is enough."
+        }
+      }
     }
   },
   {
     "name": "get_pixel_spectrum",
-    "description": "Get top spectrum peaks for the last clicked pixel, a pixelIndex, up to 4 pixelIndices, or an x/y pair. Coordinates are 1-based acquisition coordinates. Explicit reads leave the page selection unchanged.",
+    "description": "Read single-pixel spectrum peaks ranked by descending intensity, paged by a zero-based rank window. Pixel source: the last clicked pixel (no selector), a pixelIndex, up to 4 pixelIndices, or an x/y pair in 1-based acquisition coordinates (explicit reads leave the page selection unchanged). Default window rank 1–10; offset reaches any rank. Each pixel returns its own JSON with window metadata. With withImage (default true) attaches one stick-spectrum PNG per pixel: full spectrum in gray with the current window's peaks highlighted (plots cap at 2000 peaks but keep highlighted ones).",
     "parameters": {
       "type": "object",
       "properties": {
+        "offset": {
+          "type": "integer",
+          "description": "Zero-based start into the intensity ranking (any rank; default 0)."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Window size, default 10, page cap 25."
+        },
+        "withImage": {
+          "type": "boolean",
+          "description": "Attach a full-spectrum stick plot per pixel with the window peaks highlighted (default true)."
+        },
         "pixelIndex": {
           "type": "integer",
-          "description": "Zero-based spectrum row index"
+          "description": "Zero-based spectrum row index; mutually exclusive with pixelIndices."
         },
         "pixelIndices": {
           "type": "array",
           "items": {
             "type": "integer"
           },
-          "description": "1–4 spectrum row indices"
+          "description": "1–4 zero-based spectrum row indices; more or negative values error."
         },
         "x": {
           "type": "integer",
-          "description": "1-based acquisition x coordinate"
+          "description": "1-based acquisition x coordinate; must pair with y, exclusive of index selectors."
         },
         "y": {
           "type": "integer",
-          "description": "1-based acquisition y coordinate"
-        },
-        "topN": {
-          "type": "integer",
-          "description": "Number of peaks to return (default 10, max 20)"
+          "description": "1-based acquisition y coordinate; must pair with x."
         }
       }
     }
   },
   {
-    "name": "get_umap_summary",
-    "description": "Get the UMAP clustering overlay status: whether the UMAP zarr is loaded (ready), the backend task is still computing, any load error, the raster grid size, and whether the overlay currently shows on the ion image. Use before discussing UMAP dimensionality reduction or spatial clustering.",
+    "name": "get_umap",
+    "description": "Read the UMAP overlay state before discussing UMAP dimensionality reduction or spatial clustering. Reports whether the clustering zarr is loaded (ready), whether the backend task is still computing, any load error, the raster grid size, and whether the overlay currently shows. With withImage (default true) attaches the overlay PNG (transparent background; foreground is decided by embedding coordinates, not by color). The image may be omitted when the raster is not loaded or invalid.",
     "parameters": {
       "type": "object",
-      "properties": {}
+      "properties": {
+        "withImage": {
+          "type": "boolean",
+          "description": "Attach the UMAP overlay PNG (default true); false returns state JSON only."
+        }
+      }
     }
   },
   {
     "name": "get_user_quota",
-    "description": "Get the current user storage and processing quota usage (requires login).",
+    "description": "Retrieve the signed-in user's storage and processing quota usage as a bounded field summary. Requires login; this only reads quota information — it does not request or change quota.",
     "parameters": {
       "type": "object",
       "properties": {}
@@ -452,21 +331,33 @@
   },
   {
     "name": "hmdb_lookup",
-    "description": "Look up metabolites in the Human Metabolome Database (offline local index): tissue localization, disease associations, biological function, formula/mass, KEGG id. Query by name / HMDB id, or by observed m/z (+polarity) for adduct-aware mass matching of small molecules (non-lipid). The biology layer behind \"what does this molecule do here\". BATCHING: when checking several molecules at once, pass \"queries\" (array of names/ids) or \"mzs\" (array of m/z) in ONE call instead of one call per molecule. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
+    "description": "Look up an HMDB metabolite by accession in archived official XML via the Internet Archive Wayback Machine. Returns the recorded profile — Record Information (HMDB id, update date), Metabolite Identification (common name, description truncated to 1000 characters, synonyms, formula and masses, IUPAC/traditional name, CAS, SMILES/InChI/InChIKey), chemical taxonomy, Role terms, biological properties, normal concentrations and external links to other databases — with the canonical HMDB page and archive snapshot time. Lines carry the HMDB metabolite page labels (Common Name, Traditional Name, InChI Identifier, KEGG Compound ID, …) so they map straight to the page. Query by accession for the full profile; when only a name is known, a name query discovers candidate HMDB ids — review the candidates, then query by id. Archive XML is fetched through the application same-origin relay (the archive sends no browser CORS headers); on network/relay failure the tool degrades to link-only output and never invents HMDB data. For m/z candidate search use kegg_mass_search instead. BATCHING: use \"ids\" or \"queries\" in ONE call. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
     "parameters": {
       "type": "object",
       "properties": {
         "offset": {
           "type": "integer",
-          "description": "First input query index, default 0. Continue with nextOffset."
+          "description": "Zero-based start into the batch id/name inputs (default 0); continue with nextOffset."
         },
         "limit": {
           "type": "integer",
-          "description": "Queries per page. Evidence default 5, max 8."
+          "description": "Inputs processed per page, default 5, max 8; pages the combined id+name batch."
+        },
+        "id": {
+          "type": "string",
+          "description": "Single HMDB accession, e.g. \"HMDB0003502\"; use \"ids\" for several."
+        },
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 25,
+          "description": "Up to 25 accessions, fetched sequentially; combinable with name queries."
         },
         "query": {
           "type": "string",
-          "description": "Single metabolite name or HMDB id (e.g. \"glucose\", \"HMDB00165\"); for multiple use \"queries\""
+          "description": "Single metabolite name for candidate-id discovery; the result is candidate ids, not confirmed identity."
         },
         "queries": {
           "type": "array",
@@ -474,132 +365,199 @@
             "type": "string"
           },
           "maxItems": 25,
-          "description": "Batch form of \"query\": many names/ids in one call (preferred for multiple molecules)"
+          "description": "Up to 25 names, each resolved to candidate accessions for review."
+        }
+      }
+    }
+  },
+  {
+    "name": "kegg_compound",
+    "description": "Retrieve official KEGG compound entries by C id when a candidate id is known or a keyword hit needs identity checking. Returns names, FORMULA, EXACT_MASS, MOL_WEIGHT, PATHWAY links, DBLINKS and the official entry link. Compare formula and exact mass against the annotation rather than trusting keyword rank. PubChem cross-references are SIDs, not CIDs. Batch up to 25 ids; requests are chunked to KEGG's 10-entries-per-request limit; invalid ids are reported per item. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Single KEGG compound id — C plus five digits, \"cpd:\" prefix accepted. Provide id or ids."
         },
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 25,
+          "description": "Up to 25 compound ids; deduplicated and chunked 10 per upstream request."
+        }
+      }
+    }
+  },
+  {
+    "name": "kegg_find",
+    "description": "Search KEGG by keyword to locate compound or pathway entries. Each query returns entry ids/names and a result window over the fully retrieved result set; continue with nextOffset. Multi-word queries use DBGET AND semantics. Keyword hits are search candidates, not identity: verify compounds with kegg_compound or pubchem_compound_lookup. Use db=\"pathway\" for pathway keywords and kegg_pathway for details by map id. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Single KEGG keyword; for several independent searches use \"queries\". Provide query or queries."
+        },
+        "queries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 25,
+          "description": "Independent keywords (≤25); offset/limit apply to each query's own result window."
+        },
+        "db": {
+          "type": "string",
+          "description": "Database to search: compound | pathway; default compound.",
+          "enum": [
+            "compound",
+            "pathway"
+          ]
+        },
+        "offset": {
+          "type": "integer",
+          "description": "Zero-based result offset within each query (default 0); pages results, never the input array."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Result page size per query, default 10, max 25 — page size, not a total cap."
+        }
+      }
+    }
+  },
+  {
+    "name": "kegg_mass_search",
+    "description": "Search KEGG for small-molecule candidates by observed m/z when a polarity-aware mass lookup is needed. Expands the supported adduct table per polarity, queries exact-mass ranges, then verifies each candidate's EXACT_MASS from its entry and recalculates Δppm; matches from all adducts are merged and sorted by absolute Δppm, and offset/limit page the window for EACH m/z. Continue with nextOffset. Coverage is roughly 19,000 small molecules and excludes lipids — use the annotation library or PubChem for lipids. KEGG rate limits can make batches slow. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
+    "parameters": {
+      "type": "object",
+      "properties": {
         "mz": {
           "type": "number",
-          "description": "Single observed m/z for mass-based search (needs polarity)"
+          "description": "Single positive observed m/z; use \"mzs\" for several. Provide mz or mzs."
         },
         "mzs": {
           "type": "array",
           "items": {
             "type": "number"
           },
-          "maxItems": 25,
-          "description": "Batch form of \"mz\": many m/z values in one call (needs polarity)"
+          "maxItems": 10,
+          "description": "Up to 10 observed m/z values; each returns its own match window."
         },
         "polarity": {
           "type": "string",
-          "description": "Ion mode for mz search: \"positive\" or \"negative\""
+          "description": "Ion mode \"positive\" or \"negative\"; defaults to the current dataset polarity (\"+\"/\"pos\" and \"-\"/\"neg\" also accepted)."
         },
         "ppm": {
           "type": "integer",
-          "description": "Mass tolerance in ppm (default 10, max 50)"
+          "description": "Mass tolerance in ppm, default 10, clamped 1–50."
         },
-        "maxResults": {
+        "offset": {
           "type": "integer",
-          "description": "Max entries per query (default 10, max 25)"
+          "description": "Zero-based offset into each m/z's Δppm-sorted matches (default 0)."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Match page size per m/z, default 10, max 25."
         }
       }
     }
   },
   {
-    "name": "kegg_pathway_lookup",
-    "description": "Query the official KEGG REST API live for metabolic pathways: query compound names or C numbers to list pathways (e.g. \"what pathway is palmitic acid in\"), or a pathway name/map id to list member compounds. Keyword matches require identity verification. BATCHING: for several compounds at once pass \"queries\" (array) in ONE call instead of one call per molecule. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
+    "name": "kegg_pathway",
+    "description": "Retrieve an official KEGG pathway entry by map id when the pathway's details or member compounds are needed. Returns NAME, CLASS, a DESCRIPTION excerpt and a member-compound list paged by a per-pathway window (default 0/10, cap 25; rank 10–20 = offset 9 + limit 11); continue with nextOffset. Accepts map ids only — organism-specific codes like hsa00010 are rejected; discover pathway ids by keyword with kegg_find. Each pathway in a batch gets its own member window. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
     "parameters": {
       "type": "object",
       "properties": {
-        "offset": {
-          "type": "integer",
-          "description": "First input query index, default 0. Continue with nextOffset."
-        },
-        "limit": {
-          "type": "integer",
-          "description": "Queries per page. Evidence default 5, max 8."
-        },
-        "query": {
+        "id": {
           "type": "string",
-          "description": "Single compound name / C number / pathway name or map id; for multiple use \"queries\""
+          "description": "Single KEGG map id, e.g. \"map00010\"; \"path:\" prefix accepted; no organism-specific codes."
         },
-        "queries": {
+        "ids": {
           "type": "array",
           "items": {
             "type": "string"
           },
           "maxItems": 25,
-          "description": "Batch form of \"query\": many compound names / C numbers in one call"
+          "description": "Up to 25 map ids; details and member windows are fetched per pathway."
         },
-        "maxResults": {
+        "offset": {
           "type": "integer",
-          "description": "Max pathways or compounds per query (default 10, max 20)"
+          "description": "Zero-based member-compound offset within each pathway (default 0)."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Member page size per pathway, default 10, max 25 — page size, not a member-total cap."
         }
       }
     }
   },
   {
     "name": "list_files",
-    "description": "List publicly available datasets on the platform (paginated, read-only). Use for browsing public data.",
+    "description": "Browse publicly available datasets on the platform. Returns a paginated summary of file identifiers, names, sizes, dates and statuses; advance with page. Read-only; this lists entries, not file contents.",
     "parameters": {
       "type": "object",
       "properties": {
         "page": {
           "type": "integer",
-          "description": "Page number (default 1)"
+          "description": "Page number starting at 1, default 1."
         },
         "size": {
           "type": "integer",
-          "description": "Page size (default 10, max 20)"
+          "description": "Page size, default 10, clamped 1–20."
         }
       }
     }
   },
   {
     "name": "list_my_files",
-    "description": "List the current user uploaded datasets (requires login). Use when the user asks about their own files.",
+    "description": "List datasets uploaded by the signed-in user. Returns paginated file summaries; follow up with get_file_metadata using a returned public_id. Requires login — treat authorization errors as a sign-in issue, not as an empty list.",
     "parameters": {
       "type": "object",
       "properties": {
         "page": {
           "type": "integer",
-          "description": "Page number (default 1)"
+          "description": "Page number starting at 1, default 1."
         },
         "size": {
           "type": "integer",
-          "description": "Page size (default 10, max 20)"
+          "description": "Page size, default 10, clamped 1–20."
         }
       }
     }
   },
   {
     "name": "list_my_processes",
-    "description": "List the current user analysis tasks / processes with status (requires login). Use when the user asks about their analyses.",
+    "description": "List the signed-in user's analysis processes with status. Returns a paginated summary of process id, type/algorithm, status and creation time. Requires login; does not include full task inputs or result files.",
     "parameters": {
       "type": "object",
       "properties": {
         "page": {
           "type": "integer",
-          "description": "Page number (default 1)"
+          "description": "Page number starting at 1, default 1."
         },
         "size": {
           "type": "integer",
-          "description": "Page size (default 10, max 20)"
+          "description": "Page size, default 10, clamped 1–20."
         }
       }
     }
   },
   {
     "name": "openalex_search",
-    "description": "Search OpenAlex scholarly works (all disciplines, incl. reviews/preprints): title, venue, year, DOI, citation count, open-access link. Use to find review articles or gauge how much published work supports a topic. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
+    "description": "Search OpenAlex scholarly works across all disciplines (including reviews and preprints) to find survey articles or gauge how much published work supports a topic. Returns title, venue, year, type, DOI, citation count and an open-access link when available. Citation counts and links are discovery signals, not a quality verdict; read the paper or abstract before drawing scientific conclusions. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
     "parameters": {
       "type": "object",
       "properties": {
         "query": {
           "type": "string",
-          "description": "Search query"
+          "description": "OpenAlex search query; combine topic, molecule, method or study context; must be non-empty."
         },
         "maxResults": {
           "type": "integer",
-          "description": "Max works (default 5, max 10)"
+          "description": "Max works returned, default 5, clamped 1–10."
         }
       },
       "required": [
@@ -608,35 +566,22 @@
     }
   },
   {
-    "name": "pathway_enrichment",
-    "description": "Query the official KEGG REST API live for a pathway rollup: batch-map the top N annotation rows (folded into formula groups; adducts and unresolved isomers share a count) onto KEGG pathways and rank pathways by how many annotated formula groups they contain. Use AFTER get_annotation_top to answer \"are these annotations concentrated on one pathway\" — several high-score annotations on ONE pathway is a candidate descriptive finding; it does not establish pathway activity. Uses exact compound/synonym matches or KEGG C ids; reports ambiguous matches and candidates deferred beyond the 50-query budget. Descriptive counts, not a statistical enrichment test. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "topN": {
-          "type": "integer",
-          "description": "Number of top-ranked rows to include (default 10, max 20)"
-        }
-      }
-    }
-  },
-  {
     "name": "pubchem_compound_lookup",
-    "description": "Look up chemical compounds by name on PubChem: formula, exact (monoisotopic) mass, SMILES/InChIKey, synonyms. Use to verify candidate annotations or get molecule facts. BATCHING: for several compounds pass \"names\" (array) in ONE call instead of one call per compound; a name that fails does not block the rest. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
+    "description": "Look up a named chemical compound on PubChem when molecular properties are needed or an annotation candidate must be checked. Returns formula, monoisotopic and average mass, IUPAC name, SMILES, InChIKey, up to 10 synonyms and the official CID page. Cross-check the returned properties against the candidate; a name hit alone does not establish identity. Batch with \"names\"; one failed name does not block the rest. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
     "parameters": {
       "type": "object",
       "properties": {
         "offset": {
           "type": "integer",
-          "description": "First input query index, default 0. Continue with nextOffset."
+          "description": "Zero-based start into the batch name inputs (default 0); continue with nextOffset."
         },
         "limit": {
           "type": "integer",
-          "description": "Queries per page. Evidence default 5, max 8."
+          "description": "Names processed per page, default 5, max 8; this pages inputs, not synonyms."
         },
         "name": {
           "type": "string",
-          "description": "Single compound name, e.g. \"PC(16:0/18:1)\" or \"glucose\"; for multiple use \"names\""
+          "description": "Single compound name, e.g. \"PC(16:0/18:1)\" or \"glucose\"; use \"names\" for several."
         },
         "names": {
           "type": "array",
@@ -644,24 +589,24 @@
             "type": "string"
           },
           "maxItems": 25,
-          "description": "Batch form of \"name\": many compound names in one call"
+          "description": "Batch compound names, each queried independently."
         }
       }
     }
   },
   {
     "name": "pubchem_formula_search",
-    "description": "Search PubChem by molecular formula: list candidate compounds with exact masses. Use in m/z annotation to enumerate formula candidates before adduct matching. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
+    "description": "Search PubChem by molecular formula when enumerating candidate compounds, especially before adduct matching in m/z annotation. Returns the total match count and up to maxResults candidates with CID, formula, monoisotopic mass, InChIKey and per-CID official page links. Treat the list as candidates: one formula may match multiple structures; a miss raises a query error. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
     "parameters": {
       "type": "object",
       "properties": {
         "formula": {
           "type": "string",
-          "description": "Molecular formula, e.g. \"C18H36O2\""
+          "description": "Molecular formula to search, e.g. \"C18H36O2\"."
         },
         "maxResults": {
           "type": "integer",
-          "description": "Max candidates to return (default 15, max 25)"
+          "description": "Max candidates returned, default 15, clamped 1–25."
         }
       },
       "required": [
@@ -671,17 +616,17 @@
   },
   {
     "name": "pubmed_search",
-    "description": "Search PubMed literature. Returns title/journal/year/PMID/link (no abstract text — use europepmc_search when you need the abstract). Use to ground biological interpretation in published evidence (e.g. \"{molecule} mass spectrometry imaging {tissue}\"). Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
+    "description": "Search PubMed for published papers when you need to check whether a scientific topic has literature or want quick citations. Returns the total hit count plus title, journal, date, PMID and PubMed link per paper — no abstract text; switch to europepmc_search when the abstract is needed. English queries work best; do not infer a paper's conclusions from title/metadata alone. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
     "parameters": {
       "type": "object",
       "properties": {
         "query": {
           "type": "string",
-          "description": "PubMed search query (English works best)"
+          "description": "PubMed search expression; English keywords/phrases work best; must be non-empty."
         },
         "maxResults": {
           "type": "integer",
-          "description": "Max papers (default 5, max 10)"
+          "description": "Max papers returned, default 5, clamped 1–10."
         }
       },
       "required": [
@@ -691,17 +636,17 @@
   },
   {
     "name": "read_archived_result",
-    "description": "Read the full text of a previously truncated tool result from the agent archive. History truncation stubs mention an archive id — pass it here to recover the complete output (e.g. the untruncated annotation listing or database result). Long archives are returned in windows: pass the returned nextOffset to read the following section.",
+    "description": "Retrieve the full text of a previously truncated tool result using the archiveId from its history stub. Returns a character window; continue with the returned nextOffset until the archive ends. This reads saved output — it does not rerun the original tool; a missing or expired archive returns a notice, not an error.",
     "parameters": {
       "type": "object",
       "properties": {
         "archiveId": {
           "type": "string",
-          "description": "Archive id from the truncation stub"
+          "description": "The archiveId quoted in the truncation stub; pass verbatim."
         },
         "offset": {
           "type": "integer",
-          "description": "Character offset to start reading from (default 0). Use nextOffset from a previous call to continue reading."
+          "description": "Character offset to start reading (default 0); use the previous call's nextOffset to continue."
         }
       },
       "required": [
@@ -711,13 +656,13 @@
   },
   {
     "name": "skill",
-    "description": "Load a domain skill by name to get detailed analysis instructions. Available skill names are listed in the system prompt.",
+    "description": "Load a domain skill by name when its detailed workflow or output guidance is relevant to the current task. Returns the skill text for this turn. Use names exactly as listed in the system prompt; do not guess names or load unrelated skills for simple tasks.",
     "parameters": {
       "type": "object",
       "properties": {
         "name": {
           "type": "string",
-          "description": "Skill name from the catalog"
+          "description": "Exact skill name from the system-prompt catalog."
         }
       },
       "required": [
@@ -727,17 +672,17 @@
   },
   {
     "name": "web_search",
-    "description": "Search the public web with Exa for current information, official documentation and source discovery. Returns source URLs and text excerpts. Describe the page you need in natural language. Use europepmc_search for scientific abstracts. Do not send private dataset contents or credentials. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
+    "description": "Search the public web with Exa for current facts, official documentation and source discovery. Returns URLs and text excerpts; ground claims in the retrieved sources, and prefer europepmc_search for scientific abstracts. Never include private dataset content, personal data or credentials in the query; an excerpt is not the full page and does not support claims beyond it. Cite external evidence beside the supported claim as [source title](URL), optionally [source title](URL \"short source excerpt\"); the UI renders these links as Inline Citation cards. Use only retrieved source URLs or identifiers.",
     "parameters": {
       "type": "object",
       "properties": {
         "query": {
           "type": "string",
-          "description": "Focused natural-language description of the information or page to find, at most 1000 characters"
+          "description": "Focused natural-language description of the information or page to find, at most 1000 characters; exclude private data or credentials."
         },
         "maxResults": {
           "type": "integer",
-          "description": "Number of results, default 5, maximum 10"
+          "description": "Number of results, default 5, clamped 1–10."
         }
       },
       "required": [

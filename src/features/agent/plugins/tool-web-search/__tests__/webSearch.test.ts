@@ -1,6 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, expect, it, vi } from 'vitest'
-import { searchExa } from '../exa'
+import { searchExa, searchExaResults } from '../exa'
 import * as plugin from '../index'
 import { ToolRuntime } from '../../tools'
 import { SystemPrompt } from '../../system-prompt'
@@ -233,6 +233,62 @@ it('preserves provider notices when rendering structured source evidence', async
     },
   })
   expect(await searchExa('q', 3, signal())).toContain('Note: Query restriction was relaxed')
+})
+
+it('searchExaResults parses text-block replies when structuredContent is absent (anonymous endpoint)', async () => {
+  // Live shape of the anonymous mcp.exa.ai endpoint (verified 2026-11-10):
+  // no structuredContent at all; results live as rendered text blocks with
+  // "Title:/URL:/Published:/Highlights:" lines.
+  mockReply({
+    content: [
+      {
+        type: 'text',
+        text: [
+          'Title: Human Metabolome Database: Caffeine (HMDB0001847)',
+          'URL: https://www.hmdb.ca/metabolites/HMDB0001847',
+          'Published: N/A',
+          'Author: N/A',
+          'Highlights:',
+          'Caffeine is a methyl xanthine alkaloid.',
+        ].join('\n'),
+      },
+      {
+        type: 'text',
+        text: [
+          'Title: Duplicate view',
+          'URL: https://www.hmdb.ca/metabolites/HMDB0001847?view=1',
+          'Published: N/A',
+        ].join('\n'),
+      },
+      {
+        type: 'text',
+        text: [
+          'Title: Unrelated',
+          'URL: https://example.org/other',
+          'Highlights: not HMDB',
+        ].join('\n'),
+      },
+    ],
+  })
+  const results = await searchExaResults('caffeine', 5, signal())
+  // Query-string duplicates collapse onto the canonical doc; first title wins.
+  expect(results).toEqual([
+    expect.objectContaining({
+      url: 'https://www.hmdb.ca/metabolites/HMDB0001847',
+      title: 'Human Metabolome Database: Caffeine (HMDB0001847)',
+    }),
+    expect.objectContaining({ url: 'https://example.org/other', title: 'Unrelated' }),
+  ])
+  expect(results[0]!.excerpt).toContain('methyl xanthine')
+  // N/A publication dates are dropped rather than surfaced as data.
+  expect(results[0]!.publishedDate).toBeUndefined()
+})
+
+it('searchExaResults still throws when a non-empty structured branch yields no usable rows', async () => {
+  mockReply({
+    structuredContent: { results: [{ url: 'javascript:alert(1)', title: 'unsafe' }] },
+  })
+  await expect(searchExaResults('q', 3, signal())).rejects.toThrow('no usable HTTP(S)')
 })
 
 it('feeds Exa results back to the model through the production agent tool loop', async () => {

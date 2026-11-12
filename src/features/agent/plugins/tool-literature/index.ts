@@ -144,21 +144,37 @@ export const name = 'tool-literature'
 export const inject = ['tools']
 
 export function apply(ctx: Context) {
+  /**
+   * pubmed_search —— PubMed 文献检索（E-utilities esearch + esummary 两跳）。
+   *
+   * 作用：返回 total_hits 与标题/期刊/年份/PMID/链接（无摘要正文——需要摘要用
+   * europepmc_search）。用于给生物学解读找已发表证据（如 "{molecule} mass
+   * spectrometry imaging {tissue}"）。
+   *
+   * 参数：
+   * - query (string, 必填)：检索词（英文效果最好）
+   * - maxResults (integer, 可选)：返回篇数，默认 5、cap 10
+   */
   ctx.tools.register(
     defineTool({
       name: 'pubmed_search',
       category: 'literature',
       description:
-        'Search PubMed literature. Returns title/journal/year/PMID/link (no abstract text — ' +
-        'use europepmc_search when you need the abstract). Use to ground biological ' +
-        'interpretation in published evidence (e.g. "{molecule} mass spectrometry imaging {tissue}").',
+        'Search PubMed for published papers when you need to check whether a scientific topic has ' +
+        'literature or want quick citations. Returns the total hit count plus title, journal, date, PMID ' +
+        'and PubMed link per paper — no abstract text; switch to europepmc_search when the abstract is ' +
+        "needed. English queries work best; do not infer a paper's conclusions from title/metadata alone.",
       parameters: {
         query: {
           type: 'string',
           required: true,
-          description: 'PubMed search query (English works best)',
+          description:
+            'PubMed search expression; English keywords/phrases work best; must be non-empty.',
         },
-        maxResults: { type: 'integer', description: 'Max papers (default 5, max 10)' },
+        maxResults: {
+          type: 'integer',
+          description: 'Max papers returned, default 5, clamped 1–10.',
+        },
       },
       maxResultChars: TOOL_RESULT_CHARS_EVIDENCE,
       async execute(args, exec) {
@@ -167,17 +183,37 @@ export function apply(ctx: Context) {
     }),
   )
 
+  /**
+   * europepmc_search —— Europe PMC 检索（PubMed 超集，含预印本与 PMC 全文）。
+   *
+   * 作用：返回标题/期刊/年份/DOI/PMID/PMCID + 摘要正文摘录（resultType=core，≤600
+   * 字符）；OA 且有 PMCID 的条目附 europepmc 全文链接。需要已发表证据支撑或质疑
+   * 一个解读时的首选文献工具。
+   *
+   * 参数：
+   * - query (string, 必填)：检索词（英文效果最好）
+   * - maxResults (integer, 可选)：返回篇数，默认 5、cap 10
+   */
   ctx.tools.register(
     defineTool({
       name: 'europepmc_search',
       category: 'literature',
       description:
-        'Search Europe PMC (a PubMed superset including preprints and PMC full texts). ' +
-        'Returns title/journal/year/DOI plus the ABSTRACT TEXT excerpt — the first choice ' +
-        'when you need published evidence to support or challenge an interpretation.',
+        'Search Europe PMC (a PubMed superset including preprints and PMC full texts) — the first choice ' +
+        'when abstract text is needed to support or challenge an interpretation. Returns title, journal, ' +
+        'year, available identifiers (PMID/PMCID/DOI), an abstract excerpt of up to 600 characters, and a ' +
+        'full-text link for open-access entries with a PMCID. Verify the excerpt actually supports any ' +
+        'claim you cite; abstracts may be truncated.',
       parameters: {
-        query: { type: 'string', required: true, description: 'Search query (English works best)' },
-        maxResults: { type: 'integer', description: 'Max papers (default 5, max 10)' },
+        query: {
+          type: 'string',
+          required: true,
+          description: 'Europe PMC search expression; English works best; must be non-empty.',
+        },
+        maxResults: {
+          type: 'integer',
+          description: 'Max papers returned, default 5, clamped 1–10.',
+        },
       },
       maxResultChars: TOOL_RESULT_CHARS_EVIDENCE,
       async execute(args, exec) {
@@ -186,17 +222,37 @@ export function apply(ctx: Context) {
     }),
   )
 
+  /**
+   * openalex_search —— OpenAlex 学术作品检索（全学科，含综述/预印本）。
+   *
+   * 作用：返回标题/期刊/年份/DOI/被引次数/OA 链接。用于找综述文章或衡量一个主题
+   * 有多少已发表工作支撑（影响力）。
+   *
+   * 参数：
+   * - query (string, 必填)：检索词
+   * - maxResults (integer, 可选)：返回篇数，默认 5、cap 10
+   */
   ctx.tools.register(
     defineTool({
       name: 'openalex_search',
       category: 'literature',
       description:
-        'Search OpenAlex scholarly works (all disciplines, incl. reviews/preprints): title, venue, ' +
-        'year, DOI, citation count, open-access link. Use to find review articles or gauge how much ' +
-        'published work supports a topic.',
+        'Search OpenAlex scholarly works across all disciplines (including reviews and preprints) to find ' +
+        'survey articles or gauge how much published work supports a topic. Returns title, venue, year, ' +
+        'type, DOI, citation count and an open-access link when available. Citation counts and links are ' +
+        'discovery signals, not a quality verdict; read the paper or abstract before drawing scientific ' +
+        'conclusions.',
       parameters: {
-        query: { type: 'string', required: true, description: 'Search query' },
-        maxResults: { type: 'integer', description: 'Max works (default 5, max 10)' },
+        query: {
+          type: 'string',
+          required: true,
+          description:
+            'OpenAlex search query; combine topic, molecule, method or study context; must be non-empty.',
+        },
+        maxResults: {
+          type: 'integer',
+          description: 'Max works returned, default 5, clamped 1–10.',
+        },
       },
       maxResultChars: TOOL_RESULT_CHARS_EVIDENCE,
       async execute(args, exec) {

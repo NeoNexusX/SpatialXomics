@@ -25,7 +25,7 @@ import { AnalysisBindingService } from '../plugins/analysis-binding'
 import { ToolRuntime } from '../plugins/tools'
 import * as toolArchive from '../plugins/tool-archive'
 import * as toolBackendApi from '../plugins/tool-backend-api'
-import * as toolBio from '../plugins/tool-bio'
+import * as toolKegg from '../plugins/tool-kegg'
 import * as toolKnowledge from '../plugins/tool-knowledge'
 import * as toolLiterature from '../plugins/tool-literature'
 import * as toolWebSearch from '../plugins/tool-web-search'
@@ -73,7 +73,7 @@ export const baseBundle: BundleRow[] = [
   { id: 'tools', plugin: ToolRuntime },
   { id: 'tool-archive', plugin: toolArchive },
   { id: 'tool-backend-api', plugin: toolBackendApi },
-  { id: 'tool-bio', plugin: toolBio },
+  { id: 'tool-kegg', plugin: toolKegg },
   { id: 'tool-knowledge', plugin: toolKnowledge },
   { id: 'tool-literature', plugin: toolLiterature },
   { id: 'tool-web-search', plugin: toolWebSearch },
