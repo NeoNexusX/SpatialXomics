@@ -4,25 +4,55 @@ import { defineTool, renderBatch } from '../plugins/tools'
 import { createMemoryStorage } from '../plugins/session-persistence'
 import { estimateMessage } from '../plugins/token-meter/estimate'
 import { setAgentDataset } from '../bridge/datasetBinding'
-import { rasterize, displayRange, type RenderOptions } from '../plugins/tool-ion-image/render'
+import { rasterize, displayRange, legendLayout, selectPlotPeaks, isSpectrumHighlight, type RenderOptions } from '../plugins/tool-ion-image/render'
 import { readIon } from '../plugins/tool-ion-image'
+
+// jsdom 无 canvas：get_ion_image 的整链路测试只需要 renderIonImages 不抛错
+vi.mock('../plugins/tool-ion-image/render', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../plugins/tool-ion-image/render')>()
+  return {
+    ...original,
+    renderIonImages: vi.fn(() => ({
+      images: [
+        {
+          dataUrl:
+            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEBgIApD5fRAAAAABJRU5ErkJggg==',
+          mime: 'image/png' as const,
+          width: 1,
+          height: 1,
+          label: 'stub',
+        },
+      ],
+      description: 'stub render (jsdom)',
+    })),
+  }
+})
 import {
   dataModeRef,
   ionDims,
+  ticMatrix,
   mzAxisRef,
   setZarrStore,
   resetZarrSharedState,
   polarityRef,
 } from '@/services/zarr/zarrSharedState'
 import type { ZarrOssStore } from '@/services/zarr/zarrOssStore'
-import { resolveMassPolarity, buildIonImageStats } from '../bridge/analysisContext'
+import {
+  resolveMassPolarity,
+  buildIonImageStats,
+  registerContextProviders,
+  unregisterContextProviders,
+} from '../bridge/analysisContext'
 
 const PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEBgIApD5fRAAAAABJRU5ErkJggg=='
 const image = { dataUrl: PNG, mime: 'image/png' as const, width: 1, height: 1, label: 'ion A' }
 const opened: LockedAgent[] = []
-async function setup(script: Parameters<typeof createLockedAgent>[0] = []) {
-  const h = await createLockedAgent(script)
+async function setup(
+  script: Parameters<typeof createLockedAgent>[0] = [],
+  options: Parameters<typeof createLockedAgent>[1] = {},
+) {
+  const h = await createLockedAgent(script, options)
   opened.push(h)
   return h
 }
@@ -38,6 +68,7 @@ afterEach(async () => {
   for (const h of opened.splice(0)) await h.dispose()
   resetZarrSharedState()
   setZarrStore(null)
+  unregisterContextProviders()
   vi.restoreAllMocks()
 })
 
@@ -205,6 +236,51 @@ it('uses a shared scale and preserves matrix direction, zero and constant images
   expect(rasterize({ ...a, matrix: new Float32Array(4).fill(5) }, [5, 5], options)[0]).toBe(255)
 })
 
+it('lays out overlay legends three per row, wrapping and truncating beyond twelve items', () => {
+  const item = (id: number) => ({ color: [id, id, id] as const, label: `#${id} (${id} px)` })
+  // 3 项单行：x 均分三列，y 同一基线
+  const three = legendLayout([item(0), item(1), item(2)], 600)
+  expect(three.cells.map((cell) => cell.y)).toEqual([4, 4, 4])
+  expect(three.cells.map((cell) => cell.x)).toEqual([8, 208, 408])
+  expect(three.cells.every((cell) => cell.swatch)).toBe(true)
+  expect(three.height).toBe(26) // 1 行 × 18 + 8 padding
+  expect(three.truncated).toBe(0)
+  // 第 4 项换行
+  const four = legendLayout([item(0), item(1), item(2), item(3)], 600)
+  expect(four.cells[3]!.y).toBe(22)
+  expect(four.height).toBe(44)
+  // >12 项：只保留 12 项 + 无色块的 "+N more"
+  const many = legendLayout(Array.from({ length: 15 }, (_, i) => item(i)), 600)
+  expect(many.cells).toHaveLength(13)
+  expect(many.cells[12]).toMatchObject({ swatch: null, label: '+3 more' })
+  expect(many.truncated).toBe(3)
+  // 12 项恰好整行时 "+N more" 落到新行首列
+  const twelve = legendLayout(Array.from({ length: 13 }, (_, i) => item(i)), 600)
+  expect(twelve.cells[12]!.x).toBe(8)
+  expect(twelve.cells[12]!.y).toBe(4 + 4 * 18)
+})
+
+it('matches spectrum highlights within ±1e-4 and keeps them when trimming plots to 2000 peaks', () => {
+  expect(isSpectrumHighlight(100.00005, [100])).toBe(true)
+  expect(isSpectrumHighlight(99.99995, [100])).toBe(true)
+  expect(isSpectrumHighlight(100.0002, [100])).toBe(false)
+  expect(isSpectrumHighlight(100, undefined)).toBe(false)
+  // 强度单调递减的 2005 峰，mz 间距 1e-3（>容差，只有精确目标命中）
+  const target = 100 + 2004 * 0.001
+  const peaks = Array.from({ length: 2005 }, (_, i) => ({
+    mz: 100 + i * 0.001,
+    intensity: 2005 - i,
+  }))
+  const selected = selectPlotPeaks(peaks, [target])
+  expect(selected).toHaveLength(2000)
+  // 最弱但被高亮的峰必须保留；其余按强度取前 1999
+  expect(selected.some((peak) => peak.mz === target)).toBe(true)
+  expect(selected.filter((peak) => peak.mz !== target)).toHaveLength(1999)
+  // ≤2000 时原样返回（浅拷贝，不改入参顺序）
+  const small = [{ mz: 1, intensity: 1 }]
+  expect(selectPlotPeaks(small, [])).toEqual(small)
+})
+
 it('reads the same tolerance window as the workbench and rejects out-of-window targets', async () => {
   dataModeRef.value = 'continuous'
   mzAxisRef.value = new Float64Array([100, 100.005, 101])
@@ -219,6 +295,67 @@ it('reads the same tolerance window as the workbench and rejects out-of-window t
   expect(resolveMassPolarity()).toBe('negative')
   polarityRef.value = ''
   expect(() => resolveMassPolarity()).toThrow('Specify polarity')
+})
+
+it('lets explicit mz queries through when the selection changed mid-turn', async () => {
+  // 选中离子在轮次开始后才变：无参调用会被闸门拦下（behaviorLock binding-ion 已锁定），
+  // 显式 mzs 的查询目标与选中无关，应放行并返回统计
+  const h = await setup(
+    [
+      async function* () {
+        registerContextProviders({
+          selectedIon: () => ({
+            mz: 800.5,
+            tolerance: 0.01,
+            matrix: new Float32Array([1, 2, 3, 4]),
+            width: 2,
+            height: 2,
+          }),
+        })
+        yield* toolCall('get_ion_image', { mzs: [100, 300] }, 'c1')
+      },
+      text('done'),
+    ],
+    { fullTools: true, noScriptTools: true },
+  )
+  dataModeRef.value = 'continuous'
+  ionDims.value = { width: 2, height: 2 }
+  mzAxisRef.value = new Float64Array([100, 200, 300])
+  setZarrStore({
+    getSummedIonImageByMzIndices: async () => new Float32Array([0, 10, 0, 0]),
+  } as unknown as ZarrOssStore)
+  const accepted = await h.agent.send('compare these ions')
+  await h.agent.whenIdle()
+  expect(accepted).toBe(true)
+  expect(h.agent.snapshot().error).toBeNull()
+  const echoed = JSON.stringify(h.calls[1]!.messages)
+  expect(echoed).toContain('axis 100')
+  expect(echoed).toContain('axis 300')
+})
+
+it('uses TIC for processed get_ion_image when the captured tolerance is zero', async () => {
+  const h = await setup()
+  const pageTools = await import('../plugins/tool-page-context')
+  const ionImage = await import('../plugins/tool-ion-image')
+  h.ctx.plugin(ionImage)
+  h.ctx.plugin(pageTools)
+  await new Promise((resolve) => setTimeout(resolve, 0))
+
+  dataModeRef.value = 'processed'
+  ionDims.value = { width: 2, height: 2 }
+  ticMatrix.value = new Float32Array([1, 2, 3, 4])
+  const result = await h.ctx.tools.execute({
+    name: 'get_ion_image',
+    callId: 'processed-tic',
+    arguments: {},
+    signal: new AbortController().signal,
+    session: {
+      events: [{ type: 'turn/start', binding: { page: { selectedIon: { mz: 0, tolerance: 0 } } } }],
+    } as never,
+  })
+
+  expect(result.isError).toBe(false)
+  expect(result.content).toContain('TIC')
 })
 
 it('reads explicit pixels without changing the page and filters the raw mean spectrum', async () => {
@@ -254,6 +391,7 @@ it('reads explicit pixels without changing the page and filters the raw mean spe
   })
   expect(result.isError).toBe(false)
   expect(result.content).toContain('pixel #1 (x=2, y=1)')
+  expect(result.content).toContain('"window"')
   expect(pixelSpectrum.value).toBeNull()
   expect(read).toHaveBeenCalledWith(1)
   const batch = await h.ctx.tools.execute({
@@ -263,6 +401,23 @@ it('reads explicit pixels without changing the page and filters the raw mean spe
     signal: new AbortController().signal,
   })
   expect(batch.content.indexOf('pixel #1')).toBeLessThan(batch.content.indexOf('pixel #0'))
+})
+
+it('rejects concurrent selectors in get_ion_image', async () => {
+  const h = await setup()
+  const pageTools = await import('../plugins/tool-page-context')
+  const ionImage = await import('../plugins/tool-ion-image')
+  h.ctx.plugin(ionImage)
+  h.ctx.plugin(pageTools)
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  const result = await h.ctx.tools.execute({
+    name: 'get_ion_image',
+    callId: 's',
+    arguments: { mz: 100, mzs: [200] },
+    signal: new AbortController().signal,
+  })
+  expect(result.isError).toBe(true)
+  expect(result.content).toMatch(/mutually exclusive/i)
 })
 
 it('removes new image artifacts when result middleware fails before commit', async () => {

@@ -1,31 +1,41 @@
 ---
 name: metabolite-biology
-description: Interpret annotated metabolites in their tissue or disease context using identity, HMDB associations, KEGG membership and retrieved literature. For mass-only candidate discovery use msi-analysis.
+description: Interpret annotated metabolites in their tissue or disease context using identity, HMDB associations, KEGG membership and retrieved literature, then relate the verified molecules to each other. Work molecule-by-molecule first; do cross-molecule analysis only on verified identities. For mass-only candidate discovery use msi-analysis.
 ---
 
 # Metabolite biology
 
-Start with the candidate, formula, adduct and ambiguity from `get_annotation_top` / `get_annotation_detail(rowIds=[...])`, or use the identity explicitly supplied by the user. Do not require a loaded dataset for a general molecule question. Use static tissue/acquisition metadata already available; do not invent tissue information.
+Start with the candidate, formula, adduct and ambiguity from `get_annotation` windows / `get_annotation(rowIds=[...])`, or use the identity explicitly supplied by the user. Do not require a loaded dataset for a general molecule question. Use static tissue/acquisition metadata already available; do not invent tissue information.
 
-Choose the sources needed for the question. Retain lipid shorthand and class from the annotation detail; `pubchem_compound_lookup(names=[...])` supplies formula, mass and identifiers for named compounds. Check the returned identity: fuzzy name matches may be derivatives or related compounds, and sum compositions cover isomer families.
+## Stage 1 — Independent per-molecule analysis
 
-`hmdb_lookup(queries=[...])` provides tissue/disease associations, functions and KEGG ids when the deployment contains its index. Association is not causation or evidence of the molecule's abundance in this sample. A lookup miss or missing index is limited coverage, not biological absence. For supplied unknown m/z values use adduct-aware matching only when acquisition polarity is known.
+Analyze EACH molecule on its own before any cross-molecule reasoning. For each, collect only the evidence the question needs:
 
-## Live KEGG pathway evidence
+1. **Identity**: `pubchem_compound_lookup(names=[...])` for formula/mass/identifiers, and `kegg_compound(ids=[...])` for KEGG identity — compare FORMULA/EXACT_MASS against the annotation row. Check returned identities: fuzzy name matches may be derivatives, and sum compositions cover isomer families. A verified C id beats a keyword hit; keyword rank is not identity.
+2. **Context**: `hmdb_lookup(ids=[...])` for the archived official profile (taxonomy, roles, tissues, cell locations, pathways, normal concentrations, cross-references). Association is not causation or evidence of abundance in this sample. A missing snapshot or unreachable archive is limited coverage, not biological absence; relay failure returns links and explicitly says the profile was NOT read — never invent profile data. For names, `hmdb_lookup(queries=[...])` returns candidate ids with excerpts; review the candidates yourself and re-query by id — search relevance is not identity verification.
+3. **Ontology**: `chebi_lookup` when "what role does this molecule have" matters (antioxidant, xenobiotic metabolite, …). Relevance-ranked results are not identity verification.
+4. **Pathway membership**: `kegg_compound(ids=[...])` already returns each compound's PATHWAY links; use `kegg_pathway(ids=[...])` when a specific pathway's membership matters. Membership is targeted evidence, not enrichment or pathway activity.
+5. **Literature**: `europepmc_search(query="molecule tissue", maxResults=3)` for tissue-specific claims or surprising assignments; a title is not evidence.
 
-Use `kegg_pathway_lookup(queries=[...])` for an explicit compound name, KEGG C id, pathway name or pathway id. It queries the official KEGG REST API at runtime through the application's proxy. It requires no local KEGG file, prebuilt index or HMDB deployment. Prefer a verified C id when available. Inspect the returned identifiers and synonyms: a keyword result may be a derivative rather than the supplied molecule. Pathway queries return members; compound queries return reference pathway links. Use the returned compound/pathway URLs for citations.
+`kegg_find(query/queries=[...], db="compound"|"pathway")` locates ids by keyword (DBGET ANDs multi-word queries; per-query offset/limit windows). `kegg_mass_search(mz/mzs=[...], polarity=...)` is for supplied unknown m/z values: adduct-aware exact-mass matching over KEGG's ~19,000 small molecules, no lipids (use the annotation library or PubChem for lipids). All KEGG tools query the official REST API at runtime through the application's proxy; use the returned URLs for citations. If the API/proxy/network fails, state that KEGG evidence is unavailable for that attempt — do not interpret failure as biological absence and do not ask the user to build a local index.
 
-For a question about the current annotation set, read `get_annotation_top` and call `pathway_enrichment(topN=...)` once (default 10, maximum 20 rows). The tool resolves exact KEGG names/synonyms or C ids, retrieves official pathway links and names, then counts formula groups. It queries leading candidates before alternatives and reports any names deferred beyond its 50-distinct-query budget. Mention incomplete coverage when candidates were deferred; do not treat them as negative results. Multiple exact KEGG matches are retained as alternatives, not silently assigned to the first hit.
+Record a per-molecule verdict as you go: verified identity / putative identity (unresolved isomers) / conflicting evidence / insufficient evidence. Only verified or clearly-marked putative molecules proceed to Stage 2.
 
-Report mapped/total formula groups, relevant pathways, unmapped candidates and unresolved identities. Same-formula adduct rows count once and isomers remain unresolved; the rollup may use alternative candidates within a group. These are descriptive counts without a background model, p-values or FDR. Do not call a high count statistically enriched or infer pathway activation, metabolic flux or confirmed identity. For significance testing, explain the need for a defined background and an actual statistical test.
+## Stage 2 — Cross-molecule analysis
 
-KEGG calls are rate limited by the tool. Reuse returned or archived evidence instead of repeating a rollup per pathway/adduct. If an API/proxy/network query fails, state that KEGG evidence is unavailable for that attempt. Do not ask the user to build/download a KEGG index, invent pathway memberships or interpret the failure as no biological pathway. A smaller targeted lookup may be useful after a timeout; do not repeatedly retry a broken proxy.
+Now relate the molecules that survived Stage 1, using the per-molecule evidence you already collected. There is no dedicated enrichment tool; do the association reasoning yourself and present it as descriptive, not statistical:
 
-`chebi_lookup` returns ontology labels/definitions, not a complete inferred biological-role graph.
+- **Shared pathways**: intersect the PATHWAY links collected in Stage 1 (kegg_compound returns them per compound). A pathway shared by ≥2 independent molecules is a coherent pattern worth reporting; state how many molecules map to it out of how many verified. This is a descriptive count — no background model, no p-values, no FDR, no claims of statistical enrichment or pathway activation. Use `kegg_pathway(ids=[...])` to check what else is in a pathway of interest.
+- **Class-level patterns**: group by ChEBI role or HMDB taxonomy (chemical class) collected in Stage 1 — e.g. several phospholipids or several bile acids shifting together is class-level evidence even when individual isomers are unresolved.
+- **Tissue/region correspondence**: HMDB tissue locations and cell locations (Stage 1) against the imaging regions where these ions localize (from `get_ion_image` evidence). Consistent tissue annotation is supporting, not decisive.
+- **Concentration sanity**: HMDB normal concentrations give expected biofluid ranges; a measured claim wildly outside known ranges deserves a flag, but MSI is not quantitative without standards.
+- **Literature**: `europepmc_search` for the joint pattern ("moleculeA moleculeB tissue") only when the co-occurrence claim is decisive for the answer; otherwise rely on the per-molecule literature already retrieved.
 
-For tissue-specific claims use `europepmc_search(query="molecule tissue", maxResults=3)`. Prefer exact molecule/tissue evidence; label class-level or other-organ findings as indirect. Do not infer a mechanism from a title, a pathway name or general database presence.
+Cross-molecule conclusions inherit the weakest identity status among their members: a pattern built on unresolved isomers stays putative and isomer ambiguity remains explicit. For a defined statistical test, explain the need for a background set and an actual test rather than performing one implicitly.
 
-When HMDB coverage is unavailable, KEGG API access fails, or official resource documentation is needed, `web_search` can discover external sources. State that this is web-source evidence rather than a completed HMDB/KEGG lookup, and retain the candidate identity uncertainty.
+`chebi_lookup` returns ontology labels/definitions, not a complete inferred biological-role graph. When HMDB/KEGG coverage is unavailable, `web_search` can discover external sources — state that this is web-source evidence rather than a completed HMDB/KEGG lookup, and retain the candidate identity uncertainty.
+
+## Batch discipline
 
 Batch distinct names once per relevant source (maximum 25 inputs; default 5 queries per page, maximum 8). Follow `nextOffset` with unchanged query arrays only for remaining items you need. Read archived evidence via `read_archived_result(archiveId=...)` rather than repeating the original lookup. Avoid querying every database automatically for a narrow question.
 

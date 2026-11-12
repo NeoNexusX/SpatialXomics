@@ -103,6 +103,7 @@ const schemas = [
       selection: z
         .object({
           clusters: z.array(count),
+          kmeansK: count.nullable().optional(),
           pixel: z.object({ index: count, x: count, y: count }).optional(),
           annotationWeights: z
             .object({ mass: z.number(), adduct: z.number(), spatial: z.number() })

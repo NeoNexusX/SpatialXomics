@@ -95,7 +95,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 const DOMAIN_TOOLS = [
   'tool-backend-api',
-  'tool-bio',
+  'tool-kegg',
   'tool-knowledge',
   'tool-literature',
   'tool-web-search',

@@ -78,8 +78,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 9d0625ac>",
-      "tools": "<tools e89801c1>",
+      "system": "<prompt 92675986>",
+      "tools": "<tools dbaed375>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -105,8 +105,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 9d0625ac>",
-      "tools": "<tools e89801c1>",
+      "system": "<prompt 92675986>",
+      "tools": "<tools dbaed375>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -135,7 +135,7 @@
        {
         "type": "tool-call",
         "id": "c1",
-        "name": "get_annotation_top",
+        "name": "get_annotation",
         "arguments": "{}"
        }
       ],
@@ -155,7 +155,7 @@
      "message": {
       "role": "tool",
       "toolCallId": "c1",
-      "name": "get_annotation_top",
+      "name": "get_annotation",
       "content": "TOOL_NOT_STARTED: interrupted; this operation was not automatically repeated.",
       "isError": true
      },
@@ -186,8 +186,8 @@
  ],
  "calls": [
   {
-   "system": "<prompt 9d0625ac>",
-   "tools": "<tools e89801c1>",
+   "system": "<prompt 92675986>",
+   "tools": "<tools dbaed375>",
    "messages": [
     {
      "role": "user",
@@ -228,7 +228,7 @@
      {
       "type": "tool",
       "id": "7:0",
-      "name": "get_annotation_top",
+      "name": "get_annotation",
       "input": {},
       "state": "error",
       "preview": "TOOL_NOT_STARTED: interrupted; this operation was not automatically repeated."
@@ -241,11 +241,11 @@
   ],
   "error": "Annotation scoring settings changed. Submit the question again.",
   "pressure": {
-   "inputTokens": 8746,
+   "inputTokens": 11422,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.04680008561643836,
+   "ratio": 0.06111943493150685,
    "estimated": true
   }
  }

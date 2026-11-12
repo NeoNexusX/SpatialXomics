@@ -244,6 +244,14 @@ export const test = base.extend<{
           data: backend.files.slice(0, size),
           meta: { current_page: 1, total_pages: 1, total_records: backend.files.length },
         } })
+      } else if (/^\/files\/[\w-]+\/metadata$/.test(path) && request.method() === 'GET') {
+        await route.fulfill({ json: {
+          public_id: path.split('/')[2], filename: 'mouse-brain-example.imzML', size: 1_048_576,
+          status: 'completed', organism: 'Mouse (Mus musculus)', organism_part: 'Brain',
+          condition: 'Control', polarity: 'Positive', analyzer: 'timsTOF fleX',
+          ionisation_source: 'MALDI-2', uploaded_at: '2026-10-05T00:29:35', is_public: true,
+          default_run_id: 697,
+        } })
       } else if (path === '/users/quota') {
         await route.fulfill({ json: {} })
       } else if (/^\/files\/\w+\/download_raw$/.test(path) && request.method() === 'GET') {

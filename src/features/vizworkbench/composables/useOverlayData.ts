@@ -525,6 +525,41 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     return kmeansLabels
   }
 
+  /** Current UMAP RGB raster (H×W×3 uint8) or null if not loaded. */
+  function getUmapRgb(): Uint8Array | null {
+    return umapRgb
+  }
+
+  /** Current KMeans RGB raster (H×W×3 uint8) or null if not run. */
+  function getKmeansRgb(): Uint8Array | null {
+    return kmeansRgb
+  }
+
+  /** Overlay raster grid dims or null if the clustering zarr never loaded. */
+  function getOverlayDims(): { width: number; height: number } | null {
+    return dims ? { width: dims.width, height: dims.height } : null
+  }
+
+  /**
+   * UMAP occupancy mask (row-major 0/1, 1 = a tissue pixel holds an embedding
+   * point). Derived from the embedding coordinates, NOT from RGB: a valid point
+   * can legitimately map to RGB (0,0,0), so color-based background detection
+   * would silently drop it.
+   */
+  function getUmapOccupancyMask(): Uint8Array | null {
+    if (!umapEmbedding || !dims) return null
+    const { width, height } = dims
+    const mask = new Uint8Array(width * height)
+    const { coordinates, count } = umapEmbedding
+    for (let i = 0; i < count; i++) {
+      const col = coordinates[i * 2]!
+      const row = coordinates[i * 2 + 1]!
+      if (col < 0 || col >= width || row < 0 || row >= height) continue
+      mask[row * width + col] = 1
+    }
+    return mask
+  }
+
   /**
    * Export an RGB raster (H×W×3 uint8) as a scaled-up PNG download.
    * Background pixels (0,0,0) become transparent. Used by the UMAP/KMeans
@@ -610,6 +645,14 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     clearKmeansClusters,
     /** Current KMeans labels (Int32Array, -1 = background) or null. */
     getKmeansLabels,
+    /** Current UMAP RGB raster (H×W×3) or null if not loaded. */
+    getUmapRgb,
+    /** Current KMeans RGB raster (H×W×3) or null if not run. */
+    getKmeansRgb,
+    /** Overlay raster grid dims or null if the clustering zarr never loaded. */
+    getOverlayDims,
+    /** UMAP occupancy mask (coordinates-derived; color-independent). */
+    getUmapOccupancyMask,
     /** Export the UMAP RGB image as a standalone PNG. */
     exportUmapPng,
     /** Export the KMeans RGB image as a standalone PNG. */

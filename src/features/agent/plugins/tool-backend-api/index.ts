@@ -68,8 +68,8 @@ async function request<T>(call: () => Promise<T>): Promise<T> {
 }
 
 const pageParameters = {
-  page: { type: 'integer', description: 'Page number (default 1)' },
-  size: { type: 'integer', description: 'Page size (default 10, max 20)' },
+  page: { type: 'integer', description: 'Page number starting at 1, default 1.' },
+  size: { type: 'integer', description: 'Page size, default 10, clamped 1–20.' },
 } as const
 
 const pageOf = (args: { page?: number; size?: number }) => ({
@@ -82,12 +82,24 @@ export const name = 'tool-backend-api'
 export const inject = ['tools']
 
 export function apply(ctx: Context) {
+  /**
+   * list_files —— 平台公开数据集列表（分页、只读）。
+   *
+   * 作用：浏览公开数据。摘要形态：total | page 表头 + 前 20 行（public_id、文件名、
+   * 大小、日期、状态）。复用 datasetApi 的 listFiles（走 auth_api JWT）。
+   *
+   * 参数：
+   * - page (integer, 可选)：页码，默认 1
+   * - size (integer, 可选)：页大小，默认 10、cap 20
+   */
   ctx.tools.register(
     defineTool({
       category: 'files',
       name: 'list_files',
       description:
-        'List publicly available datasets on the platform (paginated, read-only). Use for browsing public data.',
+        'Browse publicly available datasets on the platform. Returns a paginated summary of file ' +
+        'identifiers, names, sizes, dates and statuses; advance with page. Read-only; this lists ' +
+        'entries, not file contents.',
       parameters: pageParameters,
       async execute(args, exec) {
         const { page, size } = pageOf(args)
@@ -97,12 +109,24 @@ export function apply(ctx: Context) {
     }),
   )
 
+  /**
+   * list_my_files —— 当前用户已上传的数据集列表（需登录）。
+   *
+   * 作用：用户询问自己的文件时用。摘要形态同 list_files；未登录时 auth_api 401 转
+   * isError 结果，模型据此提示用户登录。
+   *
+   * 参数：
+   * - page (integer, 可选)：页码，默认 1
+   * - size (integer, 可选)：页大小，默认 10、cap 20
+   */
   ctx.tools.register(
     defineTool({
       category: 'files',
       name: 'list_my_files',
       description:
-        'List the current user uploaded datasets (requires login). Use when the user asks about their own files.',
+        'List datasets uploaded by the signed-in user. Returns paginated file summaries; follow up ' +
+        'with get_file_metadata using a returned public_id. Requires login — treat authorization ' +
+        'errors as a sign-in issue, not as an empty list.',
       parameters: pageParameters,
       async execute(args, exec) {
         const { page, size } = pageOf(args)
@@ -112,18 +136,29 @@ export function apply(ctx: Context) {
     }),
   )
 
+  /**
+   * get_file_metadata —— 按 public_id 取单个数据集元数据（需登录）。
+   *
+   * 作用：仪器、样本、上传信息等一层字段摘要（≤30 字段、每字段值 ≤120 字符）。
+   * 在 list_files / list_my_files 之后检视某个文件时用。
+   *
+   * 参数：
+   * - fileId (string, 必填)：文件列表中的 public_id，字符串原样保留（含前导零）
+   */
   ctx.tools.register(
     defineTool({
       category: 'files',
       name: 'get_file_metadata',
       description:
-        'Get metadata of a dataset by public_id (instrument, sample, upload info; requires login). Use after list_files / list_my_files to inspect one file.',
+        'Retrieve metadata for one dataset by its exact public_id from a file list: a bounded ' +
+        'single-level field summary of instrument, sample and upload information. Requires login; ' +
+        'pass public_id as a string, preserving leading zeros.',
       parameters: {
         fileId: {
           type: 'string',
           required: true,
           description:
-            'Exact public_id from the file list; preserve the string, including leading zeros',
+            'Exact public_id from the file list; keep it a string including leading zeros.',
         },
       },
       async execute(args, exec) {
@@ -133,12 +168,23 @@ export function apply(ctx: Context) {
     }),
   )
 
+  /**
+   * list_my_processes —— 当前用户分析任务/进程列表及状态（需登录）。
+   *
+   * 作用：用户询问自己的分析任务时用。行摘要：#id、类型/算法、状态、创建时间。
+   *
+   * 参数：
+   * - page (integer, 可选)：页码，默认 1
+   * - size (integer, 可选)：页大小，默认 10、cap 20
+   */
   ctx.tools.register(
     defineTool({
       category: 'files',
       name: 'list_my_processes',
       description:
-        'List the current user analysis tasks / processes with status (requires login). Use when the user asks about their analyses.',
+        "List the signed-in user's analysis processes with status. Returns a paginated summary of " +
+        'process id, type/algorithm, status and creation time. Requires login; does not include full ' +
+        'task inputs or result files.',
       parameters: pageParameters,
       async execute(args, exec) {
         const { page, size } = pageOf(args)
@@ -148,11 +194,21 @@ export function apply(ctx: Context) {
     }),
   )
 
+  /**
+   * get_user_quota —— 当前用户存储与处理配额用量（需登录）。
+   *
+   * 作用：一层字段摘要（≤20 字段、每字段值 ≤100 字符）。未登录时同上转 isError。
+   *
+   * 参数：无
+   */
   ctx.tools.register(
     defineTool({
       category: 'files',
       name: 'get_user_quota',
-      description: 'Get the current user storage and processing quota usage (requires login).',
+      description:
+        "Retrieve the signed-in user's storage and processing quota usage as a bounded field " +
+        'summary. Requires login; this only reads quota information — it does not request or change ' +
+        'quota.',
       parameters: {},
       async execute(_args, exec) {
         const body = await request(() => getUserQuota(exec.signal))
