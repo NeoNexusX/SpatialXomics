@@ -5356,8 +5356,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text data-detail="context" x="155" y="319" class="t-muted" font-size="9" text-anchor="middle">连续 seq · 先存储再发布投影</text>
         </g>
 
-        <g id="node-tools" data-node-id="tools" data-node-label="ToolRuntime 与领域插件" tabindex="0" role="button" aria-label="聚焦ToolRuntime 与领域插件，校验 · 闸门 · 超时 · 本地 HMDB, 架构组件" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="校验 · 闸门 · 超时 · 本地 HMDB" data-node-context="架构组件">
-          <title>ToolRuntime 与领域插件 · 校验 · 闸门 · 超时 · 本地 HMDB · 架构组件</title>
+        <g id="node-tools" data-node-id="tools" data-node-label="ToolRuntime 与领域插件" tabindex="0" role="button" aria-label="聚焦ToolRuntime 与领域插件，校验 · 闸门 · 超时 · 结果预算, 架构组件" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="校验 · 闸门 · 超时 · 结果预算" data-node-context="架构组件">
+          <title>ToolRuntime 与领域插件 · 校验 · 闸门 · 超时 · 结果预算 · 架构组件</title>
           <rect x="420" y="260" width="230" height="90" rx="8" class="c-mask"/>
           <rect x="420" y="260" width="230" height="90" rx="8" class="c-frontend" data-animate="node" style="--step:7" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(426 266) scale(0.6875)">
@@ -5367,7 +5367,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="535" y="303" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">ToolRuntime 与领域插件</text>
-        <text data-detail="context" x="535" y="319" class="t-muted" font-size="9" text-anchor="middle">校验 · 闸门 · 超时 · 本地 HMDB</text>
+        <text data-detail="context" x="535" y="319" class="t-muted" font-size="9" text-anchor="middle">校验 · 闸门 · 超时 · 结果预算</text>
         </g>
 
         <g id="node-llm" data-node-id="llm" data-node-label="模型连接与协议适配" tabindex="0" role="button" aria-label="聚焦模型连接与协议适配，connection · llm · llm-anthropic, 架构组件" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="connection · llm · llm-anthropic" data-node-context="架构组件">
@@ -5747,7 +5747,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         </div>
         <ul>
           <li>ToolRuntime 验证参数、检查允许工具、执行 pre-execute 闸门，按工具配置超时并处理输出；领域插件提供定义。</li>
-          <li>页面与离子图工具复用 bridge 和 services/zarr；HMDB 按需加载 public/data/hmdb-index.json，缺失时报错。</li>
+          <li>页面与离子图工具复用 bridge 和 services/zarr；HMDB 经同源 /hmdb-archive/ 读取 Wayback 归档 XML，KEGG 经 /kegg-rest/ 实时查询。</li>
           <li>知识与文献使用对应 REST 服务，搜索走 Exa MCP；KEGG 通过同源代理实时访问，不依赖下载的 KEGG 索引。</li>
           <li>技能目录与 skill 工具按需提供说明；归档工具可读取被截断的原始结果。</li>
         </ul>

@@ -543,7 +543,7 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
       storage,
       // 工具只读 session.storage（存档/附件）与 session.events（turn/start 绑定离子）
       session: { storage, events },
-      skills: () => ctx.skills.catalog().map((skill) => skill.name),
+      skills: () => ctx.skills.catalog().map((skill: { name: string }) => skill.name),
       state: () => ({}),
       pixel: () => ({ x: 1, y: 1 }),
       chat: async ({ id, tool, args, result }) => {
@@ -578,7 +578,7 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
         }
       },
     }
-    return ctx.tools.list().map((def) => def.name)
+    return ctx.tools.list().map((def: { name: string }) => def.name)
   })
   if (!dom.includes('get_page')) throw new Error(`Agent not bootstrapped: ${dom.join(', ')}`)
 

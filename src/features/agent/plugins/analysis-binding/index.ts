@@ -97,7 +97,7 @@ Use these identities for analysis. Live page state may have changed.`,
         'The analysis dataset changed or is still loading. Submit the question again when ready.',
       )
     if (
-      toolName === 'get_ion_image_stats' &&
+      toolName === 'get_ion' &&
       JSON.stringify(buildPageState().selectedIon) !== JSON.stringify(binding.page.selectedIon)
     )
       throw new Error(
@@ -106,8 +106,9 @@ Use these identities for analysis. Live page state may have changed.`,
     const selection = buildAnalysisSelection()
     if (
       binding.selection &&
-      toolName === 'get_kmeans_summary' &&
-      JSON.stringify(selection.clusters) !== JSON.stringify(binding.selection.clusters)
+      toolName === 'get_kmeans' &&
+      (JSON.stringify(selection.clusters) !== JSON.stringify(binding.selection.clusters) ||
+        (binding.selection.kmeansK != null && selection.kmeansK !== binding.selection.kmeansK))
     )
       throw new Error('The selected clusters changed. Submit the question again.')
     if (

@@ -9,7 +9,7 @@ Use `europepmc_search(query=..., maxResults=3)` first when a claim needs abstrac
 
 Use `web_search(query=..., maxResults=3)` for broader source discovery, official methods pages or publisher/database documentation when the literature tools miss the needed source. Load `web-research` for that workflow. Exa returns URLs and excerpts, not a guarantee of full-text retrieval: verify scientific findings against available abstract text and do not invent a DOI from a title.
 
-Search the candidate name plus tissue and modality. If too narrow, remove one qualifier or search the molecule class, labeling that evidence as class-level. After two useful reformulations with no supporting result, report the retrieval gap instead of inventing citations. Cancellation, HTTP/auth errors, invalid responses and a missing offline index are tool failures, not evidence of no literature or biological absence.
+Search the candidate name plus tissue and modality. If too narrow, remove one qualifier or search the molecule class, labeling that evidence as class-level. After two useful reformulations with no supporting result, report the retrieval gap instead of inventing citations. Cancellation, HTTP/auth errors and invalid responses are tool failures, not evidence of no literature or biological absence.
 
 Distinguish direct evidence (the same molecule in the same tissue/modality), transferable evidence (other omics or class-level imaging), mechanism background, and contradicting findings. Separate candidate literature from evidence identifying the measured ion. Confirm isomer/adduct specificity before applying species-specific biology.
 

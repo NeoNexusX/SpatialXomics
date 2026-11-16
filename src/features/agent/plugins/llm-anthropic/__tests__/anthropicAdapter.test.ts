@@ -96,7 +96,7 @@ function thinkingToolStream(thinking: string, signature: string): SseEvent[] {
     {
       type: 'content_block_start',
       index: 1,
-      content_block: { type: 'tool_use', id: 'call_1', name: 'get_page_state', input: {} },
+      content_block: { type: 'tool_use', id: 'call_1', name: 'get_page', input: {} },
     },
     {
       type: 'content_block_delta',
@@ -312,14 +312,14 @@ describe('AnthropicAdapter', () => {
       await run(adapter, {
         tools: [
           {
-            name: 'get_page_state',
+            name: 'get_page',
             description: 'read the page',
             parameters: { type: 'object', properties: { topN: { type: 'number' } } },
           },
         ],
       })
       const [tool] = requests[0]!.body.tools
-      expect(tool.name).toBe('get_page_state')
+      expect(tool.name).toBe('get_page')
       expect(tool.input_schema.properties.topN.type).toBe('number')
       expect(tool.eager_input_streaming).toBeUndefined()
     })
@@ -375,7 +375,7 @@ describe('AnthropicAdapter', () => {
       expect(assembler.finish).toEqual({ kind: 'tool-calls' })
       expect(assembler.blocks()).toEqual([
         { type: 'reasoning', text: 'need the page' },
-        { type: 'tool-call', id: 'call_1', name: 'get_page_state', arguments: '{"topN":3}' },
+        { type: 'tool-call', id: 'call_1', name: 'get_page', arguments: '{"topN":3}' },
       ])
       expect(assembler.replayState).toEqual({
         response: { kind: 'anthropic-messages', version: 1, model: 'some-model' },
@@ -428,7 +428,7 @@ describe('AnthropicAdapter', () => {
         type: 'tool-call-delta',
         index: 1,
         id: 'call_1',
-        name: 'get_page_state',
+        name: 'get_page',
         argumentsDelta: '',
       })
     })

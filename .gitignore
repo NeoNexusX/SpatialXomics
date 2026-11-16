@@ -23,6 +23,9 @@ docs/.vitepress/.temp
 # AI 审查工具的本地产物
 .codex-review/
 
+# Claude Code 个人本地权限缓存
+.claude/settings.local.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -46,7 +49,7 @@ public/AI Agent 架构总结.md
 public/AI-Agent-BYOK配置方案.md
 public/AI-Agent代码目录结构说明.md
 
-# 本地数据目录（HMDB/LIPID MAPS 离线索引与 build-*-index.mjs 已随外部工具重构废除）
+# 本地数据目录（不入库，避免误提交本地数据文件）
 public/data/
 
 # 用户自己的注释数据库（保留在发布目录外，不入库、不分发）
@@ -67,6 +70,7 @@ __screenshots__/
 test-results/
 playwright-report/
 .auth/
+tools-output/
 public/说明 (1).md
 
 # Browser smoke-test artifacts

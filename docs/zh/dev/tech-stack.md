@@ -79,7 +79,7 @@ src/
 - Vite 环境文件位于 `env/`。本地覆盖可使用 `env/.env.development.local`；运行时业务配置由 `public/config.json` 提供，并在应用挂载前加载。
 - `config.json` 可配置站点名称、导航与悬浮按钮、分页、验证码、Zarr 读取参数等全站设置。SXO-Harness 没有独立开关：悬浮按钮的 `toggle-ai` 入口走通用 `active` / `requireAuth` 规则，当前对已登录用户开启。对话需要提供 `/v1/messages` 的端点：可以是部署级默认（`VITE_LLM_PROXY_URL` / `VITE_LLM_API_KEY` / `VITE_LLM_MODEL`），也可以由用户在连接设置里填写地址和密钥，再选一个通过多模态测试的模型。两者皆无时，面板会直接落在连接设置。联网搜索使用 Exa 托管的 MCP，可用 `VITE_EXA_API_KEY` 提高额度，留空走匿名额度。`VITE_LLM_API_KEY` 和 `VITE_EXA_API_KEY` 都会打进前端包，只能放受限的子 key，不要放官方主 key。
 - 首页展示内容（Hero 文案、功能展示、时间线、团队、联系信息、提交热力图）拆在 `public/content.json`，由 `/` 路由在进入首页时加载，与首页 chunk 并行；这样它的体积不会压在全站启动的关键路径上。取不到时首页降级为不显示这些区块，不影响其他页面。
-- SXO-Harness 的 KEGG 工具请求同源 `/kegg-rest/`，由 Vite（开发和 `vite preview`）或 nginx（Docker 部署）转发到 `https://rest.kegg.jp/`，自定义托管要配置同样的转发。HMDB 工具读取 `public/data/hmdb-index.json`，这个索引不入库，按 `scripts/build-hmdb-index.mjs` 的文件头说明生成。
+- SXO-Harness 的 KEGG 工具请求同源 `/kegg-rest/`，由 Vite（开发和 `vite preview`）或 nginx（Docker 部署）转发到 `https://rest.kegg.jp/`，自定义托管要配置同样的转发。HMDB 工具不再使用本地索引：它经同源 `/hmdb-archive/` 读取 Wayback 归档的官方 XML（服务端限 2 次/秒，只允许 `HMDB` 编号路径），中继失败时降级为只给链接、不编造条目。
 - 上传表单的下拉选项与 ion source 必填规则不再走 JSON，已编译进代码（`datasetMetadata.ts` / `ionSourceRules.ts`），随路由 chunk 长缓存，修改后需重新构建。
 - `test` 分支先执行 `npm run check` 和文档构建，再运行 Chromium 和 Firefox 的 E2E：无需 secrets 的离线回归、需要账号的真实后端测试和中文冒烟。
 - 推送 `dev` 或 `main` 会分别触发对应部署 workflow。Docker 多阶段构建同时生成 `dist/` 和 `dist-docs/`，Nginx 在 `/docs/` 提供文档站。
