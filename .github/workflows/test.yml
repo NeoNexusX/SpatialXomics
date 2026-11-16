@@ -46,7 +46,8 @@ jobs:
   # 同一次 Playwright 运行里先跑离线组和登录 setup，再跑真实后端组和中文冒烟，报告只有一份。
   e2e:
     needs: check
-    runs-on: ubuntu-latest
+    # 固定 24.04：ubuntu-latest 已迁到 26.04，而 Playwright 1.60 不支持；升级 Playwright 后可改回
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     # 真实后端组共用一个账号，还会删除并重传数据集，多个运行同时跑会互相干扰，只能排队
     concurrency: e2e-live-backend
