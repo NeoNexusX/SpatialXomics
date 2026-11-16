@@ -11,6 +11,7 @@ import type { Instructions } from '../agent-instructions'
 import type { ContextPressure } from '../token-meter'
 import type { TokenUsage } from '../llm'
 import type { AnalysisBinding, Session } from '../session'
+import type { QuestionRecords } from '../user-questions'
 import {
   SessionBusyError,
   type SessionArchive,
@@ -125,6 +126,9 @@ export class AgentRuntime extends Service implements Agent {
     const projected = session
       ? this.ctx.sessionProjections.viewOf<AgentSnapshot['messages']>(session, 'transcript')
       : undefined
+    const questions = session
+      ? this.ctx.sessionProjections.viewOf<QuestionRecords>(session, 'userQuestions')
+      : undefined
     const messages = withLiveTranscript(projected ?? [], driver?.live).map((item) => ({
       ...item,
     }))
@@ -162,6 +166,7 @@ export class AgentRuntime extends Service implements Agent {
       instructions: session
         ? this.ctx.sessionProjections.viewOf<Instructions>(session, 'instructions')
         : undefined,
+      ...(questions && Object.keys(questions).length ? { questions } : {}),
     }
   }
 

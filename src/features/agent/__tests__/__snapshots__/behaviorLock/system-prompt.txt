@@ -65,6 +65,7 @@ polarity: positive
 - web-research: Search the public web with Exa for current facts, official documentation, databases or source discovery. Use for explicit search requests or information missing from the loaded data; use literature-evidence for scientific abstract assessment.
 
 ## Available Tools
+- ask_user_question (interaction)
 - chebi_lookup (chemistry)
 - europepmc_search (literature)
 - get_annotation (page)

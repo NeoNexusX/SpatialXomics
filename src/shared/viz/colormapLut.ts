@@ -52,6 +52,12 @@ export function getColormapStops(name: string): [number, number, number][] {
   return (COLORMAP_TABLE[name] ?? COLORMAP_TABLE.viridis)!
 }
 
+/** A CSS gradient through the same stops the ion image uses. */
+export function colormapGradient(name: string, direction = 'to right'): string {
+  const stops = getColormapStops(name).map((color) => `rgb(${color.join(' ')})`)
+  return `linear-gradient(${direction}, ${stops.join(', ')})`
+}
+
 // LUTs are pure functions of the colormap name — cache by name so repeated
 // renders don't rebuild 256 stops every frame. Callers must treat the
 // returned array as read-only.

@@ -192,7 +192,7 @@ it('registers a callable tool with only query and result-count parameters and un
   const fiber = ctx.plugin(plugin)
   await fiber
   const tool = () => ctx.tools.list().find((item) => item.name === 'web_search')
-  expect(Object.keys(tool()!.parameters)).toEqual(['query', 'maxResults'])
+  expect(Object.keys(tool()!.parameters.properties)).toEqual(['query', 'maxResults'])
   mockReply({ content: [{ type: 'text', text: 'URL: https://example.org' }] })
   const result = await ctx.tools.execute({
     name: 'web_search',

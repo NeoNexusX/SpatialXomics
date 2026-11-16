@@ -245,7 +245,7 @@ export function apply(ctx: Context) {
         },
         queries: {
           type: 'array',
-          items: 'string',
+          items: { type: 'string' },
           maxItems: MAX_BATCH_QUERIES,
           description:
             "Independent keywords (≤25); offset/limit apply to each query's own result window.",
@@ -320,7 +320,7 @@ export function apply(ctx: Context) {
         },
         ids: {
           type: 'array',
-          items: 'string',
+          items: { type: 'string' },
           maxItems: MAX_BATCH_QUERIES,
           description: 'Up to 25 compound ids; deduplicated and chunked 10 per upstream request.',
         },
@@ -397,7 +397,7 @@ export function apply(ctx: Context) {
         },
         ids: {
           type: 'array',
-          items: 'string',
+          items: { type: 'string' },
           maxItems: MAX_BATCH_QUERIES,
           description: 'Up to 25 map ids; details and member windows are fetched per pathway.',
         },
@@ -494,7 +494,7 @@ export function apply(ctx: Context) {
         },
         mzs: {
           type: 'array',
-          items: 'number',
+          items: { type: 'number' },
           maxItems: 10,
           description: 'Up to 10 observed m/z values; each returns its own match window.',
         },

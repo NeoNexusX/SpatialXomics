@@ -892,7 +892,7 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
     { id: 'europepmc', group: 'literature', tool: 'europepmc_search', args: { query: 'mass spectrometry imaging lipidomics', maxResults: 2 },
       note: [
       'Europe PMC：每条 title / journal year / 标识符 + abstract 摘录（≤600 字符），OA 且有 PMCID 时附全文链接。',
-      '这一轮出现了真实超时（工具默认 15s）：正文只有一行 "Tool execution timed out after 15000ms"，没有部分结果。',
+      '这一轮出现了真实超时（工具默认 15s）：正文只有一行 "Error: tool call timed out after 15000ms"，没有部分结果。',
     ] },
     { id: 'openalex', group: 'literature', tool: 'openalex_search', args: { query: 'mass spectrometry imaging lipidomics', maxResults: 2 },
       note: [

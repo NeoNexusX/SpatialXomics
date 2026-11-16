@@ -5,6 +5,7 @@
 import { computed, shallowRef } from 'vue'
 import { ArrowDownIcon } from '@lucide/vue'
 import { useAgent } from '../../composables/useAgent'
+import { useQuestion } from '../../composables/useQuestion'
 import HistoryMarker from '../ai-elements/HistoryMarker.vue'
 import HarnessWordmark from '../brand/HarnessWordmark.vue'
 import { Button } from '../ui/button'
@@ -18,6 +19,7 @@ import {
 } from '../ui/message-scroller'
 import AgentTurn from './AgentTurn.vue'
 import ChatComposer from './ChatComposer.vue'
+import QuestionCard from './QuestionCard.vue'
 import UserTurn from './UserTurn.vue'
 
 const emit = defineEmits<{ openConnection: [] }>()
@@ -30,6 +32,7 @@ const {
   sessionId,
   pressure,
   tokenUsage,
+  questions,
   compact,
   retrySave,
   streaming,
@@ -44,6 +47,12 @@ const {
 } = useAgent()
 
 const isEmpty = computed(() => messages.value.length === 0)
+
+/** 这段对话里等待回答的提问；有的话卡片占住输入框的位置 */
+const { pending } = useQuestion()
+const asking = computed(() =>
+  pending.value && pending.value.sessionId === sessionId.value ? pending.value : null,
+)
 
 /** 只有最后一条助手消息可以重试 */
 const retryTargetId = computed(() => {
@@ -103,6 +112,7 @@ function ask(text: string, images?: string[], acknowledge?: (accepted: boolean) 
                 v-else
                 :message="message"
                 :can-retry="message.id === retryTargetId && !streaming"
+                :questions="questions"
                 @retry="retry"
               />
             </MessageScrollerItem>
@@ -126,7 +136,10 @@ function ask(text: string, images?: string[], acknowledge?: (accepted: boolean) 
       </div>
     </div>
     <div class="shrink-0 px-3 pb-3">
+      <QuestionCard v-if="asking" :key="asking.callId" :pending="asking" @stop="stop" />
+      <!-- 只隐藏不卸载：回答完提问，输入框里没发出去的文字还在 -->
       <ChatComposer
+        v-show="!asking"
         :streaming="streaming"
         :pressure="pressure"
         :token-usage="tokenUsage"

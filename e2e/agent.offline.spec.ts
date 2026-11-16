@@ -95,6 +95,53 @@ test.describe('Agent browser journeys', () => {
     expect(() => JSON.parse(text)).not.toThrow()
   })
 
+  test('asks the user in place of the composer and returns the answers to the model', async ({ page, backend }) => {
+    const questions = [
+      {
+        id: 'adduct', header: 'Adduct', question: 'Which adduct should the annotation assume?',
+        options: [{ label: '[M+H]+ (Recommended)', description: 'Most common in positive mode.' }, { label: '[M+Na]+' }],
+      },
+      { id: 'regions', question: 'Which regions should be compared?', multi_select: true, options: [{ label: 'Cortex' }, { label: 'Hippocampus' }] },
+    ]
+    backend.reply = (route) => fulfillSse(route, backend.requests.length === 1
+      ? sseTool('ask_user_question', { questions }) : sseText('Answers received.'))
+    await page.goto('/vizworkbench')
+    const panel = await openAgent(page)
+    const input = panel.getByPlaceholder('Message SXO Harness Agent')
+    await input.fill('Annotate the selected ion')
+    await input.press('Enter')
+
+    const adduct = panel.getByRole('group', { name: 'Which adduct should the annotation assume?' })
+    await expect(adduct).toBeVisible()
+    await expect(input).toBeHidden()
+    await expect(adduct.getByRole('radio', { name: /\[M\+H\]\+/ })).toBeChecked()
+    await expect(panel.getByText('Recommended', { exact: true })).toBeVisible()
+    // 用鼠标点单选项，直接进入下一题
+    await adduct.getByRole('radio', { name: /\[M\+Na\]\+/ }).click()
+    const regions = panel.getByRole('group', { name: 'Which regions should be compared?' })
+    await expect(regions).toBeVisible()
+    await regions.getByRole('checkbox', { name: 'Cortex' }).click()
+    await regions.getByRole('checkbox', { name: 'Hippocampus' }).click()
+    await panel.getByRole('button', { name: 'Submit', exact: true }).click()
+
+    await expect(panel.getByText('Answers received.', { exact: true })).toBeVisible()
+    await expect(input).toBeVisible()
+    await expect(panel.getByText('Which regions should be compared?')).toBeVisible()
+    expect(backend.requests).toHaveLength(2)
+    expect(backend.requests[0]!.tools).toContainEqual(expect.objectContaining({ name: 'ask_user_question' }))
+    const results = backend.requests[1]!.messages.flatMap((m) => m.content).filter((part) => part.type === 'tool_result')
+    expect(results).toHaveLength(1)
+    const text = typeof results[0]!.content === 'string'
+      ? (results[0]!.content as string)
+      : String((results[0]!.content as { text: string }[])[0]!.text)
+    expect(JSON.parse(text)).toEqual({
+      answers: [
+        { id: 'adduct', selected: ['[M+Na]+'] },
+        { id: 'regions', selected: ['Cortex', 'Hippocampus'] },
+      ],
+    })
+  })
+
   test('reports a permanent endpoint error and regenerates without duplicating the question', async ({ page, backend }) => {
     backend.reply = (route) => route.fulfill({ status: 401, headers: { 'access-control-allow-origin': '*' }, json: {
       type: 'error', error: { type: 'authentication_error', message: 'Invalid API key' },

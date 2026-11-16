@@ -6,27 +6,42 @@
 import { computed } from 'vue'
 import { RotateCcwIcon } from '@lucide/vue'
 import type { UiChatItem, UiPart } from '../../plugins/session-transcript'
+import type { QuestionRecord, QuestionRecords } from '../../plugins/user-questions'
 import { totalInputTokens } from '../../plugins/llm'
 import AgentMarkdown from '../ai-elements/AgentMarkdown.vue'
 import CopyButton from '../ai-elements/CopyButton.vue'
 import IconButton from '../ai-elements/IconButton.vue'
+import QuestionStep from '../ai-elements/QuestionStep.vue'
 import ReasoningStep from '../ai-elements/ReasoningStep.vue'
 import ToolStep from '../ai-elements/ToolStep.vue'
 import WorkingStep from '../ai-elements/WorkingStep.vue'
 import { Message, MessageContent, MessageFooter } from '../ui/message'
 import { Trace } from '../ui/trace'
+import QuestionReply from './QuestionReply.vue'
 
 type StepPart = Exclude<UiPart, { type: 'text' }>
-type Block = { kind: 'steps'; parts: StepPart[] } | { kind: 'text'; text: string }
+type Block =
+  | { kind: 'steps'; parts: StepPart[] }
+  | { kind: 'text'; text: string }
+  | { kind: 'question'; record: QuestionRecord }
 
-const props = defineProps<{ message: UiChatItem; canRetry: boolean }>()
+const props = defineProps<{ message: UiChatItem; canRetry: boolean; questions?: QuestionRecords }>()
 const emit = defineEmits<{ retry: [] }>()
+
+/** 提问步骤对应的记录；参数不合法的调用没有记录，仍按普通工具显示 */
+const recordOf = (part: StepPart) => (part.type === 'tool' ? props.questions?.[part.id] : undefined)
 
 const blocks = computed<Block[]>(() => {
   const result: Block[] = []
   for (const part of props.message.parts ?? []) {
     if (part.type === 'text') {
       result.push({ kind: 'text', text: part.text })
+      continue
+    }
+    // 回答过的提问自成一块，把前后的步骤分开
+    const record = recordOf(part)
+    if (record?.state === 'answered') {
+      result.push({ kind: 'question', record })
       continue
     }
     const last = result[result.length - 1]
@@ -72,9 +87,11 @@ const usage = computed(() => {
               :text="part.text"
               :active="part.active"
             />
+            <QuestionStep v-else-if="recordOf(part)" :record="recordOf(part)!" />
             <ToolStep v-else :part="part" />
           </template>
         </Trace>
+        <QuestionReply v-else-if="block.kind === 'question'" :record="block.record" />
         <AgentMarkdown
           v-else
           :text="block.text"

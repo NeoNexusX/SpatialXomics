@@ -101,6 +101,21 @@ Deployment `VITE_LLM_*` keys enter the browser bundle. Exa search uses its own o
 
 Separately, `tool-archive` persists successful tool text. Default result limits are 4,000 characters, commonly 12,000 for evidence tools. Truncated results carry a `read_archived_result` reference so the model can retrieve windows by offset. Archiving is independent of conversation compaction.
 
+## Tool parameters and execution
+
+Tool parameters are declared with the DSL in `plugins/tools/schema.ts`. Every value is a node: `string`, `number`, `integer`, `boolean`, `null`, `array`, `object`, the author-only `json` (any JSON value), or an exact-one `oneOf`. Objects must state `additionalProperties` explicitly, required properties are marked on the property (`required: true`), and arrays may carry `maxItems`. `defineTool()` compiles the DSL to JSON Schema at definition time and rejects malformed declarations, so the owning plugin fails to start; the model receives exactly the compiled schema, and argument types are inferred from the same declaration.
+
+A call copies and freezes its arguments, runs the `tools/pre-execute` gate, executes with a timeout (strictly validating the arguments against the compiled schema first: no rounding, no truncation, and `null` is not the same as absent), renders and truncates the result, then runs `tools/post-execute` and `tools/result`. Every failure becomes an `Error: <message>` result for the model and the turn continues; `error.code` distinguishes `UNKNOWN_TOOL`, `INVALID_ARGS`, `DENIED`, `ABORTED`, `ABORTED_BEFORE_DISPATCH`, and `TOOL_TIMEOUT`. Argument errors list every violation with its path, such as `missing required property "questions[0].question"`.
+
+## Asking the user
+
+`ask_user_question` (`tool-ask-user`) suspends a tool call when the model needs a confirmation, a choice, or missing information; `ctx.userQuestions` from `user-questions` waits for the answer:
+
+- Only one question waits at a time. The timer and drafts live in the service, so the deadline holds while the panel is closed. The wait defaults to 10 minutes (`timeoutMs` in the bundle row). When it runs out, the drafts are submitted: untouched questions take their recommended options (labels ending in `(Recommended)`) or are skipped when none is recommended, those answers carry `auto`, and the batch carries `timedOut`.
+- The answer returns to the model as an ordinary tool result, `{"answers":[{"id","selected","custom"}]}`; an empty `selected` without `custom` means the user skipped that question.
+- Stopping, reloading, or switching datasets interrupts the turn under the existing rules. The question is then recorded as unanswered and the user replies in the composer; it cannot be answered later.
+- While waiting, `QuestionCard` (shadcn-vue Questionnaire) takes the composer's place. The `userQuestions` projection folds each question and its answers from the log, and answered questions appear in the conversation as a question-and-answer bubble.
+
 ## Extension points
 
 | Event | Mode | Production use |
@@ -110,7 +125,7 @@ Separately, `tool-archive` persists successful tool text. Default result limits 
 | `agent/pre-request` | serial | Check pressure, compact, and refresh request snapshots |
 | `agent/request-error` | waterfall | Try overflow recovery before retry policy |
 | `agent/tool-result` | waterfall | Archive full output and prepare model-visible content |
-| `tools/pre-execute` | serial | Return `{ kind: 'deny' }` to reject execution |
+| `tools/pre-execute` | serial | Return `{ kind: 'deny' }` to reject execution; `exec.arguments` holds the frozen arguments, validated after the gate |
 | `tools/post-execute` | waterfall | Transform results |
 | `tools/result` | emit | Observe results |
 
