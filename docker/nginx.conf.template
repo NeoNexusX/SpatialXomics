@@ -13,8 +13,10 @@
 limit_req_zone $server_name zone=hmdb_archive:1m rate=2r/s;
 map "$uri|$arg_snapshot" $hmdb_archive_upstream_uri {
     default "";
-    ~^/hmdb-archive/(HMDB[0-9]{5,})\.xml\|$ /web/2id_/https://hmdb.ca/metabolites/$1.xml;
-    ~^/hmdb-archive/(HMDB[0-9]{5,})\.xml\|([0-9]{14})$ /web/$2id_/https://hmdb.ca/metabolites/$1.xml;
+    # 正则含量词 {5,}/{14}，nginx 解析器会把未加引号的 { 当作配置块开始符，
+    # 必须整体加双引号（否则 nginx -t 报 "unexpected "{""，容器无法启动）
+    "~^/hmdb-archive/(HMDB[0-9]{5,})\.xml\|$" /web/2id_/https://hmdb.ca/metabolites/$1.xml;
+    "~^/hmdb-archive/(HMDB[0-9]{5,})\.xml\|([0-9]{14})$" /web/$2id_/https://hmdb.ca/metabolites/$1.xml;
 }
 upstream web_archive_wayback {
     server web.archive.org:443;
@@ -82,7 +84,8 @@ server {
         proxy_set_header Host web.archive.org;
         proxy_ssl_server_name on;
         proxy_ssl_name web.archive.org;
-        proxy_redirect ~^https?://web\.archive\.org/web/([0-9]{14})id_/https?://(?:www\.)?hmdb\.ca/metabolites/(HMDB[0-9]{5,})\.xml$ /hmdb-archive/$2.xml?snapshot=$1;
+        # 正则含量词，同样必须加引号，原因见上方 map 处注释
+        proxy_redirect "~^https?://web\.archive\.org/web/([0-9]{14})id_/https?://(?:www\.)?hmdb\.ca/metabolites/(HMDB[0-9]{5,})\.xml$" /hmdb-archive/$2.xml?snapshot=$1;
         proxy_connect_timeout 15s;
         proxy_read_timeout 35s;
         limit_except GET { deny all; }
