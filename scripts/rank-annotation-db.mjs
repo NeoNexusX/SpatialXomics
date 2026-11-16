@@ -64,7 +64,7 @@ function originOf(m) {
 }
 
 /**
- * 流式读 HMDB XML（逐行看标签，与 build-hmdb-index 同法），返回 主编号 → 来源等级，
+ * 流式读 HMDB XML（逐行看开/闭标签的 SAX 式解析，不整树加载），返回 主编号 → 来源等级，
  * 以及 次要编号 → 主编号
  */
 async function readHmdbOrigins(xmlPath) {

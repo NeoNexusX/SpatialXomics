@@ -36,28 +36,38 @@ export function apply(ctx: Context) {
     return { ...stored, archiveId, content: stored.content.slice(0, limit - note.length) + note }
   })
 
+  /**
+   * read_archived_result —— 按窗口读回此前被截断的工具结果全文。
+   *
+   * 作用：历史截断桩里带 archiveId，传入即可取回完整输出（如未截断的注释列表或
+   * 数据库结果；全文已写入会话存储）。长存档分窗返回：每次 ≤ARCHIVE_WINDOW_CHARS
+   * 字符 + nextOffset 续读指针；本工具 maxResultChars 提到 Evidence 上限，读回内容
+   * 不会被 ToolRuntime 再截一次。存档不存在/过期/OPFS 不可用时返回提示而非报错。
+   *
+   * 参数：
+   * - archiveId (string, 必填)：截断桩中的存档 id
+   * - offset (integer, 可选)：起始字符偏移，默认 0；用上次返回的 nextOffset 续读
+   */
   ctx.tools.register(
     defineTool({
       name: 'read_archived_result',
       maxResultChars: TOOL_RESULT_CHARS_EVIDENCE,
       category: 'system',
       description:
-        'Read the full text of a previously truncated tool result from the agent archive. ' +
-        'History truncation stubs mention an archive id — pass it here to recover the complete ' +
-        'output (e.g. the untruncated annotation listing or database result). ' +
-        'Long archives are returned in windows: pass the returned nextOffset to read the ' +
-        'following section.',
+        'Retrieve the full text of a previously truncated tool result using the archiveId from its ' +
+        'history stub. Returns a character window; continue with the returned nextOffset until the ' +
+        'archive ends. This reads saved output — it does not rerun the original tool; a missing or ' +
+        'expired archive returns a notice, not an error.',
       parameters: {
         archiveId: {
           type: 'string',
           required: true,
-          description: 'Archive id from the truncation stub',
+          description: 'The archiveId quoted in the truncation stub; pass verbatim.',
         },
         offset: {
           type: 'integer',
           description:
-            'Character offset to start reading from (default 0). ' +
-            'Use nextOffset from a previous call to continue reading.',
+            "Character offset to start reading (default 0); use the previous call's nextOffset to continue.",
         },
       },
       async execute(args, exec) {

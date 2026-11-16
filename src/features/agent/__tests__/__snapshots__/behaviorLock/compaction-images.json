@@ -106,8 +106,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 5000,
       "contextWindow": 20000,
       "imageMode": "image",
@@ -133,8 +133,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 5000,
       "contextWindow": 20000,
       "imageMode": "image",
@@ -265,8 +265,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 5000,
       "contextWindow": 20000,
       "imageMode": "image",
@@ -323,8 +323,8 @@
     {
      "type": "compaction/end",
      "compactionId": "uuid-23",
-     "beforeTokens": 14936,
-     "afterTokens": 5391,
+     "beforeTokens": 15200,
+     "afterTokens": 5655,
      "seq": 18,
      "id": "uuid-27",
      "time": 0
@@ -345,8 +345,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 5000,
       "contextWindow": 20000,
       "imageMode": "image",
@@ -374,8 +374,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 5000,
       "contextWindow": 20000,
       "imageMode": "image",
@@ -437,8 +437,8 @@
  ],
  "calls": [
   {
-   "system": "<prompt 7c70871a>",
-   "tools": "<tools a4d11b16>",
+   "system": "<prompt e22127e1>",
+   "tools": "<tools 479c7b97>",
    "messages": [
     {
      "role": "user",
@@ -475,8 +475,8 @@
    "maxTokens": 5000
   },
   {
-   "system": "<prompt 7c70871a>",
-   "tools": "<tools a4d11b16>",
+   "system": "<prompt e22127e1>",
+   "tools": "<tools 479c7b97>",
    "messages": [
     {
      "role": "user",
@@ -516,8 +516,8 @@
    "maxTokens": 5000
   },
   {
-   "system": "<prompt 7c70871a>",
-   "tools": "<tools a4d11b16>",
+   "system": "<prompt e22127e1>",
+   "tools": "<tools 479c7b97>",
    "messages": [
     {
      "role": "user",
@@ -634,11 +634,11 @@
   ],
   "error": null,
   "pressure": {
-   "inputTokens": 5408,
+   "inputTokens": 5672,
    "contextWindow": 20000,
    "outputReserve": 5000,
    "inputBudget": 14600,
-   "ratio": 0.3704109589041096,
+   "ratio": 0.3884931506849315,
    "estimated": true
   }
  }

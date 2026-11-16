@@ -48,6 +48,7 @@
        "clusters": [
         1
        ],
+       "kmeansK": 2,
        "pixel": {
         "index": 4,
         "x": 1,
@@ -81,7 +82,7 @@
      "turnId": "uuid-1",
      "message": {
       "role": "user",
-      "content": "<text 307 7d074b8e [Analysis context captured for this ques…ial\":0.3}}}\nUse these identities for analysis. Live page state may have changed.>"
+      "content": "<text 319 e7a043d0 [Analysis context captured for this ques…ial\":0.3}}}\nUse these identities for analysis. Live page state may have changed.>"
      },
      "origin": "context",
      "seq": 2,
@@ -110,8 +111,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt eefdb763>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt 259c3de5>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -137,8 +138,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt eefdb763>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt 259c3de5>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -200,8 +201,8 @@
  ],
  "calls": [
   {
-   "system": "<prompt eefdb763>",
-   "tools": "<tools a4d11b16>",
+   "system": "<prompt 259c3de5>",
+   "tools": "<tools 479c7b97>",
    "messages": [
     {
      "role": "user",
@@ -209,7 +210,7 @@
     },
     {
      "role": "user",
-     "content": "<text 307 7d074b8e [Analysis context captured for this ques…ial\":0.3}}}\nUse these identities for analysis. Live page state may have changed.>"
+     "content": "<text 319 e7a043d0 [Analysis context captured for this ques…ial\":0.3}}}\nUse these identities for analysis. Live page state may have changed.>"
     }
    ],
    "turnStart": 0,
@@ -248,11 +249,11 @@
   ],
   "error": null,
   "pressure": {
-   "inputTokens": 2383,
+   "inputTokens": 2653,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.012751498287671232,
+   "ratio": 0.014196275684931507,
    "estimated": true
   }
  }

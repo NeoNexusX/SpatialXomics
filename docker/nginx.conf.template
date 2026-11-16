@@ -9,6 +9,17 @@
 #   3. Vue Router history 模式 SPA fallback
 # ============================================================
 
+# HMDB Wayback XML relay: fixed upstream + a map that only allows HMDB accession paths.
+limit_req_zone $server_name zone=hmdb_archive:1m rate=2r/s;
+map "$uri|$arg_snapshot" $hmdb_archive_upstream_uri {
+    default "";
+    ~^/hmdb-archive/(HMDB[0-9]{5,})\.xml\|$ /web/2id_/https://hmdb.ca/metabolites/$1.xml;
+    ~^/hmdb-archive/(HMDB[0-9]{5,})\.xml\|([0-9]{14})$ /web/$2id_/https://hmdb.ca/metabolites/$1.xml;
+}
+upstream web_archive_wayback {
+    server web.archive.org:443;
+}
+
 # 所有浏览器共享这一上游配额，避免同一服务器 IP 超过 KEGG 的 3 次/秒限制。
 limit_req_zone $server_name zone=kegg_rest:1m rate=3r/s;
 
@@ -54,6 +65,26 @@ server {
         proxy_ssl_name rest.kegg.jp;
         proxy_connect_timeout 10s;
         proxy_read_timeout 25s;
+        limit_except GET { deny all; }
+    }
+
+    # HMDB Wayback relay is constrained to HMDB accession XMLs. The 2id_ redirect is
+    # rewritten to this origin with ?snapshot=..., then fetched from that exact timestamp.
+    # Keep the Location regex case-sensitive to match vite.config.ts's proxyRes check
+    # (dev) so both relays diagnose mismatches identically. Both tolerate Wayback's
+    # http/https scheme and its www.hmdb.ca canonical host; anything else falls
+    # through to the browser (CORS-blocked) rather than passing through silently.
+    location ^~ /hmdb-archive/ {
+        if ($hmdb_archive_upstream_uri = "") { return 404; }
+        limit_req zone=hmdb_archive burst=4 nodelay;
+        limit_req_status 429;
+        proxy_pass https://web_archive_wayback$hmdb_archive_upstream_uri;
+        proxy_set_header Host web.archive.org;
+        proxy_ssl_server_name on;
+        proxy_ssl_name web.archive.org;
+        proxy_redirect ~^https?://web\.archive\.org/web/([0-9]{14})id_/https?://(?:www\.)?hmdb\.ca/metabolites/(HMDB[0-9]{5,})\.xml$ /hmdb-archive/$2.xml?snapshot=$1;
+        proxy_connect_timeout 15s;
+        proxy_read_timeout 35s;
         limit_except GET { deny all; }
     }
 

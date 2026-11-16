@@ -8,6 +8,7 @@ export interface AnalysisBinding {
   page: PageState
   selection?: {
     clusters: number[]
+    kmeansK?: number | null
     pixel?: { index: number; x: number; y: number }
     annotationWeights?: AnnotationScoreWeights
   }

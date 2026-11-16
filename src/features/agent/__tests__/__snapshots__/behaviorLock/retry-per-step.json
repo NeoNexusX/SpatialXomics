@@ -72,8 +72,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -99,8 +99,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -138,8 +138,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -165,8 +165,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -204,8 +204,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -231,8 +231,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -334,8 +334,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -363,8 +363,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -404,8 +404,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -433,8 +433,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -474,8 +474,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -503,8 +503,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -566,8 +566,8 @@
  ],
  "calls": [
   {
-   "system": "<prompt 7c70871a>",
-   "tools": "<tools a4d11b16>",
+   "system": "<prompt e22127e1>",
+   "tools": "<tools 479c7b97>",
    "messages": [
     {
      "role": "user",
@@ -582,8 +582,8 @@
    "maxTokens": 64000
   },
   {
-   "system": "<prompt 7c70871a>",
-   "tools": "<tools a4d11b16>",
+   "system": "<prompt e22127e1>",
+   "tools": "<tools 479c7b97>",
    "messages": [
     {
      "role": "user",
@@ -598,8 +598,8 @@
    "maxTokens": 64000
   },
   {
-   "system": "<prompt 7c70871a>",
-   "tools": "<tools a4d11b16>",
+   "system": "<prompt e22127e1>",
+   "tools": "<tools 479c7b97>",
    "messages": [
     {
      "role": "user",
@@ -614,47 +614,8 @@
    "maxTokens": 64000
   },
   {
-   "system": "<prompt 7c70871a>",
-   "tools": "<tools a4d11b16>",
-   "messages": [
-    {
-     "role": "user",
-     "content": "question"
-    },
-    {
-     "role": "user",
-     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
-    },
-    {
-     "role": "assistant",
-     "parts": [
-      {
-       "type": "tool-call",
-       "id": "c1",
-       "name": "lookup",
-       "arguments": "{}"
-      }
-     ],
-     "source": {
-      "endpoint": "anthropic",
-      "model": "m",
-      "baseUrl": "https://llm.test/v1"
-     }
-    },
-    {
-     "role": "tool",
-     "toolCallId": "c1",
-     "name": "lookup",
-     "content": "evidence 885.5",
-     "isError": false
-    }
-   ],
-   "turnStart": 0,
-   "maxTokens": 64000
-  },
-  {
-   "system": "<prompt 7c70871a>",
-   "tools": "<tools a4d11b16>",
+   "system": "<prompt e22127e1>",
+   "tools": "<tools 479c7b97>",
    "messages": [
     {
      "role": "user",
@@ -692,8 +653,47 @@
    "maxTokens": 64000
   },
   {
-   "system": "<prompt 7c70871a>",
-   "tools": "<tools a4d11b16>",
+   "system": "<prompt e22127e1>",
+   "tools": "<tools 479c7b97>",
+   "messages": [
+    {
+     "role": "user",
+     "content": "question"
+    },
+    {
+     "role": "user",
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "tool-call",
+       "id": "c1",
+       "name": "lookup",
+       "arguments": "{}"
+      }
+     ],
+     "source": {
+      "endpoint": "anthropic",
+      "model": "m",
+      "baseUrl": "https://llm.test/v1"
+     }
+    },
+    {
+     "role": "tool",
+     "toolCallId": "c1",
+     "name": "lookup",
+     "content": "evidence 885.5",
+     "isError": false
+    }
+   ],
+   "turnStart": 0,
+   "maxTokens": 64000
+  },
+  {
+   "system": "<prompt e22127e1>",
+   "tools": "<tools 479c7b97>",
    "messages": [
     {
      "role": "user",
@@ -783,11 +783,11 @@
   ],
   "error": null,
   "pressure": {
-   "inputTokens": 2287,
+   "inputTokens": 2551,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.012237799657534246,
+   "ratio": 0.013650470890410958,
    "estimated": true
   }
  }

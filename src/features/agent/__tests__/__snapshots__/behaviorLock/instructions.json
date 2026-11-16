@@ -88,8 +88,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 944483b0>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt ecbc3dfd>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -115,8 +115,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 944483b0>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt ecbc3dfd>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -255,8 +255,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 0f15b763>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt 37fabd6a>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -285,8 +285,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 0f15b763>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt 37fabd6a>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -431,8 +431,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -464,8 +464,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -616,8 +616,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 556e966c>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt 0b8846ef>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -652,8 +652,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 556e966c>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt 0b8846ef>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -715,8 +715,8 @@
  ],
  "calls": [
   {
-   "system": "<prompt 556e966c>",
-   "tools": "<tools a4d11b16>",
+   "system": "<prompt 0b8846ef>",
+   "tools": "<tools 479c7b97>",
    "messages": [
     {
      "role": "user",
@@ -885,11 +885,11 @@
   ],
   "error": null,
   "pressure": {
-   "inputTokens": 2542,
+   "inputTokens": 2806,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.013602311643835616,
+   "ratio": 0.015014982876712329,
    "estimated": true
   },
   "instructions": {

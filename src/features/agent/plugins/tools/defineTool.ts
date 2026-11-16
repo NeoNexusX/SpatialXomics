@@ -86,11 +86,16 @@ export interface ToolDefinition<A extends ParameterSchemaSpec = any, V = any> {
    */
   output?: {
     render: (args: InferArgs<A>, value: V) => string
+    /**
+     * 工具附带的图像。返回 undefined（省略 images 字段）表示本次没有可用图；
+     * 绝不要返回空数组——runtime 对真值数组一律调 validateToolImages，
+     * 空数组会被「1–4 张」校验拒绝。
+     */
     images?: (
       args: InferArgs<A>,
       value: V,
       exec: ToolRunContext,
-    ) => ToolImage[] | Promise<ToolImage[]>
+    ) => ToolImage[] | undefined | Promise<ToolImage[] | undefined>
   }
   /** 工具执行超时（ms）；缺省 15000 */
   timeoutMs?: number
@@ -115,9 +120,13 @@ export function defineTool<A extends ParameterSchemaSpec, V>(
 export const batchPageParameters = {
   offset: {
     type: 'integer',
-    description: 'First input query index, default 0. Continue with nextOffset.',
+    description:
+      'Zero-based start into the batch query inputs (default 0); continue with nextOffset.',
   },
-  limit: { type: 'integer', description: 'Queries per page. Evidence default 5, max 8.' },
+  limit: {
+    type: 'integer',
+    description: 'Queries processed per page, default 5, max 8; pages inputs.',
+  },
 } satisfies ParameterSchemaSpec
 
 /** 证据类批量工具的字符预算（配合 TOOL_RESULT_CHARS_EVIDENCE 的结果上限） */
@@ -145,19 +154,38 @@ export async function renderBatch<T>(
     limit?: number
     maxChars?: number
     maxCharsPerItem?: number
+    /** false: offset/limit belong to each query's results, never to the input array. */
+    paginateInputs?: boolean
+    /**
+     * Soft wall-clock budget (epoch ms) for slow-network batch tools. An item
+     * that would START past it is skipped and left to the nextOffset footer —
+     * never degraded in place, which would consume the pagination cursor and
+     * get skipped forever when the model follows the footer.
+     */
+    deadline?: number
     session?: Session
     signal?: AbortSignal
   } = {},
 ): Promise<string> {
-  const offset = Math.min(items.length, Math.max(0, Math.floor(options.offset ?? 0)))
-  const limit = Math.min(8, Math.max(1, Math.floor(options.limit ?? 5)))
+  const paginateInputs = options.paginateInputs ?? true
+  const offset = paginateInputs
+    ? Math.min(items.length, Math.max(0, Math.floor(options.offset ?? 0)))
+    : 0
+  const limit = paginateInputs
+    ? Math.min(8, Math.max(1, Math.floor(options.limit ?? 5)))
+    : items.length
   const budget = options.maxChars ?? 3700
   const itemBudget = options.maxCharsPerItem ?? 700
   const sections: string[] = []
   let used = 0
   let next = offset
+  let deadlineHit = false
   for (let index = offset; index < Math.min(items.length, offset + limit); index++) {
     options.signal?.throwIfAborted()
+    if (options.deadline != null && Date.now() > options.deadline && sections.length) {
+      deadlineHit = true
+      break
+    }
     const item = items[index]!
     const heading = items.length > 1 ? `### ${label(item).slice(0, 180)}\n` : ''
     // Do not query an item that cannot fit. Leave it for the next page.
@@ -191,9 +219,14 @@ export async function renderBatch<T>(
     used += heading.length + body.length + 2
     next = index + 1
   }
-  const footer =
-    next < items.length
-      ? `\n[${items.length - next} more; nextOffset=${next}; repeat the same query arrays with offset=${next}]`
+  const footer = deadlineHit
+    ? paginateInputs
+      ? `\n[${items.length - next} inputs not started: the batch time budget was exhausted by earlier slow responses; nextOffset=${next}; repeat the same query arrays with offset=${next} to continue with a fresh budget.]`
+      : `\n[${items.length - next} queries not started because the batch time budget was exhausted by earlier slow responses; retry the remaining queries in a smaller batch.]`
+    : next < items.length
+      ? paginateInputs
+        ? `\n[${items.length - next} more; nextOffset=${next}; repeat the same query arrays with offset=${next}]`
+        : `\n[${items.length - next} queries not returned because the result character budget was exhausted; retry the remaining queries in a smaller batch.]`
       : ''
   return sections.join('\n\n') + footer
 }

@@ -26,7 +26,8 @@
       "selection": {
        "clusters": [
         1
-       ]
+       ],
+       "kmeansK": 2
       }
      },
      "baseSurface": [],
@@ -50,7 +51,7 @@
      "turnId": "uuid-1",
      "message": {
       "role": "user",
-      "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[1]}}\nUse these identities for analysis. Live page state may have changed."
+      "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[1],\"kmeansK\":2}}\nUse these identities for analysis. Live page state may have changed."
      },
      "origin": "context",
      "seq": 2,
@@ -79,8 +80,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 9d0625ac>",
-      "tools": "<tools e89801c1>",
+      "system": "<prompt 92675986>",
+      "tools": "<tools dbaed375>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -106,8 +107,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 9d0625ac>",
-      "tools": "<tools e89801c1>",
+      "system": "<prompt 92675986>",
+      "tools": "<tools dbaed375>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -136,7 +137,7 @@
        {
         "type": "tool-call",
         "id": "c1",
-        "name": "get_kmeans_summary",
+        "name": "get_kmeans",
         "arguments": "{}"
        }
       ],
@@ -151,35 +152,133 @@
      "time": 0
     },
     {
+     "type": "tool/start",
+     "turnId": "uuid-1",
+     "callKey": "7:0",
+     "callId": "c1",
+     "name": "get_kmeans",
+     "input": {},
+     "seq": 8,
+     "id": "uuid-11",
+     "time": 0
+    },
+    {
      "type": "message",
      "turnId": "uuid-1",
      "message": {
       "role": "tool",
       "toolCallId": "c1",
-      "name": "get_kmeans_summary",
-      "content": "TOOL_NOT_STARTED: interrupted; this operation was not automatically repeated.",
-      "isError": true
+      "name": "get_kmeans",
+      "content": "{\"k\":2,\"clusters\":[{\"id\":0,\"color\":[0,0,0],\"count\":3},{\"id\":1,\"color\":[0,0,0],\"count\":4}],\"selectedIds\":[0],\"labelsAvailable\":true,\"computing\":false,\"visible\":false}",
+      "isError": false
      },
      "callKey": "7:0",
-     "seq": 8,
-     "id": "uuid-11",
+     "archiveId": "uuid-12",
+     "seq": 9,
+     "id": "uuid-13",
      "time": 0
     },
     {
      "type": "step/end",
      "turnId": "uuid-1",
      "step": 1,
-     "seq": 9,
-     "id": "uuid-12",
+     "seq": 10,
+     "id": "uuid-14",
+     "time": 0
+    },
+    {
+     "type": "step/start",
+     "turnId": "uuid-1",
+     "step": 2,
+     "seq": 11,
+     "id": "uuid-15",
+     "time": 0
+    },
+    {
+     "type": "request/context",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-16",
+     "request": {
+      "nodes": [
+       1,
+       2,
+       7,
+       9
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 92675986>",
+      "tools": "<tools dbaed375>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 12,
+     "id": "uuid-17",
+     "time": 0
+    },
+    {
+     "type": "attempt/start",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-16",
+     "step": 2,
+     "request": {
+      "nodes": [
+       1,
+       2,
+       7,
+       9
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt 92675986>",
+      "tools": "<tools dbaed375>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 13,
+     "id": "uuid-18",
+     "time": 0
+    },
+    {
+     "type": "attempt/end",
+     "turnId": "uuid-1",
+     "attemptId": "uuid-16",
+     "status": "failed",
+     "failure": {
+      "message": "The script has no response for call 2",
+      "code": "UNKNOWN"
+     },
+     "seq": 14,
+     "id": "uuid-19",
+     "time": 0
+    },
+    {
+     "type": "step/end",
+     "turnId": "uuid-1",
+     "step": 2,
+     "seq": 15,
+     "id": "uuid-20",
      "time": 0
     },
     {
      "type": "turn/end",
      "turnId": "uuid-1",
      "reason": "failed",
-     "error": "The selected clusters changed. Submit the question again.",
-     "seq": 10,
-     "id": "uuid-13",
+     "error": "The script has no response for call 2",
+     "seq": 16,
+     "id": "uuid-21",
      "time": 0
     }
    ]
@@ -187,8 +286,8 @@
  ],
  "calls": [
   {
-   "system": "<prompt 9d0625ac>",
-   "tools": "<tools e89801c1>",
+   "system": "<prompt 92675986>",
+   "tools": "<tools dbaed375>",
    "messages": [
     {
      "role": "user",
@@ -196,7 +295,46 @@
     },
     {
      "role": "user",
-     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[1]}}\nUse these identities for analysis. Live page state may have changed."
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[1],\"kmeansK\":2}}\nUse these identities for analysis. Live page state may have changed."
+    }
+   ],
+   "turnStart": 0,
+   "maxTokens": 64000
+  },
+  {
+   "system": "<prompt 92675986>",
+   "tools": "<tools dbaed375>",
+   "messages": [
+    {
+     "role": "user",
+     "content": "question"
+    },
+    {
+     "role": "user",
+     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[1],\"kmeansK\":2}}\nUse these identities for analysis. Live page state may have changed."
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "tool-call",
+       "id": "c1",
+       "name": "get_kmeans",
+       "arguments": "{}"
+      }
+     ],
+     "source": {
+      "endpoint": "anthropic",
+      "model": "m",
+      "baseUrl": "https://llm.test/v1"
+     }
+    },
+    {
+     "role": "tool",
+     "toolCallId": "c1",
+     "name": "get_kmeans",
+     "content": "{\"k\":2,\"clusters\":[{\"id\":0,\"color\":[0,0,0],\"count\":3},{\"id\":1,\"color\":[0,0,0],\"count\":4}],\"selectedIds\":[0],\"labelsAvailable\":true,\"computing\":false,\"visible\":false}",
+     "isError": false
     }
    ],
    "turnStart": 0,
@@ -209,8 +347,9 @@
   "generating",
   "generating [tool:running]",
   "executing-tools [tool:running]",
-  "executing-tools [tool:error]",
-  "idle [tool:error]"
+  "executing-tools [tool:done]",
+  "generating [tool:done]",
+  "idle [tool:done]"
  ],
  "snapshot": {
   "phase": "idle",
@@ -229,24 +368,24 @@
      {
       "type": "tool",
       "id": "7:0",
-      "name": "get_kmeans_summary",
+      "name": "get_kmeans",
       "input": {},
-      "state": "error",
-      "preview": "TOOL_NOT_STARTED: interrupted; this operation was not automatically repeated."
+      "state": "done",
+      "preview": "{\"k\":2,\"clusters\":[{\"id\":0,\"color\":[0,0,0],\"count\":3},{\"id\":1,\"color\":[0,0,0],\"count\":4}],\"selectedIds\":[0],\"labelsAvailable\":true,\"computing\":false,\"visible\":false}"
      }
     ],
     "pending": false,
     "interrupted": false,
-    "error": "The selected clusters changed. Submit the question again."
+    "error": "The script has no response for call 2"
    }
   ],
-  "error": "The selected clusters changed. Submit the question again.",
+  "error": "The script has no response for call 2",
   "pressure": {
-   "inputTokens": 8727,
+   "inputTokens": 11435,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.04669841609589041,
+   "ratio": 0.061188998287671235,
    "estimated": true
   }
  }

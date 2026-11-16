@@ -131,7 +131,7 @@ describe('system prompt and tool catalog', () => {
     await expect(JSON.stringify(h.calls[0]!.tools, null, 2) + '\n').toMatchFileSnapshot(
       './__snapshots__/behaviorLock/tool-schemas.json',
     )
-    expect(h.calls[0]!.tools).toHaveLength(29)
+    expect(h.calls[0]!.tools).toHaveLength(28)
   })
 })
 
@@ -726,10 +726,10 @@ describe('analysis binding', () => {
   })
 
   it.each([
-    ['ion', 'get_ion_image_stats', () => selectIon(741.531), () => selectIon(800.5)],
+    ['ion', 'get_ion', () => selectIon(741.531), () => selectIon(800.5)],
     [
       'clusters',
-      'get_kmeans_summary',
+      'get_kmeans',
       () =>
         registerContextProviders({
           kmeans: () => ({ k: 2, clusterSizes: [3, 4], selectedIds: [1] }),
@@ -737,6 +737,18 @@ describe('analysis binding', () => {
       () =>
         registerContextProviders({
           kmeans: () => ({ k: 2, clusterSizes: [3, 4], selectedIds: [0] }),
+        }),
+    ],
+    [
+      'cluster-result',
+      'get_kmeans',
+      () =>
+        registerContextProviders({
+          kmeans: () => ({ k: 2, clusterSizes: [3, 4], selectedIds: [1] }),
+        }),
+      () =>
+        registerContextProviders({
+          kmeans: () => ({ k: 3, clusterSizes: [3, 4, 1], selectedIds: [1] }),
         }),
     ],
     [
@@ -751,7 +763,7 @@ describe('analysis binding', () => {
     ],
     [
       'weights',
-      'get_annotation_top',
+      'get_annotation',
       () =>
         registerContextProviders({
           annotations: () => ({

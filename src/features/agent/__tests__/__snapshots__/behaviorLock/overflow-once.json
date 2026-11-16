@@ -72,8 +72,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 16000,
       "contextWindow": 64000,
       "imageMode": "image",
@@ -99,8 +99,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 16000,
       "contextWindow": 64000,
       "imageMode": "image",
@@ -231,8 +231,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 16000,
       "contextWindow": 64000,
       "imageMode": "image",
@@ -261,8 +261,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 16000,
       "contextWindow": 64000,
       "imageMode": "image",
@@ -334,8 +334,8 @@
     {
      "type": "compaction/end",
      "compactionId": "uuid-22",
-     "beforeTokens": 27331,
-     "afterTokens": 2378,
+     "beforeTokens": 27595,
+     "afterTokens": 2642,
      "seq": 20,
      "id": "uuid-26",
      "time": 0
@@ -355,8 +355,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 16000,
       "contextWindow": 64000,
       "imageMode": "image",
@@ -383,8 +383,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 7c70871a>",
-      "tools": "<tools a4d11b16>",
+      "system": "<prompt e22127e1>",
+      "tools": "<tools 479c7b97>",
       "maxTokens": 16000,
       "contextWindow": 64000,
       "imageMode": "image",
@@ -430,8 +430,8 @@
  ],
  "calls": [
   {
-   "system": "<prompt 7c70871a>",
-   "tools": "<tools a4d11b16>",
+   "system": "<prompt e22127e1>",
+   "tools": "<tools 479c7b97>",
    "messages": [
     {
      "role": "user",
@@ -446,8 +446,8 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt 7c70871a>",
-   "tools": "<tools a4d11b16>",
+   "system": "<prompt e22127e1>",
+   "tools": "<tools 479c7b97>",
    "messages": [
     {
      "role": "user",
@@ -484,8 +484,8 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt 7c70871a>",
-   "tools": "<tools a4d11b16>",
+   "system": "<prompt e22127e1>",
+   "tools": "<tools 479c7b97>",
    "messages": [
     {
      "role": "user",
@@ -517,8 +517,8 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt 7c70871a>",
-   "tools": "<tools a4d11b16>",
+   "system": "<prompt e22127e1>",
+   "tools": "<tools 479c7b97>",
    "messages": [
     {
      "role": "user",
@@ -595,11 +595,11 @@
   ],
   "error": "common.agent.errors.contextWindow: still too long",
   "pressure": {
-   "inputTokens": 2378,
+   "inputTokens": 2642,
    "contextWindow": 64000,
    "outputReserve": 16000,
    "inputBudget": 46720,
-   "ratio": 0.05089897260273973,
+   "ratio": 0.056549657534246574,
    "estimated": true
   }
  }

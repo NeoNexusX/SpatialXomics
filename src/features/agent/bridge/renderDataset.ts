@@ -8,7 +8,7 @@ export function fmt(v: number | null | undefined): string {
   return v.toFixed(4).replace(/\.?0+$/, '')
 }
 
-/** 渲染数据集概览（get_dataset_overview 工具与 system prompt 静态段共用） */
+/** 渲染数据集概览（get_dataset 工具与 system prompt 静态段共用） */
 export function renderDataset(d: DatasetOverview): string {
   const lines = [`dataMode: ${d.dataMode}`, `dimensions: ${d.width} x ${d.height}`]
   if (d.rowAxis) lines.push(`rowAxis: ${d.rowAxis}`)
@@ -18,7 +18,7 @@ export function renderDataset(d: DatasetOverview): string {
   if (d.pixelSizeHorizontal != null)
     lines.push(`pixelSize: ${d.pixelSizeHorizontal} x ${d.pixelSizeVertical ?? '?'} um`)
   if (d.mzMin != null)
-    lines.push(`mzRange: ${fmt(d.mzMin)} - ${fmt(d.mzMax)} (${d.mzCount} points)`)
+    lines.push(`mzRange: ${fmt(d.mzMin)} - ${fmt(d.mzMax)} (${d.mzCount} axis points)`)
   if (d.analyzer) lines.push(`analyzer: ${d.analyzer}`)
   if (d.ionisationSource) lines.push(`ionSource: ${d.ionisationSource}`)
   if (d.polarity) lines.push(`polarity: ${d.polarity}`)

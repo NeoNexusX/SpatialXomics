@@ -74,19 +74,25 @@ test.describe('Agent browser journeys', () => {
 
   test('executes a real registered tool and passes its result back to the model', async ({ page, backend }) => {
     backend.reply = (route) => fulfillSse(route, backend.requests.length === 1
-      ? sseTool('get_page_state') : sseText('Page state inspected.'))
+      ? sseTool('get_page') : sseText('Page state inspected.'))
     await page.goto('/vizworkbench')
     const panel = await openAgent(page)
     await panel.getByPlaceholder('Message SXO Harness Agent').fill('Inspect the current page')
     await panel.getByRole('button', { name: 'Send', exact: true }).click()
     await expect(panel.getByText('Page state inspected.', { exact: true })).toBeVisible()
     expect(backend.requests).toHaveLength(2)
-    expect(backend.requests[0]!.tools).toContainEqual(expect.objectContaining({ name: 'get_page_state' }))
+    expect(backend.requests[0]!.tools).toContainEqual(expect.objectContaining({ name: 'get_page' }))
     const results = backend.requests[1]!.messages.flatMap((m) => m.content).filter((part) => part.type === 'tool_result')
     expect(results).toHaveLength(1)
     expect(results[0]).toMatchObject({ tool_use_id: 'e2e-tool-call' })
     expect(results[0]!.is_error).not.toBe(true)
-    expect(JSON.stringify(results[0]!.content)).toContain('mean spectrum: not loaded')
+    // The rendered tool result is the get_page JSON payload (header/dataset/ion/...).
+    const payload = JSON.stringify(results[0]!.content)
+    expect(payload).toContain('header')
+    const text = typeof results[0]!.content === 'string'
+      ? (results[0]!.content as string)
+      : String((results[0]!.content as { text: string }[])[0]!.text)
+    expect(() => JSON.parse(text)).not.toThrow()
   })
 
   test('reports a permanent endpoint error and regenerates without duplicating the question', async ({ page, backend }) => {

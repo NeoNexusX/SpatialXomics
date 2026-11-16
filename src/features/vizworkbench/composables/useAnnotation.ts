@@ -924,11 +924,39 @@ export function useAnnotation(opts: {
 
   registerContextProviders({
     annotations: () =>
-      ions.value.length > 0
+      runState.value !== 'idle' || ions.value.length > 0
         ? {
             count: ions.value.length,
             rows: () => ions.value.map(toAgentRow),
             weights: { ...scoreWeights.value },
+            // get_annotation 的面板状态头：与表格筛选/排序解耦（分页读全量 ions）
+            panel: () => ({
+              summary: summary.value,
+              conditions: {
+                tolValue: tolValue.value,
+                tolUnit: tolUnit.value,
+                cutPct: cutPct.value,
+                spatialPct: spatialPct.value,
+                polarityOverride: polarityOverride.value,
+                adductOverrides: { ...adductOverrides.value },
+                scoreRatio: { ...scoreRatio.value },
+              },
+              filters: {
+                qLevel: qLevel.value,
+                adductFilter: [...adductFilter.value],
+                siblingsOnly: siblingsOnly.value,
+                moleculeFilter: moleculeFilter.value,
+                searchQuery: searchQuery.value,
+                sortKey: sortKey.value,
+                sortReverse: sortReverse.value,
+              },
+              visibleRows: rows.value.length,
+              runState: runState.value,
+              dbInfo: db.value ? { label: db.value.label, count: db.value.count } : null,
+              peakStats: peakStats.value,
+            }),
+            // 全量行（rank 窗口分页的数据源，与 rows computed 的筛选无关）
+            panelRows: () => ions.value.map(toAgentRow),
           }
         : null,
   })
