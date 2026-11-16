@@ -42,6 +42,21 @@ jobs:
       # 与部署阶段 docker build 内的 `RUN npm run docs:build` 行为一致，提前到 PR 阶段拦截
       - run: npm run docs:build
 
+      # nginx 配置模板校验：镜像只在 dev/main 部署时构建，模板语法此前从未被 CI
+      # 检查过（曾因正则量词 {n,m} 未加引号导致 nginx -t 报 "unexpected {"，
+      # 容器起不来、部署后站点下线）。复刻 Dockerfile 运行层环境
+      # （alpine:3.21 + nginx + brotli + gettext），用与 entrypoint.sh 相同的
+      # envsubst 变量白名单渲染后执行 nginx -t，把这类错误拦在 PR 阶段。
+      - name: Validate nginx config template
+        run: |
+          docker run --rm \
+            -v "$PWD/docker/nginx.conf.template:/tmp/template.conf:ro" \
+            alpine:3.21 sh -c "set -e;
+              apk add --no-cache nginx nginx-mod-http-brotli gettext >/dev/null;
+              rm -f /etc/nginx/http.d/default.conf;
+              BACKEND_HOST=127.0.0.1 BACKEND_PORT=8000 envsubst '\$BACKEND_HOST \$BACKEND_PORT' < /tmp/template.conf > /etc/nginx/http.d/default.conf;
+              nginx -t"
+
   # ---- Job 2: E2E（依赖 check 通过）----
   # 同一次 Playwright 运行里先跑离线组和登录 setup，再跑真实后端组和中文冒烟，报告只有一份。
   e2e:
