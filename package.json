@@ -35,6 +35,7 @@
     "@iconify/vue": "^5.0.1",
     "@lucide/vue": "^1.66.0",
     "@mdit/plugin-tex": "^1.2.0",
+    "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.1.18",
     "@vueuse/core": "^15.0.0",
     "@zip.js/zip.js": "^2.8.26",

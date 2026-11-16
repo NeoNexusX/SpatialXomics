@@ -10,6 +10,7 @@ export const ICON_SETS = {
     'user-circle',
     'arrow-right-end-on-rectangle',
     'home',
+    'megaphone',
     'academic-cap',
     'building-library',
     'map-pin',

@@ -54,10 +54,11 @@ it('preserves public_id through list to metadata and exposes pagination', async 
 })
 
 it('passes execution signals to every backend request', async () => {
-  vi.mocked(listFiles).mockResolvedValue([])
-  vi.mocked(listUserFiles).mockResolvedValue([])
+  const emptyPage = { data: [], meta: { current_page: 1, total_pages: 1, total_records: 0 } }
+  vi.mocked(listFiles).mockResolvedValue(emptyPage)
+  vi.mocked(listUserFiles).mockResolvedValue(emptyPage)
   vi.mocked(getFileMetadata).mockResolvedValue({})
-  vi.mocked(listMyProcesses).mockResolvedValue({ data: [] })
+  vi.mocked(listMyProcesses).mockResolvedValue(emptyPage)
   vi.mocked(getUserQuota).mockResolvedValue({} as never)
   for (const name of [
     'list_files',

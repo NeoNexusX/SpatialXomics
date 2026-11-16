@@ -1,4 +1,5 @@
 import { auth_api } from '@/shared/api/httpClient'
+import { unwrap } from '@/shared/api/response'
 import type { UserQuota } from '@/shared/types/quota'
 
 // Get user storage and processing quota
@@ -8,6 +9,5 @@ import type { UserQuota } from '@/shared/types/quota'
 // 与 datasets 业务无耦合，故放在 shared/api 层（原位于 features/datasets/api/datasetApi，
 // 曾导致 shared/composables/useUserQuota -> features/datasets 的反向依赖环）。
 export async function getUserQuota(signal?: AbortSignal): Promise<UserQuota> {
-  const res = await auth_api.get('/users/quota', ...(signal ? [{ signal }] : []))
-  return res.data
+  return unwrap(auth_api.get('/users/quota', ...(signal ? [{ signal }] : [])))
 }

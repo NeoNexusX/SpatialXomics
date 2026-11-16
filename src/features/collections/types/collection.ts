@@ -136,11 +136,3 @@ export function isCollectionApiError(e: unknown): e is CollectionApiError {
   return e instanceof Error && 'backendMessage' in e
 }
 
-/** 与 PaginationFooter / buildPageList 对齐的分页元信息（POST /collections/list(_all) 的 meta 原样） */
-export interface CollectionListMeta {
-  current_page: number
-  current_records: number
-  total_pages: number
-  total_records: number
-}
-

@@ -7,12 +7,9 @@ type ApplyFilters = (payload: Record<string, any>) => void
 interface DatasetRouteStateOptions {
   page: Ref<number>
   size: Ref<number>
-  meta: { total_pages?: number; current_page?: number }
   auth: ReturnType<typeof useAuthStore>
   fetchFiles: FetchFiles
   applyFilters: ApplyFilters
-  goToPage: (page: number) => void
-  changeSize: (size: number) => void
   onMountedReady?: () => void
 }
 
@@ -32,9 +29,9 @@ export function useDatasetListRouteState(options: DatasetRouteStateOptions) {
     options.onMountedReady?.()
   }
 
+  // applyFilters 已把页码复位到 1
   const applyAndRefresh = (payload: Record<string, any>) => {
     options.applyFilters(payload)
-    options.page.value = 1
     fetchCurrentPage()
   }
 
@@ -46,27 +43,11 @@ export function useDatasetListRouteState(options: DatasetRouteStateOptions) {
     applyAndRefresh(payload)
   }
 
-  const goToPage = (nextPage: number) => {
-    const totalPages = options.meta.total_pages || 1
-    const normalizedPage = Math.min(Math.max(nextPage, 1), totalPages)
-    options.page.value = normalizedPage
-    options.meta.current_page = normalizedPage
-    options.goToPage(normalizedPage)
-  }
-
-  const changeSize = (newSize: number) => {
-    options.size.value = newSize
-    options.page.value = 1
-    options.changeSize(newSize)
-  }
-
   // Lifecycle
   onMounted(initializeFromRoute)
 
   return {
     handleSearch,
     handleApplyFilters,
-    goToPage,
-    changeSize,
   }
 }

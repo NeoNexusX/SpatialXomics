@@ -51,6 +51,7 @@ export type FeatureNs =
   | 'vizworkbench'
   | 'home'
   | 'databases'
+  | 'news'
 
 /**
  * Vite 在构建期把每个 json 切成独立 chunk，只有真正 import 到的语言/命名空间才会下载。

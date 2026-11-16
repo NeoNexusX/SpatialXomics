@@ -103,6 +103,16 @@ const routes = [
     component: view(() => import('../views/DatasetOverviewView.vue'), 'datasets'),
   },
   {
+    path: '/news',
+    name: 'News',
+    component: view(() => import('../views/NewsView.vue'), 'news'),
+  },
+  {
+    path: '/news/:id',
+    name: 'NewsDetail',
+    component: view(() => import('../views/NewsDetailView.vue'), 'news'),
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('../views/LoginView.vue'),

@@ -1,4 +1,5 @@
 import { api, auth_api, extractBackendError } from '@/shared/api/httpClient'
+import { toPage, unwrap, type Page } from '@/shared/api/response'
 import { mapCollectionDetail, mapCollectionSummary } from '../mappers/collectionMapper'
 import { isCollectionApiError } from '../types/collection'
 import { t } from '@/i18n'
@@ -6,7 +7,6 @@ import type {
   CollectionApiError,
   CollectionCreatePayload,
   CollectionDetail,
-  CollectionListMeta,
   CollectionPatchPayload,
   CollectionSummary,
   MemberRemovalResult,
@@ -30,9 +30,10 @@ function toCollectionApiError(err: any): CollectionApiError {
   return e
 }
 
-async function unwrap<T>(fn: () => Promise<{ data: T }>): Promise<T> {
+/** 发请求并取出响应体；失败时抛 CollectionApiError */
+async function request<T>(call: () => Promise<{ data: T }>): Promise<T> {
   try {
-    return (await fn()).data
+    return await unwrap(call())
   } catch (err) {
     throw toCollectionApiError(err)
   }
@@ -48,30 +49,6 @@ export function collectionErrorMessage(err: any, fallback: string): string {
   return extractBackendError(err, fallback)
 }
 
-/** 响应信封防御归一：列表接口可能返回纯数组或 { data } / { items } 信封 */
-function normalizeList(body: any): any[] {
-  if (Array.isArray(body)) return body
-  if (body && Array.isArray(body.data)) return body.data
-  if (body && Array.isArray(body.items)) return body.items
-  return []
-}
-
-/** meta 防御归一：缺字段时退化为单页语义 */
-function toListMeta(meta: any): CollectionListMeta {
-  return {
-    current_page: meta?.current_page ?? 1,
-    current_records: meta?.current_records ?? 0,
-    total_pages: meta?.total_pages ?? 1,
-    total_records: meta?.total_records ?? 0,
-  }
-}
-
-/** POST /collections/list 与 POST /collections/list_all 的分页响应（{meta, data}，与文件列表一致） */
-export interface CollectionListResponse {
-  meta: CollectionListMeta
-  data: CollectionSummary[]
-}
-
 /**
  * 集合列表筛选体（POST body）。不筛选也要发 {}——后端对缺失 body 返回 422；
  * 字段支持单值或数组（数组 = OR），语义见后端接口文档 §4.3：
@@ -80,37 +57,34 @@ export interface CollectionListResponse {
  */
 export type CollectionListFilters = Record<string, any>
 
-// POST /collections/list?page=&size= — 当前登录用户的集合（owner 过滤），updated_at 倒序；
-// 筛选条件走 body（CollectionFilter，不筛选也发 {}），分页走 query
-export async function listCollections(
+/** 两个列表接口的分页和筛选契约完全一致 */
+async function listPage(
+  path: string,
   page: number,
   size: number,
-  filters: CollectionListFilters = {},
-): Promise<CollectionListResponse> {
-  const body = await unwrap<any>(() =>
-    auth_api.post('/collections/list', filters, { params: { page, size } }),
-  )
-  return { meta: toListMeta(body?.meta), data: normalizeList(body).map(mapCollectionSummary) }
+  filters: CollectionListFilters,
+): Promise<Page<CollectionSummary>> {
+  const { data, meta } = toPage(await request(() => auth_api.post(path, filters, { params: { page, size } })))
+  return { meta, data: data.map(mapCollectionSummary) }
+}
+
+// POST /collections/list?page=&size= — 当前登录用户的集合（owner 过滤），updated_at 倒序；
+// 筛选条件走 body（CollectionFilter，不筛选也发 {}），分页走 query
+export function listCollections(page: number, size: number, filters: CollectionListFilters = {}) {
+  return listPage('/collections/list', page, size, filters)
 }
 
 // POST /collections/list_all?page=&size= — 全库集合（任意登录用户，不做 owner 过滤），
 // 用于「浏览全部」；筛选/分页契约与 /collections/list 完全一致
-export async function listAllCollections(
-  page: number,
-  size: number,
-  filters: CollectionListFilters = {},
-): Promise<CollectionListResponse> {
-  const body = await unwrap<any>(() =>
-    auth_api.post('/collections/list_all', filters, { params: { page, size } }),
-  )
-  return { meta: toListMeta(body?.meta), data: normalizeList(body).map(mapCollectionSummary) }
+export function listAllCollections(page: number, size: number, filters: CollectionListFilters = {}) {
+  return listPage('/collections/list_all', page, size, filters)
 }
 
 // POST /collections — 创建；file_public_ids 顺序 = position，响应为完整 CollectionDetail
 export async function createCollection(
   payload: CollectionCreatePayload,
 ): Promise<CollectionDetail> {
-  const body = await unwrap(() => auth_api.post('/collections', payload))
+  const body = await request(() => auth_api.post('/collections', payload))
   return mapCollectionDetail(body)
 }
 
@@ -119,7 +93,7 @@ export async function updateCollection(
   publicId: string,
   patch: CollectionPatchPayload,
 ): Promise<CollectionDetail> {
-  const body = await unwrap(() => auth_api.patch(`/collections/${publicId}`, patch))
+  const body = await request(() => auth_api.patch(`/collections/${publicId}`, patch))
   return mapCollectionDetail(body)
 }
 
@@ -127,7 +101,9 @@ export async function updateCollection(
 export async function deleteCollection(
   publicId: string,
 ): Promise<{ publicId: string; deleted: boolean }> {
-  const body = await unwrap<any>(() => auth_api.delete(`/collections/${publicId}`))
+  const body = await request<{ public_id?: string; deleted?: boolean } | null>(() =>
+    auth_api.delete(`/collections/${publicId}`),
+  )
   return { publicId: body?.public_id ?? publicId, deleted: !!body?.deleted }
 }
 
@@ -136,7 +112,7 @@ export async function addMembers(
   publicId: string,
   filePublicIds: string[],
 ): Promise<CollectionDetail> {
-  const body = await unwrap(() =>
+  const body = await request(() =>
     auth_api.post(`/collections/${publicId}/members`, { file_public_ids: filePublicIds }),
   )
   return mapCollectionDetail(body)
@@ -147,7 +123,7 @@ export async function removeMembers(
   publicId: string,
   filePublicIds: string[],
 ): Promise<MemberRemovalResult> {
-  const body = await unwrap<any>(() =>
+  const body = await request<{ public_id?: string; removed?: string[]; skipped?: string[] } | null>(() =>
     auth_api.delete(`/collections/${publicId}/members`, { data: { file_public_ids: filePublicIds } }),
   )
   return {
@@ -163,7 +139,7 @@ export async function reorderMembers(
   publicId: string,
   filePublicIds: string[],
 ): Promise<CollectionDetail> {
-  const body = await unwrap(() =>
+  const body = await request(() =>
     auth_api.patch(`/collections/${publicId}/members/order`, { file_public_ids: filePublicIds }),
   )
   return mapCollectionDetail(body)
@@ -171,6 +147,6 @@ export async function reorderMembers(
 
 // GET /collections/public/{public_id} — 免登录公开页详情（响应无数字 id，见 PublicCollectionDetail）
 export async function getPublicCollection(publicId: string): Promise<PublicCollectionDetail> {
-  const body = await unwrap(() => api.get(`/collections/public/${publicId}`))
+  const body = await request(() => api.get(`/collections/public/${publicId}`))
   return mapCollectionDetail(body)
 }

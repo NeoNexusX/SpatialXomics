@@ -21,14 +21,19 @@ type DateInput = Date | string | number | null | undefined
 
 type DateFormat = 'toLocaleDateString' | 'toLocaleString' | 'toLocaleTimeString'
 
-function formatLocalDate(value: DateInput, method: DateFormat): string {
+function formatLocalDate(
+  value: DateInput,
+  method: DateFormat,
+  options?: Intl.DateTimeFormatOptions,
+): string {
   if (value == null || value === '') return ''
   const date = value instanceof Date ? value : new Date(value)
-  return Number.isNaN(date.getTime()) ? '' : date[method](currentLocale())
+  return Number.isNaN(date.getTime()) ? '' : date[method](currentLocale(), options)
 }
 
-export function formatDate(value?: DateInput): string {
-  return formatLocalDate(value, 'toLocaleDateString')
+/** options 用来换写法，比如 { month: 'short', day: 'numeric' } 得到「11月3日」/「Nov 3」 */
+export function formatDate(value?: DateInput, options?: Intl.DateTimeFormatOptions): string {
+  return formatLocalDate(value, 'toLocaleDateString', options)
 }
 
 export function formatDateTime(value?: DateInput): string {

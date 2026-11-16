@@ -78,7 +78,7 @@
                   class="btn btn-ghost btn-sm btn-circle hover:bg-base-200 kawaru-text-75"
                   :aria-label="$t('common.action.view')"
                 >
-                  <svg-icon type="chevron_right" class="w-6 h-6 text-base-content/60" />
+                  <SvgIcon type="chevron_right" class="w-6 h-6 text-base-content/60" />
                 </button>
                 <span v-else class="text-base-content/30 kawaru-text-87">—</span>
               </td>
@@ -89,7 +89,7 @@
                   class="btn btn-ghost btn-sm btn-circle hover:bg-error/10 hover:text-error kawaru-text-75"
                   :aria-label="$t('common.action.delete')"
                 >
-                  <svg-icon type="trash" class="w-5 h-5 text-base-content/50" />
+                  <SvgIcon type="trash" class="w-5 h-5 text-base-content/50" />
                 </button>
                 <span v-else class="text-base-content/30 kawaru-text-87">—</span>
               </td>
@@ -146,7 +146,7 @@
               class="btn btn-ghost btn-sm kawaru-text-75"
               :aria-label="$t('common.action.view')"
             >
-              <svg-icon type="chevron_right" class="w-5 h-5" />
+              <SvgIcon type="chevron_right" class="w-5 h-5" />
               <span>{{ $t('common.action.view') }}</span>
             </button>
             <span v-else class="text-base-content/30 kawaru-text-87 px-2">{{ $t('common.status.processing') }}</span>
@@ -156,7 +156,7 @@
               class="btn btn-ghost btn-sm text-error/70 hover:text-error hover:bg-error/10 kawaru-text-75"
               :aria-label="$t('common.action.delete')"
             >
-              <svg-icon type="trash" class="w-4 h-4" />
+              <SvgIcon type="trash" class="w-4 h-4" />
               <span>{{ $t('common.action.delete') }}</span>
             </button>
           </div>

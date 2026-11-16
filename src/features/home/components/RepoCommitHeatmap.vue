@@ -133,24 +133,24 @@ const vertical = computed(() =>
             <!-- 图例：横向保留库原生底部图例；纵向用 SVG 内置的右侧纵向图例（外置图例由下方 CSS 隐藏）。 -->
           </div>
 
-          <footer class="heatmap-summary" :aria-label="$t('home.heatmap.summary')">
+          <footer class="heatmap-summary kawaru-text-62" :aria-label="$t('home.heatmap.summary')">
             <div class="heatmap-metrics">
-              <div class="heatmap-metric">
+              <div class="heatmap-metric kawaru-text-68">
                 <span>{{ $t('home.heatmap.total') }}</span>
-                <strong>{{ total }}</strong>
+                <strong class="kawaru-text-75">{{ total }}</strong>
                 <span>{{ $t('home.heatmap.commits') }}</span>
               </div>
-              <div class="heatmap-metric">
+              <div class="heatmap-metric kawaru-text-68">
                 <span>{{ $t('home.heatmap.activeDays') }}</span>
-                <strong>{{ activeDays }}</strong>
+                <strong class="kawaru-text-75">{{ activeDays }}</strong>
               </div>
-              <div class="heatmap-metric">
+              <div class="heatmap-metric kawaru-text-68">
                 <!-- 天数保持加粗：数字用插槽传入，译文里的位置由语言包决定 -->
                 <I18nT keypath="home.heatmap.lastDays" tag="span" scope="global">
-                  <template #days><strong>{{ days }}</strong></template>
+                  <template #days><strong class="kawaru-text-75">{{ days }}</strong></template>
                 </I18nT>
               </div>
-              <div class="heatmap-metric">
+              <div class="heatmap-metric kawaru-text-68">
                 <span>{{ $t('home.heatmap.branch') }}</span>
                 <span class="badge badge-primary h-[1.7em] px-[0.7em] font-mono kawaru-text-81">
                   {{ branch }}
@@ -204,6 +204,7 @@ const vertical = computed(() =>
 .heatmap-frame--horizontal :deep(.vch__container > .vch__legend) {
   margin-top: 0.4em;
   color: color-mix(in oklch, var(--color-base-content) 58%, transparent);
+  /* 图例是库渲染的节点，挂不上档位类；字号直接按 50 档取值 */
   font-size: calc(var(--kawaru-fs) * 0.5);
 }
 
@@ -254,7 +255,8 @@ const vertical = computed(() =>
   border-top: 1px solid var(--color-base-300);
   padding-top: 1em;
   color: color-mix(in oklch, var(--color-base-content) 62%, transparent);
-  font-size: calc(var(--kawaru-fs) * 0.625);
+  /* 模板上挂 62 档；行高沿用原从 card-body 75 档继承的 1.45 */
+  line-height: 1.45;
 }
 
 .heatmap-metrics {
@@ -267,7 +269,6 @@ const vertical = computed(() =>
   display: flex;
   align-items: baseline;
   gap: 0.4em;
-  font-size: calc(var(--kawaru-fs) * 0.6875);
   white-space: normal;
 }
 
@@ -278,7 +279,6 @@ const vertical = computed(() =>
 
 .heatmap-metric strong {
   color: var(--color-base-content);
-  font-size: calc(var(--kawaru-fs) * 0.75);
   font-weight: 650;
 }
 

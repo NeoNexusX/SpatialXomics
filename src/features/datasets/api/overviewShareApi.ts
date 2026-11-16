@@ -1,4 +1,5 @@
 import { api, auth_api } from '@/shared/api/httpClient'
+import { unwrap } from '@/shared/api/response'
 import { authStorage } from '@/shared/auth/authStorage'
 
 export interface ShareOverviewResult {
@@ -20,6 +21,5 @@ export async function getShareOverviewMetadata(publicId: string): Promise<ShareO
   const client = authed ? auth_api : api
   const config = authed ? {} : ({ skipAuthRedirect: true } as any)
 
-  const res = await client.get(`/files/${publicId}/metadata`, config)
-  return { metadata: res.data }
+  return { metadata: await unwrap(client.get(`/files/${publicId}/metadata`, config)) }
 }

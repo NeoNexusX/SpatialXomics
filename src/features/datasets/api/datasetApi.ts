@@ -1,13 +1,13 @@
 import { auth_api, api } from '@/shared/api/httpClient'
+import { toPage, unwrap, type Page } from '@/shared/api/response'
 import { authStorage } from '@/shared/auth/authStorage'
 import { getConfig } from '@/shared/config/runtimeConfig'
 import type {
   DownloadRawResponse,
   FilePublicId,
+  ProcessItem,
   ProcessingStats,
 } from '@/features/datasets/types/dataset'
-
-// 约定：本模块所有函数都返回**解包后的响应体**（res.data），调用方不再处理 axios 信封。
 
 // GET /files/{public_id}/download — ZIP 打包下载；只消费 oss_download_url 与 filename，
 // 不再声明或读取 file_id/path 等字段
@@ -18,8 +18,7 @@ export interface DownloadZipResponse {
 }
 
 export async function getDownloadMetadata(publicId: FilePublicId): Promise<DownloadZipResponse> {
-  const res = await auth_api.get(`/files/${publicId}/download`)
-  return res.data
+  return unwrap(auth_api.get(`/files/${publicId}/download`))
 }
 
 // GET /files/{public_id}/metadata — 元数据：后端强制登录（匿名一律 401，不看 is_public），
@@ -27,13 +26,14 @@ export async function getDownloadMetadata(publicId: FilePublicId): Promise<Downl
 // 匿名走 api + skipAuthRedirect，由调用方（useDatasetDetail）把 401 转成就地登录引导
 export async function getFileMetadata(publicId: FilePublicId, signal?: AbortSignal) {
   const authed = !!authStorage.getToken()
-  const res = authed
-    ? await auth_api.get(`/files/${publicId}/metadata`, ...(signal ? [{ signal }] : []))
-    : await api.get(`/files/${publicId}/metadata`, {
-        skipAuthRedirect: true,
-        ...(signal ? { signal } : {}),
-      } as any)
-  return res.data
+  return unwrap(
+    authed
+      ? auth_api.get(`/files/${publicId}/metadata`, ...(signal ? [{ signal }] : []))
+      : api.get(`/files/${publicId}/metadata`, {
+          skipAuthRedirect: true,
+          ...(signal ? { signal } : {}),
+        } as any),
+  )
 }
 
 // GET /files/{public_id}/download_raw - pre-signed URLs for imzML + ibd, zero polling
@@ -42,27 +42,23 @@ export async function getDownloadRaw(
   isPublic = false,
 ): Promise<DownloadRawResponse> {
   const client = isPublic ? api : auth_api
-  const res = await client.get(`/files/${publicId}/download_raw`)
-  return res.data
+  return unwrap(client.get(`/files/${publicId}/download_raw`))
 }
 
 // GET /files/{public_id}/download_raw_noauth — 公开集合页专用（免登录）。
 // 后端仅对 is_public 文件放行，私有文件 404。
 export async function getDownloadRawNoauth(publicId: FilePublicId): Promise<DownloadRawResponse> {
-  const res = await api.get(`/files/${publicId}/download_raw_noauth`)
-  return res.data
+  return unwrap(api.get(`/files/${publicId}/download_raw_noauth`))
 }
 
 // DELETE /files/{public_id} — 响应回传 public_id
 export async function deleteFile(publicId: FilePublicId): Promise<{ public_id: string }> {
-  const res = await auth_api.delete(`/files/${publicId}`)
-  return res.data
+  return unwrap(auth_api.delete(`/files/${publicId}`))
 }
 
 // PUT /files/{public_id}/set_public — 响应回传 public_id
 export async function setFilePublic(publicId: FilePublicId): Promise<{ public_id: string }> {
-  const res = await auth_api.put(`/files/${publicId}/set_public`)
-  return res.data
+  return unwrap(auth_api.put(`/files/${publicId}/set_public`))
 }
 
 // PATCH /files/{public_id} — 文件元数据部分更新（键为后端 snake_case）。
@@ -83,8 +79,7 @@ export interface FileMetadataPatch {
 }
 
 export async function patchFileMetadata(publicId: FilePublicId, patch: FileMetadataPatch) {
-  const res = await auth_api.patch(`/files/${publicId}`, patch)
-  return res.data
+  return unwrap(auth_api.patch(`/files/${publicId}`, patch))
 }
 
 /** 文件列表服务端排序（sort_by/order 白名单与后端一致，非法值 422） */
@@ -105,11 +100,13 @@ export async function listFiles(
   signal?: AbortSignal,
 ) {
   const client = isPublic ? api : auth_api
-  const res = await client.post('/files/list_files', filters, {
-    ...(signal ? { signal } : {}),
-    params: { page, size, sort_by: sort?.sortBy, order: sort?.order },
-  })
-  return res.data
+  const body = await unwrap(
+    client.post('/files/list_files', filters, {
+      ...(signal ? { signal } : {}),
+      params: { page, size, sort_by: sort?.sortBy, order: sort?.order },
+    }),
+  )
+  return toPage(body)
 }
 
 // List files for the current user (backend separates public vs user scope)
@@ -121,26 +118,32 @@ export async function listUserFiles(
   sort?: FileListSort,
   signal?: AbortSignal,
 ) {
-  const res = await auth_api.post('/files/list_user_files', filters, {
-    ...(signal ? { signal } : {}),
-    params: { page, size, sort_by: sort?.sortBy, order: sort?.order },
-  })
-  return res.data
+  const body = await unwrap(
+    auth_api.post('/files/list_user_files', filters, {
+      ...(signal ? { signal } : {}),
+      params: { page, size, sort_by: sort?.sortBy, order: sort?.order },
+    }),
+  )
+  return toPage(body)
+}
+
+/** 新建（或复用已有）处理任务的返回 */
+export interface CreatedProcess {
+  id: number
+  user_id: number
 }
 
 // POST /processes - Create Process（源文件以 public_id 标识，禁止任何数字转换）
 export async function createProcess(payload: {
   file_public_id: FilePublicId
   algorithms: Record<string, any>
-}) {
-  const res = await auth_api.post('/processes', payload)
-  return res.data
+}): Promise<CreatedProcess> {
+  return unwrap(auth_api.post('/processes', payload))
 }
 
 // POST /processes/raw-convert - 一键 Zarr 可视化（无需配置预处理参数）
-export async function rawConvertProcess(publicId: FilePublicId) {
-  const res = await auth_api.post('/processes/raw-convert', { file_public_id: publicId })
-  return res.data
+export async function rawConvertProcess(publicId: FilePublicId): Promise<CreatedProcess> {
+  return unwrap(auth_api.post('/processes/raw-convert', { file_public_id: publicId }))
 }
 
 // POST /processes/mine?page=&size= - List my processes (paginated, fuzzy filter)
@@ -152,33 +155,28 @@ export interface ProcessRunFilter {
   params?: string
 }
 
-// 后端返回 { data: [...], meta: { current_page, total_pages, total_records } }
+// 后端返回 { data: [...], meta: { current_page, total_pages, total_records } }，偶尔是纯数组
 export async function listMyProcesses(
   page = 1,
   size = 10,
   filter: ProcessRunFilter = {},
   signal?: AbortSignal,
-) {
-  const res = await auth_api.post('/processes/mine', filter, {
-    params: { page, size },
-    ...(signal ? { signal } : {}),
-  })
-  const body = res.data
-  // 兼容纯数组返回（无分页信息时）
-  if (Array.isArray(body))
-    return { data: body, meta: { current_page: 1, total_pages: 1, total_records: body.length } }
-  if (body && Array.isArray(body.data)) return body
-  return { data: [], meta: { current_page: 1, total_pages: 1, total_records: 0 } }
+): Promise<Page<ProcessItem>> {
+  const body = await unwrap(
+    auth_api.post('/processes/mine', filter, {
+      params: { page, size },
+      ...(signal ? { signal } : {}),
+    }),
+  )
+  return toPage(body)
 }
 
 // GET /stats/processing - Processing statistics for current user
 export async function getProcessingStats(): Promise<ProcessingStats> {
-  const res = await auth_api.get('/stats/processing')
-  return res.data
+  return unwrap(auth_api.get('/stats/processing'))
 }
 
 // DELETE /processes/{run_id} - Delete a process/result
 export async function deleteProcess(runId: string | number) {
-  const res = await auth_api.delete(`/processes/${runId}`)
-  return res.data
+  return unwrap(auth_api.delete(`/processes/${runId}`))
 }

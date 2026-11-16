@@ -85,7 +85,7 @@ export interface TeamMember {
 export interface GithubHeatmapConfig {
   /** GitHub 仓库拥有者，如 "BioNet-XMU" */
   owner: string
-  /** GitHub 仓库名，如 "MassVision" */
+  /** GitHub 仓库名，如 "SpatialXomics" */
   repo: string
   /** 统计哪个分支的提交，默认 "dev" */
   branch?: string

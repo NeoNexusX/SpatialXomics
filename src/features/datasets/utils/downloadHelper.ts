@@ -1,5 +1,6 @@
 import { getDownloadMetadata, getDownloadRaw, getDownloadRawNoauth } from '@/features/datasets/api/datasetApi'
 import type { DownloadRawEntry } from '@/features/datasets/types/dataset'
+import { downloadUrl } from '@/shared/utils/download'
 import { t } from '@/i18n'
 
 async function pollDownloadUrl(
@@ -44,12 +45,7 @@ export async function ossDownloadAndSave(
       : `${rawFilename}.zip`
     : options?.getFallbackFilename?.() || `${publicId}.zip`
 
-  const link = document.createElement('a')
-  link.href = ossUrl
-  link.setAttribute('download', filename)
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  downloadUrl(ossUrl, filename)
 }
 
 /**

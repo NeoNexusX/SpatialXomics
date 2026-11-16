@@ -57,12 +57,7 @@ describe('collectionApi', () => {
     const res = await listCollections(2, 10)
 
     expect(authPost).toHaveBeenCalledWith('/collections/list', {}, { params: { page: 2, size: 10 } })
-    expect(res.meta).toEqual({
-      current_page: 2,
-      current_records: 10,
-      total_pages: 3,
-      total_records: 25,
-    })
+    expect(res.meta).toEqual({ current_page: 2, total_pages: 3, total_records: 25 })
     expect(res.data).toHaveLength(1)
     expect(res.data.map((r) => r.name)).toEqual(['a'])
     expect(res.data[0]!.publicId).toBe('bB2cD4fG6hJ8kL0m')
@@ -86,12 +81,7 @@ describe('collectionApi', () => {
     authPost.mockResolvedValueOnce({ data: [row, row] })
     const plain = await listCollections(1, 10)
     expect(plain.data).toHaveLength(2)
-    expect(plain.meta).toEqual({
-      current_page: 1,
-      current_records: 0,
-      total_pages: 1,
-      total_records: 0,
-    })
+    expect(plain.meta).toEqual({ current_page: 1, total_pages: 1, total_records: 2 })
 
     authPost.mockResolvedValueOnce({ data: { items: [row] } })
     const items = await listCollections(1, 10)

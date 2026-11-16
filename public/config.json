@@ -1,12 +1,12 @@
 {
   "appName": "SpatialXomics",
-  "version": "0.7.4",
+  "version": "0.7.6",
   "zarr": {
     "spectraChunkCacheSize": 100,
     "spectraConcurrency": 16
   },
   "oss": {
-    "previewImageBase": "https://kawaru-oss.oss-cn-hangzhou.aliyuncs.com"
+    "previewImageBase": "https://test-dev-oss.oss-cn-hongkong.aliyuncs.com"
   },
   "pagination": {
     "defaultPageSize": 10,
@@ -136,6 +136,16 @@
         "label": {
           "en": "Database",
           "zh-CN": "数据库"
+        },
+        "active": true
+      },
+      {
+        "kind": "link",
+        "to": "/news",
+        "icon": "megaphone",
+        "label": {
+          "en": "News",
+          "zh-CN": "动态"
         },
         "active": true
       }

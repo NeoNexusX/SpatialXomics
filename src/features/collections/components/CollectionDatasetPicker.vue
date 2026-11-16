@@ -106,13 +106,13 @@ import PaginationFooter from '@/shared/components/PaginationFooter.vue'
 import { formatBytes } from '@/shared/utils/format'
 import { vocabLabel } from '@/features/datasets/constants/vocabLabels'
 import type { File } from '@/features/datasets/types/dataset'
-import type { CollectionListMeta } from '@/features/collections/types/collection'
+import type { PageMeta } from '@/shared/api/response'
 
 const props = defineProps({
   datasets: { type: Array as PropType<File[]>, required: true },
   loading: { type: Boolean, required: true },
   error: { type: String, required: true },
-  meta: { type: Object as PropType<CollectionListMeta>, required: true },
+  meta: { type: Object as PropType<PageMeta>, required: true },
   size: { type: Number, required: true },
   pagination: { type: Array as PropType<(number | string)[]>, required: true },
   query: { type: String, required: true },

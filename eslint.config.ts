@@ -30,6 +30,13 @@ const ROOT_LEVEL_FOLDERS = {
     'Root-level frontend folders are deprecated. Import from @/shared/* or the owning @/features/* module instead.',
 }
 
+/** axios 实例只在各模块的 api/ 目录里用，组件和 composable 调 API 函数 */
+const HTTP_CLIENT = {
+  name: '@/shared/api/httpClient',
+  importNames: ['api', 'auth_api'],
+  message: 'Send requests from an api/ module; components and composables call its functions.',
+}
+
 /** 模型通信只经适配器插件，其他地方看不到 AI SDK */
 const AGENT_SDK = {
   group: ['ai', '@ai-sdk/*'],
@@ -89,10 +96,18 @@ export default defineConfigWithVueTs(
           varsIgnorePattern: '^_',
         },
       ],
-      'no-restricted-imports': ['error', { patterns: [ROOT_LEVEL_FOLDERS] }],
+      'no-restricted-imports': ['error', { paths: [HTTP_CLIENT], patterns: [ROOT_LEVEL_FOLDERS] }],
       'vue/block-lang': 'warn',
       'vue/multi-word-component-names': 'warn',
       'vue/no-mutating-props': 'warn',
+    },
+  },
+
+  {
+    name: 'app/api-modules',
+    files: ['src/**/api/**/*.ts', 'src/shared/auth/authApi.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [ROOT_LEVEL_FOLDERS] }],
     },
   },
 
@@ -101,7 +116,10 @@ export default defineConfigWithVueTs(
     files: ['src/features/agent/**/*.{ts,vue}'],
     ignores: ['src/features/agent/plugins/llm-anthropic/**'],
     rules: {
-      'no-restricted-imports': ['error', { patterns: [ROOT_LEVEL_FOLDERS, AGENT_SDK] }],
+      'no-restricted-imports': [
+        'error',
+        { paths: [HTTP_CLIENT], patterns: [ROOT_LEVEL_FOLDERS, AGENT_SDK] },
+      ],
     },
   },
 
@@ -117,6 +135,7 @@ export default defineConfigWithVueTs(
       'no-restricted-imports': [
         'error',
         {
+          paths: [HTTP_CLIENT],
           patterns: [
             ROOT_LEVEL_FOLDERS,
             AGENT_SDK,
@@ -143,6 +162,7 @@ export default defineConfigWithVueTs(
       'no-restricted-imports': [
         'error',
         {
+          paths: [HTTP_CLIENT],
           patterns: [
             ROOT_LEVEL_FOLDERS,
             AGENT_SDK,
@@ -153,6 +173,16 @@ export default defineConfigWithVueTs(
           ],
         },
       ],
+    },
+  },
+
+  {
+    // 模板里的组件名一律 PascalCase。默认只查本文件 import 的组件；
+    // 全局注册的组件要列进 globals 才会被检查。
+    name: 'app/template-component-casing',
+    files: ['src/**/*.vue'],
+    rules: {
+      'vue/component-name-in-template-casing': ['error', 'PascalCase', { globals: ['SvgIcon'] }],
     },
   },
 

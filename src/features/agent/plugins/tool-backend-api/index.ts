@@ -14,14 +14,12 @@ import {
   listMyProcesses,
 } from '@/features/datasets/api/datasetApi'
 import { getUserQuota } from '@/shared/api/quotaApi'
+import type { Page } from '@/shared/api/response'
 
 /** 列表响应的统一形态：表头（总数、页码）+ 前 20 行。后端返回 { data: [...], meta: {...} } */
-function summarizeList(body: any, line: (item: any) => (string | false | undefined)[]): string {
-  const items: any[] = Array.isArray(body?.data) ? body.data : Array.isArray(body) ? body : []
-  const meta = body?.meta
-  const lines = items.slice(0, 20).map((item) => `- ${line(item).filter(Boolean).join(' | ')}`)
-  const total = meta?.total_records ?? items.length
-  return `total: ${total}${meta ? ` | page: ${meta.current_page} / ${meta.total_pages}` : ''}\n${lines.join('\n') || '(empty)'}`
+function summarizeList<T>({ data, meta }: Page<T>, line: (item: T) => (string | false | undefined)[]): string {
+  const lines = data.slice(0, 20).map((item) => `- ${line(item).filter(Boolean).join(' | ')}`)
+  return `total: ${meta.total_records} | page: ${meta.current_page} / ${meta.total_pages}\n${lines.join('\n') || '(empty)'}`
 }
 
 const fileLine = (f: any) => [

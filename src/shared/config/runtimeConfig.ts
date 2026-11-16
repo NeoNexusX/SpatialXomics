@@ -348,8 +348,8 @@ export async function loadConfig(): Promise<AppConfig> {
     _config.zarr.spectraConcurrency = 16
   }
   _config.oss ??= {}
-  // 缺省回退测试环境域名，保证未配置 oss 块的旧配置行为不变
-  _config.oss.previewImageBase ??= 'https://kawaru-oss.oss-cn-hangzhou.aliyuncs.com'
+  // 缺省回退测试环境域名（测试服 bucket 已迁到香港 region），保证未配置 oss 块的旧配置行为不变
+  _config.oss.previewImageBase ??= 'https://test-dev-oss.oss-cn-hongkong.aliyuncs.com'
   _config.nav ??= { items: [], userMenu: [], guestLinks: [] }
   _config.fab ??= { main: { iconClosed: 'home', iconOpen: 'close' }, items: [] }
   return _config

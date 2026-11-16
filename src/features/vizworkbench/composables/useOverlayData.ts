@@ -7,6 +7,7 @@ import { computeKmeansFromUmap, preloadKmeans } from '@/features/vizworkbench/ut
 import { kmeansColor } from '@/features/vizworkbench/utils/regionPalette'
 import { dataModeRef } from '@/features/vizworkbench/composables/useZarrIonImage'
 import { useToast } from '@/shared/composables/useToast'
+import { downloadCanvas } from '@/shared/utils/download'
 import { extractBackendError } from '@/shared/api/httpClient'
 import { t } from '@/i18n'
 
@@ -557,10 +558,7 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     sctx.putImageData(imgData, 0, 0)
     ctx.drawImage(src, 0, 0, canvas.width, canvas.height)
 
-    const link = document.createElement('a')
-    link.download = filename
-    link.href = canvas.toDataURL('image/png')
-    link.click()
+    downloadCanvas(canvas, filename)
   }
 
   /** Export the UMAP RGB image as a standalone PNG (no ion image background). */

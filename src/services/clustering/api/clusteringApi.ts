@@ -11,6 +11,7 @@
  */
 
 import { auth_api } from '@/shared/api/httpClient'
+import { unwrap } from '@/shared/api/response'
 import type { ClusteringTaskResponse } from '../types/clustering'
 
 /**
@@ -19,9 +20,7 @@ import type { ClusteringTaskResponse } from '../types/clustering'
  */
 export async function createClustering(runId: string): Promise<ClusteringTaskResponse> {
   if (!runId) throw new Error('[clusteringApi] runId is required')
-  const { data } = await auth_api.post<ClusteringTaskResponse>(
-    `/processes/${runId}/clustering`,
-  )
+  const data = await unwrap(auth_api.post<ClusteringTaskResponse>(`/processes/${runId}/clustering`))
   if (!data || data.id == null) {
     throw new Error('[clusteringApi] invalid clustering response: missing id')
   }

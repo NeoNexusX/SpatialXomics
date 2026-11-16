@@ -5,6 +5,8 @@
      纯属死 CSS。关掉后产物少 2.1KB，主题变量与关掉前逐项一致（已用浏览器计算值比对）。 */
   themes: false;
 }
+/* Markdown 正文排版（prose 类）。daisyUI 已把它的颜色变量接到主题上，深色模式不用另配 */
+@plugin "@tailwindcss/typography";
 @import './assets/daisy-theme.css';
 @import './features/agent/assets/shadcn-bridge.css';
 
@@ -59,6 +61,18 @@ i:lang(zh-CN) {
    取代散落各处的 color-mix(... var(--color-primary) ...%, white) 字面量。 */
 :root {
   --brand-accent: color-mix(in oklch, var(--color-primary) 45%, white);
+}
+
+/* 离子图 viridis 色标里的青色，用作文字强调色（text-viridis-ink 等）。
+   深色背景上换成提亮的一档，保证对比度。 */
+@theme inline {
+  --color-viridis-ink: var(--viridis-ink);
+}
+:root {
+  --viridis-ink: #13706b;
+}
+[data-theme='dark'] {
+  --viridis-ink: #8be0bd;
 }
 
 /* 渐变文字：配合 bg-gradient-* + from-/to- 把渐变裁切进文字（省去每处重复的 clip/transparent 样板） */

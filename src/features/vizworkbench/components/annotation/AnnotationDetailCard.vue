@@ -11,6 +11,7 @@
  */
 import { computed, inject, watch } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
+import { useCopyToClipboard } from '@/shared/composables/useCopyToClipboard'
 import AnnotationScoreBreakdown from './AnnotationScoreBreakdown.vue'
 import OriginBadge from './OriginBadge.vue'
 import { ANNOTATION_KEY } from '@/features/vizworkbench/composables/useAnnotation'
@@ -86,9 +87,7 @@ function rClass(r: number | null | undefined): string {
   return r < 0.4 ? 'text-base-content/40' : ''
 }
 
-function copy(text: string) {
-  navigator.clipboard?.writeText(text).catch(() => {})
-}
+const { copy } = useCopyToClipboard()
 </script>
 
 <template>

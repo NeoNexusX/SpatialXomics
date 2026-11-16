@@ -48,8 +48,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (!fetchUserPromise) {
       fetchUserPromise = (async () => {
         try {
-          const response = await getCurrentUser()
-          user.value = response.data as SessionUser
+          user.value = (await getCurrentUser()) as SessionUser
         } catch (error: any) {
           // Only logout on 401 Unauthorized; transient errors keep the session.
           if (error.response?.status === 401) {

@@ -69,7 +69,7 @@ const statusBadge = computed(() => {
           @click="goBack"
           class="btn btn-ghost btn-md sm:btn-lg kawaru-text-100 text-base-content/70 hover:bg-base-300 rounded-lg shrink-0 self-start"
         >
-          <svg-icon type="back" class="w-4 h-4 mr-1" />
+          <SvgIcon type="back" class="w-4 h-4 mr-1" />
           {{
             source === 'public'
               ? $t('datasets.overview.backToPublic')
@@ -120,7 +120,7 @@ const statusBadge = computed(() => {
       <!-- Empty Data State：匿名被 401（分享链接 / 公开列表进入）→ 登录/注册引导；其余为无效链接/无数据 -->
       <template v-else-if="!dataset">
         <div class="card bg-base-100 rounded-2xl shadow-sm border border-base-200 p-12 text-center">
-          <svg-icon
+          <SvgIcon
             :type="requiresAuth ? 'password' : 'duplicate'"
             class="h-12 w-12 mx-auto text-base-content/30 mb-4"
           />
@@ -198,7 +198,7 @@ const statusBadge = computed(() => {
                 :disabled="packing"
               >
                 <span v-if="packing" class="loading loading-spinner loading-xs"></span>
-                <svg-icon v-else type="download" class="w-4 h-4" />
+                <SvgIcon v-else type="download" class="w-4 h-4" />
                 {{ packing ? $t('datasets.card.packing') : $t('common.action.download') }}
               </button>
               <button
@@ -210,7 +210,7 @@ const statusBadge = computed(() => {
                     : 'border-info/30 bg-info/10 text-info hover:border-info/50 hover:bg-info/20'
                 "
               >
-                <svg-icon :type="isShareCopied ? 'check' : 'share'" class="w-4 h-4" />
+                <SvgIcon :type="isShareCopied ? 'check' : 'share'" class="w-4 h-4" />
                 {{ isShareCopied ? $t('datasets.overview.linkCopied') : $t('common.action.share') }}
               </button>
               <button
@@ -218,7 +218,7 @@ const statusBadge = computed(() => {
                 @click="openPublicConfirm"
                 class="btn btn-sm h-8 min-h-8 btn-outline btn-warning kawaru-text-75 ml-auto"
               >
-                <svg-icon type="region" class="w-4 h-4" />
+                <SvgIcon type="region" class="w-4 h-4" />
                 {{ $t('datasets.overview.makePublic') }}
               </button>
               <div

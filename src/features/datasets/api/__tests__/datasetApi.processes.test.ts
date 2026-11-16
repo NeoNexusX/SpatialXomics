@@ -48,12 +48,12 @@ describe('listMyProcesses', () => {
     })
   })
 
-  it('returns the { data, meta } envelope as-is when present', async () => {
+  it('keeps the { data, meta } envelope when present', async () => {
     const body = { data: [{ id: 1 }], meta: { current_page: 2, total_pages: 3, total_records: 25 } }
     post.mockResolvedValue({ data: body })
 
     const result = await listMyProcesses()
 
-    expect(result).toBe(body)
+    expect(result).toEqual(body)
   })
 })

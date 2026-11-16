@@ -10,7 +10,7 @@ const {
   loading,
   error,
   authStore,
-  isConfirmOpen,
+  deleteConfirm,
   filters,
   currentPage,
   pageSize,
@@ -24,8 +24,6 @@ const {
   openDrawer,
   closeDrawer,
   promptDeleteUser,
-  cancelDeleteUser,
-  executeDeleteUser,
   goToPage,
   changeSize,
   quotaLimits,
@@ -101,14 +99,14 @@ const {
 
     <!-- Delete Confirmation Modal -->
     <ConfirmDialog
-      :open="isConfirmOpen"
+      :open="deleteConfirm.isOpen"
       :title="$t('users.management.deleteTitle')"
       :message="$t('users.management.deleteMessage', { name: selectedUser?.username ?? '' })"
       :confirm-label="$t('users.management.deleteConfirm')"
       :danger="true"
-      :loading="loading"
-      @confirm="executeDeleteUser"
-      @cancel="cancelDeleteUser"
+      :loading="deleteConfirm.deleting"
+      @confirm="deleteConfirm.confirm"
+      @cancel="deleteConfirm.cancel"
     />
   </div>
 </template>

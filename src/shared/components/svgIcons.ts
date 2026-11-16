@@ -65,6 +65,7 @@ export const ICON_MAP = {
   settings: 'heroicons:cog-6-tooth',
   'paper-clip': 'heroicons:paper-clip',
   'code-bracket': 'heroicons:code-bracket',
+  megaphone: 'heroicons:megaphone',
   book: 'heroicons:book-open',
 } satisfies Record<string, string>
 

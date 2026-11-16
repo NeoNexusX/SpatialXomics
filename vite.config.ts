@@ -9,6 +9,41 @@ import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import tailwindcss from '@tailwindcss/vite';
 import vueI18n from '@intlify/unplugin-vue-i18n/vite'
+import { parseFrontmatter, parseMarkdown } from 'comark/parse'
+import breaks from 'comark/plugins/breaks'
+import frontmatter from 'comark/plugins/frontmatter'
+import html from 'comark/plugins/html'
+import taskList from 'comark/plugins/task-list'
+import cjkFriendly from 'markdown-it-cjk-friendly'
+
+/**
+ * 动态（/news）的 Markdown 在构建时解析，浏览器只拿结果，不用下载解析器。
+ * 文件是 src/features/news/content/<语言>/<YYYY-MM-DD-标识>.md：
+ * - 带 ?meta 导入只得到 frontmatter 里的 title、summary，给列表页
+ * - 直接导入得到整篇的 Comark 文档树，详情页用 MarkdownDocument 渲染
+ * 插件和助手一样没开 components、attributes，原因见 markdownSyntax.ts。
+ * 文件名或 frontmatter 不对时构建直接失败，并指出是哪个文件。
+ */
+const NEWS_PARSER = {
+  registerDefaultPlugins: false,
+  plugins: [frontmatter(), html(), taskList(), breaks(), { name: 'cjk-friendly', markdownItPlugins: [cjkFriendly] }],
+}
+
+function newsMarkdown(): Plugin {
+  return {
+    name: 'news-markdown',
+    async transform(code, id) {
+      const match = /\/features\/news\/content\/[^/]+\/([^/]+)\.md(\?meta)?$/.exec(id)
+      if (!match) return
+      const { title, summary } = parseFrontmatter(code).data
+      if (!/^\d{4}-\d{2}-\d{2}-/.test(match[1]!) || !title || !summary) {
+        this.error('动态的文件名要以 YYYY-MM-DD- 开头，frontmatter 要有 title 和 summary')
+      }
+      const value = match[2] ? { title, summary } : await parseMarkdown(code, NEWS_PARSER)
+      return `export default ${JSON.stringify(value)}`
+    },
+  }
+}
 
 /**
  * 构建期预压缩：为产物额外写出 .gz / .br，配合 nginx 的 gzip_static / brotli_static。
@@ -161,6 +196,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       vue(),
       vueDevTools(),
+      newsMarkdown(),
       tailwindcss(),
       vueI18n({
         include: [fileURLToPath(new URL('./src/i18n/locales/**', import.meta.url))],

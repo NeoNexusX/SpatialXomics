@@ -113,6 +113,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, type PropType } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
+import { downloadCanvas } from '@/shared/utils/download'
 import IonImageToolbar from './IonImageToolbar.vue'
 import { useZoomPan } from '../../composables/useZoomPan'
 import { useCanvasRenderer } from '../../composables/useCanvasRenderer'
@@ -386,10 +387,7 @@ function exportImage(format: IonImageFormat = DEFAULT_ION_IMAGE_FORMAT) {
       ? `_mz_${props.selectedMz.toFixed(6)}`
       : ''
   const src = format === 'jpeg' ? flattenOnBackground(canvas, ION_IMAGE_JPEG_BACKGROUND) : canvas
-  const link = document.createElement('a')
-  link.download = ionImageFilename(label, format)
-  link.href = src.toDataURL(ION_IMAGE_MIME[format], ION_IMAGE_JPEG_QUALITY)
-  link.click()
+  downloadCanvas(src, ionImageFilename(label, format), ION_IMAGE_MIME[format], ION_IMAGE_JPEG_QUALITY)
 }
 
 defineExpose({ canvasContainer: containerRef })

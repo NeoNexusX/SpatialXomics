@@ -26,7 +26,7 @@
           />
         </div>
         <button
-          class="btn btn-fluid btn-ghost"
+          class="btn btn-fluid btn-ghost kawaru-text-81"
           :title="$t('vizworkbench.toolbar.searchHint')"
           @click="onSearchMz"
         >
@@ -61,7 +61,7 @@
            紧凑宽度随字号缩放，并为色图名称和箭头保留空间。 -->
       <select
         data-testid="colormap-select"
-        class="select select-fluid select-bordered w-[7em]"
+        class="select select-fluid select-bordered w-[7em] kawaru-text-81"
         :class="{ 'opacity-50': channelsMode }"
         :disabled="channelsMode"
         :title="channelsMode ? $t('vizworkbench.ionImage.rangeDisabled') : undefined"
@@ -76,7 +76,7 @@
         <!-- TIC 使用简短标签，宽度仍容纳英文 Linear 和下拉箭头。 -->
         <select
           data-testid="intensity-scale-select"
-          class="select select-fluid select-bordered w-[6.5em]"
+          class="select select-fluid select-bordered w-[6.5em] kawaru-text-81"
           :class="[normalizationError ? 'select-error' : '', channelsMode ? 'opacity-50' : '']"
           :disabled="channelsMode"
           :title="
@@ -101,7 +101,7 @@
         </select>
       </div>
       <button
-        class="btn btn-fluid btn-ghost"
+        class="btn btn-fluid btn-ghost kawaru-text-81"
         :class="{ 'opacity-50': channelsMode }"
         :disabled="channelsMode"
         :title="channelsMode ? $t('vizworkbench.ionImage.rangeDisabled') : undefined"
@@ -115,7 +115,7 @@
         <button
           type="button"
           data-testid="export-button"
-          class="btn btn-fluid btn-ghost"
+          class="btn btn-fluid btn-ghost kawaru-text-81"
           :aria-label="$t('vizworkbench.toolbar.exportImage')"
           @click="onPick(DEFAULT_ION_IMAGE_FORMAT)"
         >
@@ -263,12 +263,12 @@ function onToleranceBlur(e: Event) {
 <style scoped>
 /* daisyUI 的 btn-xs…btn-xl 用 rem 推导高度与内边距（--size-field），字号变了尺寸不跟。
    这里把尺寸全改成 em，让按钮随自身字号等比缩放；比例沿用 btn-sm（2 / 0.75）。
-   与 .btn 并用（它仍提供配色/圆角/交互），但不要再叠加 btn-sm 等档位类。 */
+   字号由模板上的 kawaru-text-81 档位类给出；与 .btn 并用（它仍提供配色/圆角/交互），
+   但不要再叠加 btn-sm 等尺寸档位类。 */
 .btn-fluid {
   height: 2em;
   min-height: 1rem;
   padding-inline: 0.75em;
-  font-size: calc(var(--kawaru-fs) * 0.8125);
   gap: 0.1em;
 }
 
@@ -284,7 +284,6 @@ function onToleranceBlur(e: Event) {
   height: 2em;
   min-height: 1rem;
   padding-inline: 0.75em 2em;
-  font-size: calc(var(--kawaru-fs) * 0.8125);
   background-position:
     calc(100% - 1.4286em) calc(1px + 50%),
     calc(100% - 1.15em) calc(1px + 50%);

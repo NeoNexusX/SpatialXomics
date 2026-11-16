@@ -1,0 +1,12 @@
+{
+  "news": {
+    "title": "动态",
+    "subtitle": "版本更新与平台公告",
+    "notice": "公告",
+    "readMore": "阅读全文",
+    "newer": "上一篇",
+    "older": "下一篇",
+    "empty": "还没有动态",
+    "notFound": "没有找到这条动态"
+  }
+}

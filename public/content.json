@@ -341,14 +341,14 @@
   },
   "githubHeatmap": {
     "owner": "NeoNexusX",
-    "repo": "MassVision",
+    "repo": "SpatialXomics",
     "branch": "dev",
     "days": 365,
     "title": {
       "en": "SpatialXomics · Activity",
       "zh-CN": "SpatialXomics · 开发动态"
     },
-    "repoUrl": "https://github.com/NeoNexusX/MassFlow",
+    "repoUrl": "https://github.com/NeoNexusX/SpatialXomics",
     "orientation": "auto"
   }
 }

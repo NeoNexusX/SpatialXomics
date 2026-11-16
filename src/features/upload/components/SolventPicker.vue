@@ -1,17 +1,21 @@
 <template>
   <div class="flex flex-col gap-2">
-    <!-- Row 1: percentage + solvent + add button -->
-    <div class="flex items-start gap-2">
-      <!-- Percentage text input -->
-      <div class="flex flex-col flex-1">
-        <label class="label py-1">
-          <span class="label-text kawaru-text-100">{{ $t('upload.solvent.percentage') }}</span>
-        </label>
+    <!-- 标签 + 比例 + 溶剂 + 添加同一行；窄屏标签单独占一行。
+         items-start：选 Other 时下拉下方会多出输入框，居中对齐会把整行拉偏；
+         标签 h-10 与控件同高，文字才与输入框居中。
+         字号与下拉一致（87），标签取 81，不大过外层字段名。 -->
+    <div class="flex flex-wrap items-start gap-2">
+      <label :for="percentageId" class="label kawaru-text-81 basis-full sm:basis-auto sm:h-10">
+        {{ $t('upload.solvent.percentage') }}
+      </label>
+
+      <div class="flex flex-col flex-1 min-w-0">
         <input
+          :id="percentageId"
           v-model="percentageStr"
           type="text"
           inputmode="decimal"
-          class="input input-bordered w-full kawaru-text-100"
+          class="input input-bordered w-full kawaru-text-87"
           :class="{ 'input-error': percentageError }"
           :placeholder="$t('common.input.example', { value: 50 })"
           @keyup.enter="addSolvent"
@@ -19,11 +23,7 @@
         <span v-if="percentageError" class="kawaru-text-75 text-error mt-0.5">{{ percentageError }}</span>
       </div>
 
-      <!-- Solvent select -->
-      <div class="flex flex-col flex-[2]">
-        <div class="label py-1 invisible" aria-hidden="true">
-          <span class="label-text kawaru-text-100">&nbsp;</span>
-        </div>
+      <div class="flex-[2] min-w-0">
         <SelectWithOther
           v-model="selectedSolvent"
           :options="solventOptions"
@@ -34,20 +34,14 @@
         />
       </div>
 
-      <!-- Add button -->
-      <div class="flex flex-col shrink-0">
-        <div class="label py-1 invisible" aria-hidden="true">
-          <span class="label-text kawaru-text-100">&nbsp;</span>
-        </div>
-        <button
-          class="btn btn-primary btn-square kawaru-text-87"
-          @click="addSolvent"
-          :disabled="!canAdd"
-:title="$t('upload.solvent.add')"
-        >
-          <SvgIcon type="plus" class="h-5 w-5" />
-        </button>
-      </div>
+      <button
+        class="btn btn-primary btn-square shrink-0 kawaru-text-87"
+        :disabled="!canAdd"
+        :title="$t('upload.solvent.add')"
+        @click="addSolvent"
+      >
+        <SvgIcon type="plus" class="h-5 w-5" />
+      </button>
     </div>
 
     <!-- Error -->
@@ -81,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, useId } from 'vue'
 import SelectWithOther from '@/shared/components/SelectWithOther.vue'
 import { vocabLabel } from '@/features/datasets/constants/vocabLabels'
 import { t } from '@/i18n'
@@ -94,6 +88,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', v: string): void
 }>()
+
+const percentageId = useId()
 
 // Local state
 const percentageStr = ref('')

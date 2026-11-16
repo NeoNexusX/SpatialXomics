@@ -7,10 +7,9 @@
  * 所有接口需登录态，未登录一律 401。
  */
 import { auth_api } from '@/shared/api/httpClient'
+import { unwrap, type Page } from '@/shared/api/response'
 import { ENV } from '@/shared/config'
-import type { DatabasePageMeta } from '../types/database'
 
-// 约定：本模块所有函数都返回**解包后的响应体**（res.data），调用方不再处理 axios 信封。
 
 /** 列表行（后端 snake_case；entry_key 即 HMDB ID，如 HMDB0001234） */
 interface SiDbEntry {
@@ -35,10 +34,6 @@ export interface SiDbFilters {
 /** 服务端排序白名单（与后端一致，非法值 422） */
 export type SiDbSortBy = 'entry_key' | 'name' | 'mass' | 'origin'
 
-export interface SiDbListResult {
-  meta: DatabasePageMeta & { current_records?: number }
-  data: SiDbEntry[]
-}
 
 /**
  * POST /annotations/si-db/list?page&size&sort_by&order — 唯一查询接口。
@@ -49,11 +44,12 @@ export async function listSiDb(
   page = 1,
   size = 10,
   sort?: { sortBy: SiDbSortBy; order: 'asc' | 'desc' },
-): Promise<SiDbListResult> {
-  const res = await auth_api.post<SiDbListResult>('/annotations/si-db/list', filters, {
-    params: { page, size, sort_by: sort?.sortBy ?? 'entry_key', order: sort?.order ?? 'asc' },
-  })
-  return res.data
+): Promise<Page<SiDbEntry>> {
+  return unwrap(
+    auth_api.post<Page<SiDbEntry>>('/annotations/si-db/list', filters, {
+      params: { page, size, sort_by: sort?.sortBy ?? 'entry_key', order: sort?.order ?? 'asc' },
+    }),
+  )
 }
 
 /** GET /annotations/si-db/download — 两步下载的第一步：换取内嵌短时 token 的直链 */
@@ -65,8 +61,7 @@ export interface SiDbDownloadInfo {
 }
 
 export async function getSiDbDownload(): Promise<SiDbDownloadInfo> {
-  const res = await auth_api.get<SiDbDownloadInfo>('/annotations/si-db/download')
-  return res.data
+  return unwrap(auth_api.get<SiDbDownloadInfo>('/annotations/si-db/download'))
 }
 
 /**

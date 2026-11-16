@@ -1,15 +1,14 @@
 import { useLatestRequest } from '@/shared/composables/useLatestRequest'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { usePagination } from '@/shared/composables/usePagination'
+import { onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '@/shared/auth/authStore'
-import { getConfig } from '@/shared/config/runtimeConfig'
-import { buildPageList } from '@/shared/utils/pagination'
 import {
   collectionErrorMessage,
   deleteCollection,
   listAllCollections,
   listCollections,
 } from '../api/collectionApi'
-import type { CollectionListMeta, CollectionSummary } from '../types/collection'
+import type { CollectionSummary } from '../types/collection'
 import { t } from '@/i18n'
 
 // 每页条数与数据集列表一致，走全局 config（默认 10，选项 [6,10,20]）
@@ -33,17 +32,10 @@ export function useCollectionsPage() {
   const rows = ref<CollectionSummary[]>([])
   const loading = ref(false)
   const error = ref('')
-  const page = ref(1)
-  const size = ref(getConfig().pagination.defaultPageSize || 10)
+  const pager = usePagination(() => fetchPage())
+  const { page, size } = pager
   const mineOnly = ref(false)
   const search = ref('')
-
-  const meta = reactive<CollectionListMeta>({
-    current_page: 1,
-    current_records: 0,
-    total_pages: 1,
-    total_records: 0,
-  })
 
   // 服务端筛选体（§4.3）：name/title/journal_name/owner_username 模糊、
   // member_type/collection_type 精确、词表字段「集合内包含」；多值数组 = OR。
@@ -58,6 +50,7 @@ export function useCollectionsPage() {
   const canEdit = (c: CollectionSummary) => isMine(c) || auth.isAdmin
 
   async function fetchPage(targetPage = page.value) {
+    page.value = targetPage
     const isCurrent = requests.begin()
     loading.value = true
     error.value = ''
@@ -66,8 +59,7 @@ export function useCollectionsPage() {
       const res = await fetcher(targetPage, size.value, filters.value)
       if (!isCurrent()) return
       rows.value = res.data
-      Object.assign(meta, res.meta)
-      page.value = res.meta.current_page || targetPage
+      pager.setMeta(res.meta)
     } catch (err: any) {
       if (!isCurrent()) return
       error.value = collectionErrorMessage(
@@ -78,8 +70,6 @@ export function useCollectionsPage() {
       if (isCurrent()) loading.value = false
     }
   }
-
-  const pagination = computed(() => buildPageList(page.value, meta.total_pages))
 
   /** 搜索走服务端 name 模糊（跨全部分页）；title 命中不再覆盖——
    *  后端筛选字段间是 AND，表达不了 name/title 的 OR。
@@ -102,15 +92,6 @@ export function useCollectionsPage() {
   // 范围切换：回到第一页重新拉取（两个接口的数据集不同，页码不可比）
   watch(mineOnly, () => fetchPage(1))
 
-  const goToPage = (p: number) => {
-    fetchPage(p)
-  }
-
-  const changeSize = (s: number) => {
-    size.value = s
-    fetchPage(1)
-  }
-
   /** 删除集合（不动文件）。成功/失败提示由调用方的 useConfirmDelete 统一负责；
    *  服务端分页下重拉当前页，尾页删尽则回落一页 */
   async function removeCollection(publicId: string) {
@@ -125,19 +106,19 @@ export function useCollectionsPage() {
     collections: rows,
     loading,
     error,
-    meta,
+    meta: pager.meta,
     page,
     size,
     mineOnly,
     search,
-    pagination,
+    pagination: pager.pageRange,
     canEdit,
     isMine,
     handleSearch,
     clearSearch,
     applyFilters,
-    goToPage,
-    changeSize,
+    goToPage: pager.goToPage,
+    changeSize: pager.changeSize,
     removeCollection,
   }
 }
