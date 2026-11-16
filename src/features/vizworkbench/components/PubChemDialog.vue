@@ -11,6 +11,7 @@
  */
 import { ref, watch } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
+import { useCopyToClipboard } from '@/shared/composables/useCopyToClipboard'
 import { searchPubChemByName } from '@/services/pubchem/api/pubchemApi'
 import { PubChemNotFoundError, type PubChemCompound } from '@/services/pubchem/types/pubchem'
 import { t } from '@/i18n'
@@ -25,6 +26,7 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
+const { copy } = useCopyToClipboard()
 const loading = ref(false)
 const error = ref<string | null>(null)
 const result = ref<PubChemCompound | null>(null)
@@ -78,27 +80,6 @@ watch(
   },
   { immediate: true },
 )
-
-/** Copy text to clipboard with a fallback for non-secure contexts. */
-async function copyText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch {
-    // Fallback: select-and-copy via a temporary textarea
-    const ta = document.createElement('textarea')
-    ta.value = text
-    ta.style.position = 'fixed'
-    ta.style.opacity = '0'
-    document.body.appendChild(ta)
-    ta.select()
-    try {
-      document.execCommand('copy')
-    } catch {
-      /* ignore */
-    }
-    document.body.removeChild(ta)
-  }
-}
 </script>
 
 <template>
@@ -218,7 +199,7 @@ async function copyText(text: string) {
                     v-if="result.iupacName"
                     class="btn btn-ghost btn-xs btn-square kawaru-text-68"
                     :title="$t('vizworkbench.pubchem.copy')"
-                    @click="copyText(result.iupacName)"
+                    @click="copy(result.iupacName)"
                   >
                     <SvgIcon type="duplicate" />
                   </button>
@@ -232,7 +213,7 @@ async function copyText(text: string) {
                     v-if="result.smiles"
                     class="btn btn-ghost btn-xs btn-square kawaru-text-68"
                     :title="$t('vizworkbench.pubchem.copy')"
-                    @click="copyText(result.smiles)"
+                    @click="copy(result.smiles)"
                   >
                     <SvgIcon type="duplicate" />
                   </button>
@@ -246,7 +227,7 @@ async function copyText(text: string) {
                     v-if="result.inchiKey"
                     class="btn btn-ghost btn-xs btn-square kawaru-text-68"
                     :title="$t('vizworkbench.pubchem.copy')"
-                    @click="copyText(result.inchiKey)"
+                    @click="copy(result.inchiKey)"
                   >
                     <SvgIcon type="duplicate" />
                   </button>
@@ -260,7 +241,7 @@ async function copyText(text: string) {
                     v-if="result.inchi"
                     class="btn btn-ghost btn-xs btn-square kawaru-text-68"
                     :title="$t('vizworkbench.pubchem.copy')"
-                    @click="copyText(result.inchi)"
+                    @click="copy(result.inchi)"
                   >
                     <SvgIcon type="duplicate" />
                   </button>

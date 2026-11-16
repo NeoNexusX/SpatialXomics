@@ -1,7 +1,8 @@
-import { test, expect, type Download, type Page } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { mkdtempSync, rmSync, readdirSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
+import { startRawDownload } from './utils.js'
 
 /**
  * Upload Round-Trip E2E 测试 — 真实后端
@@ -16,7 +17,7 @@ import { tmpdir } from 'os'
  * - Arabidopsis_Spleen_MALDI_10_Negative_f9d339（小，Organism=Arabidopsis / Part=Spleen）
  * - Rat_Liver_MALDI_40_Positive_9ce4d1（大，压缩后约 360MB，Organism=Rat / Part=Liver）
  *   破坏性测试跑大文件成本高（下载+重传 360MB），保留覆盖是值得的：
- *   大文件路径才会暴露分块上传/超时/进度的问题。
+ *   大文件路径才会暴露分块上传/超时/进度的问题。这些问题与浏览器无关，只在 chromium 跑一次。
  *
  * 相同内容 + 相同 metadata = 相同数据集，重传后自动恢复，不需要额外清理。
  * 注意文件名不保证逐字恢复：后端 canonical 命名是 `hash_Name`，与历史
@@ -53,6 +54,7 @@ interface RoundTripParams {
 interface DatasetCase {
   name: string
   testTimeout: number
+  chromiumOnly?: boolean
   params: RoundTripParams
 }
 
@@ -78,24 +80,18 @@ async function runUploadRoundTrip(page: Page, params: RoundTripParams): Promise<
     const targetCard = cardHeading.locator('..').locator('..')
 
     // ============================================================
-    // Step 2: 下载 imzML + ibd
-    // ossDownloadRaw 对两个文件各起一个 iframe，触发两个 download 事件。
-    // 用 page.on('download') 持续收集，避免两个 waitForEvent 抢同一个事件。
+    // Step 2: 下载 imzML + ibd（配额用完时在删除之前就 skip，不会动到数据）
     // ============================================================
-    const collected: Download[] = []
-    page.on('download', (dl) => collected.push(dl))
-
-    await targetCard.getByRole('button', { name: 'Download' }).click()
-
-    // 等两个下载都触发（imzML + ibd）
-    await expect.poll(
-      () => collected.length,
-      { timeout: params.downloadTimeout, intervals: [500, 1000, 2000] },
-    ).toBeGreaterThanOrEqual(2)
+    const collected = await startRawDownload(
+      page,
+      targetCard.getByRole('button', { name: 'Download' }),
+      params.downloadTimeout,
+    )
+    test.skip(collected === null, 'Account download quota exhausted (HTTP 403)')
 
     // 保存到临时目录（保持 suggestedFilename 原名，imzML/ibd 的 basename 配对不变）
     const savedPaths: string[] = []
-    for (const dl of collected) {
+    for (const dl of collected!) {
       const dest = join(dir, dl.suggestedFilename())
       await dl.saveAs(dest)
       savedPaths.push(dest)
@@ -222,6 +218,7 @@ const CASES: DatasetCase[] = [
   },
   {
     name: 'large: Rat_Liver_MALDI_40_Positive',
+    chromiumOnly: true,
     // 12 min：360MB 下载落盘 + hash/压缩/重传 + 轮询验证。8 min 实测不够
     // （2026-10-09 重传实际完成、数据完好，但预算在轮询阶段耗尽误判超时）
     testTimeout: 720_000,
@@ -242,6 +239,7 @@ test.describe('Upload Round-Trip', () => {
   for (const ds of CASES) {
     test(`download -> delete -> re-upload (${ds.name})`, async ({ page, browserName }) => {
       test.skip(browserName === 'webkit', 'Linux WebKit 不支持 OPFS 且 headless 下载不稳定')
+      test.skip(!!ds.chromiumOnly && browserName !== 'chromium', '大文件只在 chromium 跑一次')
       test.setTimeout(ds.testTimeout)
 
       const found = await runUploadRoundTrip(page, ds.params)

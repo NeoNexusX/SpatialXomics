@@ -1,10 +1,10 @@
-# 数据集基本信息查看
+# 数据集总览
 
 本文介绍SpatialXomics中数据集详情页的基本信息构成，以及如何下载原始数据、生成并复制分享链接、将数据集设为公开。
 
 作者：陈柯江
 
-问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
+问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
 
 
 
@@ -97,6 +97,12 @@
 
 ![image-20260914195006521](https://cdn.neonexus.top/docs/20260914195006583.jpg_view)
 
+下载前请注意：
+
+- 需要登录，且个人资料中的机构、职位、研究领域、地区均已填写；未填写时会提示先到[账户管理](./account-management)补全。
+- 一次下载包含 .imzML 和 .ibd 两个文件，由浏览器分别保存。
+- 下载开始后 60 秒内不能再次下载；账号的下载配额用完时会提示 `Download limit reached`，配额可在个人资料页查看。
+
 
 
 
@@ -107,7 +113,7 @@
 1. 进入基本信息页面，点击`Share`。
 2. 链接会自动复制到剪贴板。
 
-链接为 `/s/` 开头的短链，由数据集的 16 位 public id 构成。
+链接为 `/s/` 开头的短链，由数据集的 16 位 public id 构成。收到链接的人需要登录才能查看内容；未登录时页面显示登录和注册入口。
 
 ![image-20260914195044109](https://cdn.neonexus.top/docs/20260914195044165.jpg_view)
 

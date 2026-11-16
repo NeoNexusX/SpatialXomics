@@ -11,22 +11,22 @@
       <div
         class="absolute w-2.5 h-2.5 bg-white border-2 border-red-500 rounded-full -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize z-30"
         :style="handlePos.tl"
-        @mousedown.prevent.stop="startHandleDrag('tl', $event)"
+        @mousedown.prevent.stop="startHandleDrag('tl')"
       />
       <div
         class="absolute w-2.5 h-2.5 bg-white border-2 border-red-500 rounded-full -translate-x-1/2 -translate-y-1/2 cursor-nesw-resize z-30"
         :style="handlePos.tr"
-        @mousedown.prevent.stop="startHandleDrag('tr', $event)"
+        @mousedown.prevent.stop="startHandleDrag('tr')"
       />
       <div
         class="absolute w-2.5 h-2.5 bg-white border-2 border-red-500 rounded-full -translate-x-1/2 -translate-y-1/2 cursor-nesw-resize z-30"
         :style="handlePos.bl"
-        @mousedown.prevent.stop="startHandleDrag('bl', $event)"
+        @mousedown.prevent.stop="startHandleDrag('bl')"
       />
       <div
         class="absolute w-2.5 h-2.5 bg-white border-2 border-red-500 rounded-full -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize z-30"
         :style="handlePos.br"
-        @mousedown.prevent.stop="startHandleDrag('br', $event)"
+        @mousedown.prevent.stop="startHandleDrag('br')"
       />
     </template>
   </div>
@@ -357,7 +357,7 @@ function onDown(e: MouseEvent) {
 }
 
 // ─── Handle drag (resize corners) ───
-function startHandleDrag(corner: 'tl' | 'tr' | 'bl' | 'br', e: MouseEvent) {
+function startHandleDrag(corner: 'tl' | 'tr' | 'bl' | 'br') {
   dragCorner = corner
   const onMove = (ev: MouseEvent) => {
     if (!dragCorner) return

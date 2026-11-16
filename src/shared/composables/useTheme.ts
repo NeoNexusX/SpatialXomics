@@ -14,8 +14,6 @@ type Theme = 'light' | 'dark'
 
 const theme = ref<Theme>('light')
 let initialized = false
-/** Reactively track system preference changes (listener reference for cleanup). */
-let systemListener: ((e: MediaQueryListEvent) => void) | null = null
 
 function apply(t: Theme) {
   document.documentElement.setAttribute('data-theme', t)
@@ -31,14 +29,14 @@ function readSaved(): Theme | null {
 }
 
 /** 设置主题：更新状态、应用到 <html>、持久化到 localStorage */
-export function setTheme(t: Theme) {
+function setTheme(t: Theme) {
   theme.value = t
   apply(t)
   localStorage.setItem(STORAGE_KEYS.theme, t)
 }
 
 /** 在 light / dark 之间切换 */
-export function toggleTheme() {
+function toggleTheme() {
   setTheme(theme.value === 'dark' ? 'light' : 'dark')
 }
 
@@ -62,17 +60,16 @@ export function initTheme() {
   apply(initial)
 
   // 用户尚未手动保存偏好时，跟随系统主题变化自动切换
-  systemListener = (e: MediaQueryListEvent) => {
+  window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', (e) => {
     if (!readSaved()) {
       const next: Theme = e.matches ? 'dark' : 'light'
       theme.value = next
       apply(next)
     }
-  }
-  window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', systemListener)
+  })
 }
 
 export function useTheme() {
   const isDark = computed(() => theme.value === 'dark')
-  return { theme, isDark, setTheme, toggleTheme, initTheme }
+  return { theme, isDark, toggleTheme, initTheme }
 }

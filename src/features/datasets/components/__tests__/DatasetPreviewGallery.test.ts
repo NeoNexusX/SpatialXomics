@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import DatasetPreviewGallery from '../DatasetPreviewGallery.vue'
 import { buildPreviewImageUrls } from '@/features/datasets/utils/imageUtils'
+import { loadFeatureMessages } from '@/i18n'
 
 // imageUtils 的 base 运行时经 getConfig() 读 config.json 的 oss 块；单测不走
 // 启动链，mock 掉并返回测试环境域名（与 imageUtils.test.ts 的 mock 一致）。
@@ -10,6 +11,8 @@ vi.mock('@/shared/config/runtimeConfig', () => ({
     oss: { previewImageBase: 'https://kawaru-oss.oss-cn-hangzhou.aliyuncs.com' },
   }),
 }))
+
+beforeAll(() => loadFeatureMessages('datasets'))
 
 const urls = buildPreviewImageUrls('images/file_42/')
 

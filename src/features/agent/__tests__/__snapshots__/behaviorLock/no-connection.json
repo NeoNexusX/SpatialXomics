@@ -1,0 +1,23 @@
+{
+ "blank": false,
+ "missing": false,
+ "logs": [
+  {
+   "datasetId": "dataset-a",
+   "mode": "temporary",
+   "events": []
+  }
+ ],
+ "calls": [],
+ "trace": [
+  "restoring",
+  "preparing",
+  "idle"
+ ],
+ "snapshot": {
+  "phase": "idle",
+  "mode": "temporary",
+  "messages": [],
+  "error": "common.agent.noApiConfigured"
+ }
+}

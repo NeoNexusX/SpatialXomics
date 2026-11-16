@@ -4,7 +4,7 @@ SpatialXomics is a web-based platform for managing, analyzing, and visualizing m
 
 **Author:** Chen Kejiang
 
-**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) or email **jydong@xmu.edu.cn**.
+**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) or email **jydong@xmu.edu.cn**.
 
 ## Overview
 
@@ -24,12 +24,13 @@ SpatialXomics brings the most common MSI data management and analysis tasks into
 |---|---|
 | **Accounts & Permissions** | Registration, login, password recovery, profile editing. Admins can manage all users. |
 | **Data Upload** | Upload paired .imzML/.ibd files with automatic deduplication, ZIP compression, chunked upload, and resume. |
-| **Dataset Management** | Browse public datasets, manage your own, inspect metadata, share public pages, and download originals. |
+| **Dataset Management** | Browse public datasets, manage your own, inspect metadata, share detail-page links, and download originals. |
 | **Collections** | Group related public datasets into curated collections with academic metadata and an ordered member list. |
 | **Preprocessing** | Compatible methods shown automatically based on your data's spectrum/storage mode: noise reduction, baseline correction, normalization, peak picking, peak alignment. |
-| **Visualization** | Continuous mode: ion images + mean spectra. Processed mode: TIC images + per-pixel spectra. Adjustable range, gamma, colormap, TIC normalization, and transparent PNG export. |
+| **Visualization** | Continuous mode: ion images + mean spectra. Processed mode: TIC images + per-pixel spectra. Adjustable range, gamma, colormap, TIC normalization, and JPG (default) / PNG ion-image export. |
 | **Spatial Analysis** | UMAP/KMeans clustering, cluster filtering, rectangular/freeform ROIs, and multi-region comparison. |
 | **Annotation Matching** | Import CSV annotation tables, match by m/z with ppm or Da tolerance, filter, export, and query PubChem. |
+| **SXO-Harness Agent** | Open the floating chat panel from the dataset visualization page and ask about the current dataset. The agent reads ion images, statistics, annotations, and clustering, and can look up compounds, pathways, literature, and web sources. |
 
 ## Quick Start
 
@@ -55,11 +56,11 @@ Search by name or use filters to narrow down results (see [Finding Datasets](./f
 
 ### 4. Inspect & Download
 
-Click any dataset row to view its metadata.
+Click a dataset card to view its metadata.
 
 ![Dataset info](https://cdn.neonexus.top/docs/20260907175815189.jpg_view)
 
-The detail page shows biological info, acquisition parameters, and file details (see [Dataset Overview](./dataset-overview)). Use **Download** to get the raw files, or **Share** to copy the dataset's link.
+The detail page shows biological info, acquisition parameters, and file details (see [Dataset Overview](./dataset-overview)). Use **Download** to get the raw files (this requires signing in and a complete profile), or **Share** to copy the dataset's link.
 
 ![Download & Share](https://cdn.neonexus.top/docs/20260907180028501.jpg_view)
 
@@ -107,6 +108,7 @@ Pick a topic that matches your workflow:
 | [Finding Datasets](./finding-datasets) | Search, filter, and sort public and personal datasets |
 | [Dataset Overview](./dataset-overview) | Metadata fields, downloading, sharing links, making datasets public |
 | [Data Visualization](./data-visualization) | Ion images, TIC plots, spectra, UMAP/KMeans, ROIs, region comparison, annotations |
+| [SXO-Harness Agent](./sxo-harness) | Conversational dataset Q&A, connection and model setup, tools and skills, conversation management |
 | [Upload Data](./upload-data) | imzML/ibd upload flow, metadata form, deduplication, resume |
 | [Dataset Analysis](./dataset-analysis) | Choosing compatible preprocessing methods, parameters, submission |
 | [Workspace](./workspace) | Task dashboard, status tracking, viewing results |

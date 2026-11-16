@@ -1,10 +1,10 @@
-# 导航
+# 导航说明
 
 本文介绍导航组件的使用。
 
 作者：陈柯江
 
-问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
+问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
 
 
 
@@ -27,5 +27,7 @@
 ![3bbf79c7-4e04-4675-b276-ed7e94680cff](https://cdn.neonexus.top/docs/20261021105000645.jpg_view)
 
 点击右下角导航球，会在页面左侧出现抽屉式导航供用户进行功能跳转。抽屉内容与前文导航栏基本一致，但有两点差异：抽屉不提供登录/注册入口——未登录用户请通过首页的 `Join to start` 按钮登录或注册；退出登录由导航球上的按钮承担，不在抽屉中。
+
+登录后，导航球上还会显示 SXO 图标；点击可打开 SXO-Harness 对话面板（详见 [SXO-Harness 助手](./sxo-harness)）。该图标只在上述使用导航球的页面出现，顶栏形态的页面目前没有助手入口，需要回到首页或数据集可视化页使用。
 
 ![image-20261021105310331](https://cdn.neonexus.top/docs/20261021105310451.jpg_view)

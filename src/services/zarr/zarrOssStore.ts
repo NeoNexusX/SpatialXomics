@@ -35,7 +35,7 @@
  */
 
 import { LruCache } from '@/shared/utils/lruCache'
-import { createOssClient, OssError } from './ossClient'
+import { createOssClient, OssError, ossKey } from './ossClient'
 import type { OssClient } from './ossClient'
 import type {
   ZarrAccessResponse,
@@ -66,6 +66,40 @@ export class ZarrIncompatibleError extends Error {
 }
 
 // ---------- main store ----------
+
+/** 同时请求的 chunk 数：浏览器对同一 origin 的并发连接上限 */
+const CHUNK_BATCH_SIZE = 6
+
+/**
+ * 只读一次的小数组：并发调用共用一个请求，失败后下次重试；
+ * store 释放后，还在路上的结果不再留下。
+ */
+class LoadOnce<T> {
+  current: T | null = null
+  private pending: Promise<T> | null = null
+
+  constructor(private readonly disposed: () => boolean) {}
+
+  async get(load: () => Promise<T>): Promise<T> {
+    if (this.current) return this.current
+    if (this.pending) return this.pending
+    const pending = load().then((value) => {
+      if (!this.disposed()) this.current = value
+      return value
+    })
+    this.pending = pending
+    try {
+      return await pending
+    } finally {
+      if (this.pending === pending) this.pending = null
+    }
+  }
+
+  clear(): void {
+    this.current = null
+    this.pending = null
+  }
+}
 
 /**
  * Fail fast on metadata we cannot decode: shape must be a non-empty list of
@@ -117,15 +151,11 @@ export class ZarrOssStore {
   private spectraOffsetsMeta: ZarrV3ArrayMetadata | null = null
 
   // Fully loaded small arrays (cached after first load)
-  private coordinates: Uint32Array | null = null
-  private coordinatesPending: Promise<Uint32Array> | null = null
+  private coordinates = new LoadOnce<Uint32Array>(() => this._disposed)
   private mzAxis: Float64Array | null = null
-  private _offsets: number[] | null = null // converted from int64
-  private offsetsPending: Promise<number[]> | null = null
+  private offsets = new LoadOnce<number[]>(() => this._disposed)
+  private spectraOffsets = new LoadOnce<number[]>(() => this._disposed)
   private meanSpectrum: Float32Array | null = null
-  private ticData: Float64Array | null = null
-  private _spectraOffsets: number[] | null = null // converted from int64
-  private spectraOffsetsPending: Promise<number[]> | null = null
 
   // Metadata attrs
   private _metadataAttrs: MetadataAttrs | null = null
@@ -184,15 +214,11 @@ export class ZarrOssStore {
     this.inFlightIntensity.clear()
     this.inFlightMz.clear()
     this.inFlightSpectra.clear()
-    this.coordinates = null
-    this.coordinatesPending = null
+    this.coordinates.clear()
     this.mzAxis = null
-    this._offsets = null
-    this.offsetsPending = null
-    this._spectraOffsets = null
-    this.spectraOffsetsPending = null
+    this.offsets.clear()
+    this.spectraOffsets.clear()
     this.meanSpectrum = null
-    this.ticData = null
     this._metadataAttrs = null
   }
 
@@ -211,10 +237,6 @@ export class ZarrOssStore {
   get spatialShape(): [number, number] {
     if (!this._spatialShape) throw new Error('[ZarrOssStore] call init() first')
     return this._spatialShape
-  }
-
-  get nRows(): number {
-    return this._offsets ? this._offsets.length - 1 : 0
   }
 
   get metadataAttrs(): MetadataAttrs | null {
@@ -345,12 +367,12 @@ export class ZarrOssStore {
     }
 
     // stats/tic（非致命）
-    if (statsResult && !(statsResult instanceof Error)) {
+    if (statsResult) {
       this.ticMeta = statsResult
       if (import.meta.env.DEV) {
         console.log('[ZarrOssStore] stats/tic found', {
-          shape: this.ticMeta!.shape.join('×'),
-          dtype: this.ticMeta!.data_type,
+          shape: statsResult.shape.join('×'),
+          dtype: statsResult.data_type,
         })
       }
     } else if (import.meta.env.DEV) {
@@ -421,25 +443,11 @@ export class ZarrOssStore {
 
   /** Load pixel coordinates. Shape (n_pixels, 3), dtype uint32, one-based. */
   async loadCoordinates(): Promise<Uint32Array> {
-    if (this.coordinates) return this.coordinates
-    if (this.coordinatesPending) return this.coordinatesPending
-    if (!this.coordinatesMeta) throw new Error('[ZarrOssStore] call init() first')
-
-    const pending = this.fetchArrayFull('axes/coordinates', this.coordinatesMeta).then((ab) => {
-      const coordinates = new Uint32Array(ab)
-      // A disposed store must not retain a large array after its request finishes.
-      if (!this._disposed) this.coordinates = coordinates
-      return coordinates
-    })
-    this.coordinatesPending = pending
-
-    try {
-      return await pending
-    } finally {
-      // Clear rejected requests so a later call can retry. Do not clear a newer
-      // request if dispose/reinitialization changed the pending reference.
-      if (this.coordinatesPending === pending) this.coordinatesPending = null
-    }
+    const meta = this.coordinatesMeta
+    if (!meta && !this.coordinates.current) throw new Error('[ZarrOssStore] call init() first')
+    return this.coordinates.get(async () =>
+      new Uint32Array(await this.fetchArrayFull('axes/coordinates', meta!)),
+    )
   }
 
   /** Load shared m/z axis (continuous mode only). Returns null for processed mode. */
@@ -455,24 +463,16 @@ export class ZarrOssStore {
     return this.mzAxis
   }
 
-  /** Load row offsets. Returns number[] (converted from int64). */
+  /** Row boundaries of a group, converted from int64. */
+  private async readOffsets(arrayPath: string, meta: ZarrV3ArrayMetadata): Promise<number[]> {
+    return Array.from(new BigInt64Array(await this.fetchArrayFull(arrayPath, meta)), Number)
+  }
+
+  /** Load row offsets of the main data group. */
   async loadOffsets(): Promise<number[]> {
-    if (this._offsets) return this._offsets
-    if (this.offsetsPending) return this.offsetsPending
-    if (!this.offsetsMeta) throw new Error('[ZarrOssStore] call init() first')
-
-    const pending = this.fetchArrayFull(this.offsetsPath, this.offsetsMeta).then((ab) => {
-      const offsets = Array.from(new BigInt64Array(ab), (v) => Number(v))
-      if (!this._disposed) this._offsets = offsets
-      return offsets
-    })
-    this.offsetsPending = pending
-
-    try {
-      return await pending
-    } finally {
-      if (this.offsetsPending === pending) this.offsetsPending = null
-    }
+    const meta = this.offsetsMeta
+    if (!meta && !this.offsets.current) throw new Error('[ZarrOssStore] call init() first')
+    return this.offsets.get(() => this.readOffsets(this.offsetsPath, meta!))
   }
 
   /** Whether the pixel-major continuous spectra group is available. */
@@ -482,22 +482,9 @@ export class ZarrOssStore {
 
   /** Load spectra offsets (n_pixels+1 rows). Returns null without a continuous spectra group. */
   async loadSpectraOffsets(): Promise<number[] | null> {
-    if (this._spectraOffsets) return this._spectraOffsets
-    if (this.spectraOffsetsPending) return this.spectraOffsetsPending
-    if (!this.spectraOffsetsMeta) return null
-
-    const pending = this.fetchArrayFull('spectra/offsets', this.spectraOffsetsMeta).then((ab) => {
-      const offsets = Array.from(new BigInt64Array(ab), (v) => Number(v))
-      if (!this._disposed) this._spectraOffsets = offsets
-      return offsets
-    })
-    this.spectraOffsetsPending = pending
-
-    try {
-      return await pending
-    } finally {
-      if (this.spectraOffsetsPending === pending) this.spectraOffsetsPending = null
-    }
+    const meta = this.spectraOffsetsMeta
+    if (!meta && !this.spectraOffsets.current) return null
+    return this.spectraOffsets.get(() => this.readOffsets('spectra/offsets', meta!))
   }
 
   /**
@@ -635,24 +622,23 @@ export class ZarrOssStore {
     }
 
     // Read the full stats/tic array (single chunk, small)
-    const ab = await this.fetchArrayFull('stats/tic', this.ticMeta)
-    const dtype = this.ticMeta.data_type
-    const typed = makeTypedArray(dtype, ab)
-    this.ticData =
-      typed instanceof Float64Array ? typed : new Float64Array(typed as ArrayLike<number>)
+    const typed = makeTypedArray(
+      this.ticMeta.data_type,
+      await this.fetchArrayFull('stats/tic', this.ticMeta),
+    )
+    const tic = typed instanceof Float64Array ? typed : new Float64Array(typed as ArrayLike<number>)
 
     // Map 1D TIC values to 2D image via coordinates
     const coords = await this.loadCoordinates()
     const nPixels = coords.length / 3
 
-    if (this.ticData.length < nPixels) {
+    if (tic.length < nPixels) {
       console.warn('[ZarrOssStore] stats/tic length mismatch, falling back to computeTICImage')
-      this.ticData = null
       this.ticMeta = null
       return null
     }
 
-    return this.mapPixelsToMatrix(this.ticData, nPixels, coords)
+    return this.mapPixelsToMatrix(tic, nPixels, coords)
   }
 
   /** Whether stats/tic is available (fast path). */
@@ -686,14 +672,13 @@ export class ZarrOssStore {
     const cs = this.intensityMeta!.chunk_grid.configuration.chunk_shape[0]!
     const totalChunks = Math.ceil(this.totalIntensityPoints / cs)
 
-    const BATCH_SIZE = 6 // browser concurrent connection limit per origin
     const ticByPixel = new Float32Array(nPixels)
     let cursor = 0 // current pixel index, advances monotonically
 
-    for (let batchStart = 0; batchStart < totalChunks; batchStart += BATCH_SIZE) {
+    for (let batchStart = 0; batchStart < totalChunks; batchStart += CHUNK_BATCH_SIZE) {
       if (this._disposed) return new Float32Array(0)
 
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, totalChunks)
+      const batchEnd = Math.min(batchStart + CHUNK_BATCH_SIZE, totalChunks)
       // Fetch chunks directly (bypass the LRU cache): each chunk is read once
       // in this scan, so caching it would only evict other chunks.
       const batch: Promise<Float32Array | Float64Array>[] = []
@@ -853,19 +838,6 @@ export class ZarrOssStore {
     return bestDist <= tolerance ? bestIdx : -1
   }
 
-  // ========== backward-compat helpers ==========
-
-  /**
-   * Returns [nMz, height, width] for continuous mode.
-   * Used by existing components that expect the old ion shape format.
-   */
-  getIonShape(): number[] | null {
-    if (this._dataMode !== 'continuous') return null
-    if (!this._spatialShape) return null
-    const offsetsLen = this._offsets ? this._offsets.length - 1 : 0
-    return [offsetsLen, this._spatialShape[0], this._spatialShape[1]]
-  }
-
   // ========== internal: OSS key helpers ==========
 
   private get intensityPath(): string {
@@ -881,10 +853,7 @@ export class ZarrOssStore {
   }
 
   private key(relativePath: string): string {
-    const root = this.folderPath
-    const rel = relativePath.replace(/^\/+/, '')
-    if (!root) return rel
-    return root.endsWith('/') ? `${root}${rel}` : `${root}/${rel}`
+    return ossKey(this.folderPath, relativePath)
   }
 
   private async readJson<T>(relativePath: string): Promise<T> {
@@ -1028,15 +997,13 @@ export class ZarrOssStore {
 
     const result = isFloat64 ? new Float64Array(end - start) : new Float32Array(end - start)
 
-    // Fetch chunks in parallel batches (browser concurrent connection limit
-    // per origin, mirroring computeTICImage), then assemble in chunk order.
+    // Fetch chunks in parallel batches, then assemble in chunk order.
     // Cache + in-flight dedup in getOrFetchChunk keep concurrent fetches safe.
-    const BATCH_SIZE = 6
     const chunkCount = endChunk - startChunk + 1
     const chunks: (Float32Array | Float64Array)[] = new Array(chunkCount)
 
-    for (let batchStart = 0; batchStart < chunkCount; batchStart += BATCH_SIZE) {
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, chunkCount)
+    for (let batchStart = 0; batchStart < chunkCount; batchStart += CHUNK_BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + CHUNK_BATCH_SIZE, chunkCount)
       const batch: Promise<Float32Array | Float64Array>[] = []
       for (let k = batchStart; k < batchEnd; k++) {
         batch.push(this.getOrFetchChunk(arrayPath, meta, startChunk + k, cache, inFlight))
@@ -1104,9 +1071,7 @@ export class ZarrOssStore {
     meta: ZarrV3ArrayMetadata,
     chunkIndex: number,
   ): Promise<Float32Array | Float64Array> {
-    const chunkKey = this.compute1DChunkKey(meta, chunkIndex)
-    const relKey = `${arrayPath}/${chunkKey}`
-    const key = this.key(relKey)
+    const key = this.key(`${arrayPath}/${computeNDChunkKey(meta, [chunkIndex])}`)
     let raw: ArrayBuffer
     try {
       raw = await this.oss.getObjectArrayBuffer(key)
@@ -1141,16 +1106,6 @@ export class ZarrOssStore {
     const fill = meta.fill_value
     if (fill != null && fill !== 0) chunk.fill(fill)
     return chunk
-  }
-
-  /**
-   * Compute chunk key for a 1D array using zarr v3 default encoding.
-   * For 1D: "c/0", "c/1", "c/2", ...
-   * Equivalent to the N-D key with a single index — delegated to keep
-   * the encoding/separator handling in one place.
-   */
-  private compute1DChunkKey(meta: ZarrV3ArrayMetadata, chunkIndex: number): string {
-    return computeNDChunkKey(meta, [chunkIndex])
   }
 
   /**
@@ -1197,7 +1152,7 @@ export class ZarrOssStore {
 
   /**
    * Read a small array in full (for metadata arrays like offsets, coordinates, mz_axis).
-   * Downloads all chunks and concatenates (shared zarrCodecs assembler).
+   * Downloads all chunks and concatenates.
    */
   private async fetchArrayFull(arrayPath: string, meta: ZarrV3ArrayMetadata): Promise<ArrayBuffer> {
     const out = await readFullArray(meta, arrayPath, async (coords) => {
@@ -1456,15 +1411,14 @@ export class ZarrOssStore {
 
     const cs = this.intensityMeta.chunk_grid.configuration.chunk_shape[0]!
     const totalChunks = Math.ceil(this.totalIntensityPoints / cs)
-    const BATCH_SIZE = 6 // smaller batch: each chunk fetches 2 arrays (intensity + mz)
 
     let cursor = 0 // current pixel index, advances monotonically
 
-    for (let batchStart = 0; batchStart < totalChunks; batchStart += BATCH_SIZE) {
+    for (let batchStart = 0; batchStart < totalChunks; batchStart += CHUNK_BATCH_SIZE) {
       if (this._disposed) return { bins: [], binCount: 0 }
       if (isCancelled?.()) return { bins: [], binCount: 0 }
 
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, totalChunks)
+      const batchEnd = Math.min(batchStart + CHUNK_BATCH_SIZE, totalChunks)
       const nChunksInBatch = batchEnd - batchStart
 
       // Fetch intensity + mz chunks in parallel

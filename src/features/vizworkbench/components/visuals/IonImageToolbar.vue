@@ -26,7 +26,7 @@
           />
         </div>
         <button
-          class="btn btn-fluid btn-ghost"
+          class="btn btn-fluid btn-ghost kawaru-text-81"
           :title="$t('vizworkbench.toolbar.searchHint')"
           @click="onSearchMz"
         >
@@ -61,7 +61,7 @@
            紧凑宽度随字号缩放，并为色图名称和箭头保留空间。 -->
       <select
         data-testid="colormap-select"
-        class="select select-fluid select-bordered w-[7em]"
+        class="select select-fluid select-bordered w-[7em] kawaru-text-81"
         :class="{ 'opacity-50': channelsMode }"
         :disabled="channelsMode"
         :title="channelsMode ? $t('vizworkbench.ionImage.rangeDisabled') : undefined"
@@ -76,7 +76,7 @@
         <!-- TIC 使用简短标签，宽度仍容纳英文 Linear 和下拉箭头。 -->
         <select
           data-testid="intensity-scale-select"
-          class="select select-fluid select-bordered w-[6.5em]"
+          class="select select-fluid select-bordered w-[6.5em] kawaru-text-81"
           :class="[normalizationError ? 'select-error' : '', channelsMode ? 'opacity-50' : '']"
           :disabled="channelsMode"
           :title="
@@ -101,7 +101,7 @@
         </select>
       </div>
       <button
-        class="btn btn-fluid btn-ghost"
+        class="btn btn-fluid btn-ghost kawaru-text-81"
         :class="{ 'opacity-50': channelsMode }"
         :disabled="channelsMode"
         :title="channelsMode ? $t('vizworkbench.ionImage.rangeDisabled') : undefined"
@@ -109,14 +109,35 @@
       >
         {{ $t('common.action.reset') }}
       </button>
-      <button
-        class="btn btn-fluid btn-ghost"
-        :title="$t('vizworkbench.toolbar.exportPng')"
-        @click="$emit('download')"
-      >
-        <SvgIcon type="download" />
-        PNG
-      </button>
+      <!-- 导出：主按钮按默认格式（JPG）一键下载，悬停展开格式选择。
+           菜单贴着按钮下沿，不留 margin —— hover 菜单一旦离开按钮盒就会闪断。 -->
+      <div class="dropdown dropdown-end dropdown-hover">
+        <button
+          type="button"
+          data-testid="export-button"
+          class="btn btn-fluid btn-ghost kawaru-text-81"
+          :aria-label="$t('vizworkbench.toolbar.exportImage')"
+          @click="onPick(DEFAULT_ION_IMAGE_FORMAT)"
+        >
+          <SvgIcon type="download" />
+          JPG
+          <SvgIcon type="chevron_down" class="w-[0.8em] h-[0.8em] opacity-60" />
+        </button>
+        <ul
+          class="menu dropdown-content w-max rounded-box border border-base-300 bg-base-100 p-1 shadow-lg"
+        >
+          <li>
+            <button type="button" data-testid="export-jpg" @click="onPick('jpeg')">
+              <span class="font-mono">JPG</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" data-testid="export-png" @click="onPick('png')">
+              <span class="font-mono">PNG</span>
+            </button>
+          </li>
+        </ul>
+      </div>
     </div>
   </div>
 </template>
@@ -126,6 +147,7 @@ import { ref, watch, nextTick } from 'vue'
 import type { DataMode } from '@/services/zarr/types/zarr'
 import { ZARR_STORE } from '@/shared/config/defaults'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
+import { DEFAULT_ION_IMAGE_FORMAT, type IonImageFormat } from '../../utils/ionImageExport'
 
 /** 可选色图：value 传给 zarr 渲染，label 用于展示（色图是专有名称，各语言都显示英文原名） */
 const COLORMAPS = [
@@ -162,8 +184,18 @@ const emit = defineEmits<{
   (e: 'update:intensityScale', v: string): void
   (e: 'search-mz', v: string): void
   (e: 'reset'): void
-  (e: 'download'): void
+  /** 导出当前视图，format 由悬停菜单或默认格式决定 */
+  (e: 'download', format: IonImageFormat): void
 }>()
+
+/**
+ * 导出并收起菜单：daisyUI 的 dropdown 靠 :focus-within 展开，
+ * 不主动 blur 的话，点过的按钮会把菜单一直留在展开态。
+ */
+function onPick(format: IonImageFormat) {
+  emit('download', format)
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+}
 
 // ---- m/z 搜索框 ----
 
@@ -231,12 +263,12 @@ function onToleranceBlur(e: Event) {
 <style scoped>
 /* daisyUI 的 btn-xs…btn-xl 用 rem 推导高度与内边距（--size-field），字号变了尺寸不跟。
    这里把尺寸全改成 em，让按钮随自身字号等比缩放；比例沿用 btn-sm（2 / 0.75）。
-   与 .btn 并用（它仍提供配色/圆角/交互），但不要再叠加 btn-sm 等档位类。 */
+   字号由模板上的 kawaru-text-81 档位类给出；与 .btn 并用（它仍提供配色/圆角/交互），
+   但不要再叠加 btn-sm 等尺寸档位类。 */
 .btn-fluid {
   height: 2em;
   min-height: 1rem;
   padding-inline: 0.75em;
-  font-size: calc(var(--kawaru-fs) * 0.8125);
   gap: 0.1em;
 }
 
@@ -252,7 +284,6 @@ function onToleranceBlur(e: Event) {
   height: 2em;
   min-height: 1rem;
   padding-inline: 0.75em 2em;
-  font-size: calc(var(--kawaru-fs) * 0.8125);
   background-position:
     calc(100% - 1.4286em) calc(1px + 50%),
     calc(100% - 1.15em) calc(1px + 50%);

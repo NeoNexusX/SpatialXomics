@@ -114,7 +114,6 @@ test('footer shows team info, powered by, and copyright', async ({ page }) => {
 
   // 滚动到底部（scroll-snap 页面，用键盘 End 键滚到底）
   await page.locator('.home-scroll').press('End')
-  await page.waitForTimeout(500)
 
   // 团队标题
   await expect(page.getByText('The Team')).toBeVisible()

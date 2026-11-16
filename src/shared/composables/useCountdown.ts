@@ -59,10 +59,8 @@ export function useCountdown(
   return {
     count,
     isActive,
-    attempts,
     maxAttempts,
     isExhausted,
     start: cstart,
-    stop,
   }
 }

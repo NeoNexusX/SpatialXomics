@@ -4,6 +4,7 @@ import { mount } from '@vue/test-utils'
 import {
   disposeZarrState,
   loadPixelSpectrum,
+  meanSpectrumRef,
   pixelSpectrum,
   pixelSpectrumError,
   pixelSpectrumLoading,
@@ -24,6 +25,8 @@ const mocks = vi.hoisted(() => ({
     reject: (error: Error) => void
   }[],
   initError: null as Error | null,
+  /** 设置后平均谱按它返回，测试用来挂起请求 */
+  meanSpectrum: null as Promise<Float32Array> | null,
 }))
 
 vi.mock('@/services/zarr/api/zarrAccessApi', () => ({ getZarrAccess: async () => ({}) }))
@@ -48,14 +51,11 @@ vi.mock('@/services/zarr/zarrOssStore', async (importOriginal) => {
     async loadMzAxis() {
       return new Float64Array([100, 200, 300])
     }
-    getIonShape() {
-      return [3, 2, 2]
-    }
     async getSummedIonImageByMzIndices() {
       return new Float32Array(4)
     }
     async loadMeanSpectrum() {
-      return new Float32Array([1, 0, 3])
+      return mocks.meanSpectrum ?? new Float32Array([1, 0, 3])
     }
     getPixelSpectrum(index: number) {
       return new Promise<PixelSpectrum | null>((resolve, reject) => {
@@ -98,6 +98,7 @@ describe('useZarrIonImage pixel spectrum', () => {
   beforeEach(() => {
     mocks.pixelRequests.length = 0
     mocks.initError = null
+    mocks.meanSpectrum = null
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
@@ -182,6 +183,21 @@ describe('useZarrIonImage pixel spectrum', () => {
     expect(pixelSpectrum.value).toBeNull()
     expect(requestedPixelIndex.value).toBeNull()
     expect(spectrumView.value).toBe('mean')
+  })
+
+  it('keeps a mean spectrum of the previous run out of the new one', async () => {
+    const api = await initSession()
+    let finish!: (mean: Float32Array) => void
+    mocks.meanSpectrum = new Promise((resolve) => (finish = resolve))
+    await api.init('run-2')
+    mocks.meanSpectrum = null
+    await api.init('run-3')
+    await vi.waitFor(() => expect(meanSpectrumRef.value).toEqual(new Float32Array([1, 0, 3])))
+    const current = meanSpectrumRef.value
+
+    finish(new Float32Array([9, 9, 9]))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(meanSpectrumRef.value).toBe(current)
   })
 
   it('reports an unsupported zarr layout with the localized incompatible-format message', async () => {

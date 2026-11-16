@@ -112,12 +112,26 @@ export function compoundUrl(id: string): string | null {
   return null
 }
 
-function csvCell(value: string): string {
+export function csvCell(value: string): string {
   return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
 }
 
-function num(v: number | null | undefined, digits: number): string {
+export function csvNumber(v: number | null | undefined, digits: number): string {
   return v != null && Number.isFinite(v) ? v.toFixed(digits) : ''
+}
+
+/** 候选名和候选 id 两列 */
+export function candidateCells(m: Molecule | undefined): [string, string] {
+  const candidates = m?.candidates ?? []
+  return [
+    csvCell(candidates.map((c) => c.name).join('; ')),
+    csvCell(
+      candidates
+        .map((c) => c.id)
+        .filter(Boolean)
+        .join('; '),
+    ),
+  ]
 }
 
 const CSV_HEADER = [
@@ -165,27 +179,21 @@ export function buildAnnotationCsv(
       String(ion.rank),
       csvCell(moleculeName(m)),
       moleculeOrigin(m) ?? '',
-      csvCell((m?.candidates ?? []).map((c) => c.name).join('; ')),
-      csvCell(
-        (m?.candidates ?? [])
-          .map((c) => c.id)
-          .filter(Boolean)
-          .join('; '),
-      ),
+      ...candidateCells(m),
       csvCell(m?.formula ?? ''),
-      num(m?.neutralMass, 6),
+      csvNumber(m?.neutralMass, 6),
       csvCell(adductLabel(ion.adduct)),
-      num(ion.theoMz, 6),
-      num(ion.obsMz, 6),
-      num(ion.errPpm, 3),
-      num(ion.intensity, 2),
-      num(ion.scores.mass, 4),
-      num(ion.scores.adduct, 2),
-      num(ion.scores.chaos, 4),
-      num(ion.scores.coloc, 4),
-      num(ion.scores.spatial ?? 0, 4),
-      num(ion.scores.total, 4),
-      num(ion.q, 4),
+      csvNumber(ion.theoMz, 6),
+      csvNumber(ion.obsMz, 6),
+      csvNumber(ion.errPpm, 3),
+      csvNumber(ion.intensity, 2),
+      csvNumber(ion.scores.mass, 4),
+      csvNumber(ion.scores.adduct, 2),
+      csvNumber(ion.scores.chaos, 4),
+      csvNumber(ion.scores.coloc, 4),
+      csvNumber(ion.scores.spatial ?? 0, 4),
+      csvNumber(ion.scores.total, 4),
+      csvNumber(ion.q, 4),
       csvCell(siblings.join('; ')),
       csvCell(samePeak.join('; ')),
     ]

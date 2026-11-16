@@ -1,10 +1,10 @@
-# 工作区
+# 工作台
 
-本文介绍工作区页面的整体布局、任务列表与状态跟踪，以及分析结果与失败信息的查看入口。
+本文介绍工作台页面的整体布局、任务列表与状态跟踪，以及分析结果与失败信息的查看入口。
 
 作者：陈柯江
 
-问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
+问题反馈：如果在使用 SpatialXomics 或阅读文档时发现问题，可通过 [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) 提交反馈，或联系邮箱：**jydong@xmu.edu.cn**。
 
 
 
@@ -12,7 +12,7 @@
 
 ### 1. 进入 Workspace 页面
 
-点击导航栏`Workspace`—`Workspace`进入工作区页面。
+点击导航栏`Workspace`—`Workspace`进入工作台页面。
 
 ![image-20260909173325329](https://cdn.neonexus.top/docs/20260909173325409.jpg_view)
 
@@ -58,7 +58,7 @@
 | **Created** | 任务提交时间 |
 | **Finished** | 任务完成时间（仍在运行时为空） |
 | **Status** | Running、Completed 或 Failed |
-| **View** | 在可视化工作台打开该结果 |
-| **Delete** | 确认后删除该结果 |
+| **View** | 在可视化工作台打开该结果；失败的任务改为弹窗显示失败原因；运行中的任务没有此按钮 |
+| **Delete** | 确认后删除该结果；运行中的任务没有此按钮，显示运行超过 3 小时的除外 |
 
-分析失败的任务可展开错误详情，查看失败原因。搜索框支持按数据集名称筛选任务。
+搜索框按数据集名称筛选任务：输入后按回车生效，清空后恢复全部任务。表格底部可翻页和切换每页数量。

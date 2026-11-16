@@ -1,15 +1,7 @@
 import { useRouter } from 'vue-router'
-import { useDatasetList } from '@/features/datasets/composables/useDatasetList'
+import { useDatasetList, type DatasetFetcher } from '@/features/datasets/composables/useDatasetList'
 import { useDatasetListRouteState } from '@/features/datasets/composables/useDatasetListRouteState'
 import { useAuthStore } from '@/shared/auth/authStore'
-import type { FileListSort } from '@/features/datasets/api/datasetApi'
-
-type Fetcher = (
-  filters: Record<string, any>,
-  page: number,
-  size: number,
-  sort?: FileListSort,
-) => Promise<any>
 
 /**
  * MyDatasets / PublicDatasets 两个列表页共用的装配逻辑：
@@ -18,7 +10,7 @@ type Fetcher = (
  * 页面间的差异（配额条、删除流程、登录门槛、?upload=1 等）仍由各页面自己处理。
  */
 export function useDatasetListPage(
-  fetcher: Fetcher,
+  fetcher: DatasetFetcher,
   opts: {
     source: 'my' | 'public'
     defaultFilters?: Record<string, any>
@@ -39,8 +31,8 @@ export function useDatasetListPage(
     fetchFiles,
     applyFilters,
     handleSort,
-    goToPage: dsGoToPage,
-    changeSize: dsChangeSize,
+    goToPage,
+    changeSize,
     pagination,
   } = useDatasetList(fetcher, {
     defaultFilters: opts.defaultFilters,
@@ -48,18 +40,14 @@ export function useDatasetListPage(
     initialDesc: true,
   })
 
-  const { handleSearch, handleApplyFilters, goToPage, changeSize } =
-    useDatasetListRouteState({
-      page,
-      size,
-      meta,
-      auth,
-      fetchFiles,
-      applyFilters,
-      goToPage: dsGoToPage,
-      changeSize: dsChangeSize,
-      onMountedReady: opts.onMountedReady,
-    })
+  const { handleSearch, handleApplyFilters } = useDatasetListRouteState({
+    page,
+    size,
+    auth,
+    fetchFiles,
+    applyFilters,
+    onMountedReady: opts.onMountedReady,
+  })
 
   /** 上传成功后刷新当前页；弹窗关闭、配额刷新等由页面各自处理 */
   const refreshCurrentPage = () => fetchFiles({ page: page.value, size: size.value })

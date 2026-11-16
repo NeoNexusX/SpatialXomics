@@ -1,24 +1,12 @@
+import { useLatestRequest } from '@/shared/composables/useLatestRequest'
+import { usePagination } from '@/shared/composables/usePagination'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { listMyProcesses, deleteProcess, getProcessingStats, type ProcessRunFilter } from '@/features/datasets/api/datasetApi'
+import type { ProcessItem } from '@/features/datasets/types/dataset'
 import { parseAlgorithms } from '@/shared/utils/methodsNormalize'
-import { buildPageList } from '@/shared/utils/pagination'
 import { parseUtcDate } from '@/shared/utils/date'
 import { formatDate, formatDateTime, formatTime } from '@/shared/utils/format'
-import { getConfig } from '@/shared/config/runtimeConfig'
 import { t } from '@/i18n'
-
-export interface ProcessItem {
-  id: number
-  status: string
-  params_json: string
-  /** 源文件对外标识（16 位字符串 public_id），后端字段 source_file_public_id */
-  source_file_public_id: string
-  error_message: string | null
-  created_at: string
-  started_at: string | null
-  finished_at: string | null
-  filename?: string
-}
 
 export interface TaskRow {
   id: string
@@ -39,17 +27,13 @@ export interface TaskRow {
 }
 
 export function useWorkspaceDashboard() {
+  const requests = useLatestRequest()
   const processes = ref<ProcessItem[]>([])
   const loading = ref(false)
 
   // Pagination (后端分页)
-  const page = ref(1)
-  const size = ref(getConfig().pagination.defaultPageSize)
-  const meta = reactive({ current_page: 1, total_pages: 1, total_records: 0 })
-
-  const pagination = computed<(number | string)[]>(() =>
-    buildPageList(meta.current_page, meta.total_pages),
-  )
+  const pager = usePagination(() => fetchProcesses())
+  const { page, size } = pager
 
   // ── Computed ────────────────────────────────────────────────────
   function toTaskRow(p: ProcessItem): TaskRow {
@@ -106,49 +90,30 @@ export function useWorkspaceDashboard() {
   function applySearch(query: string) {
     const q = query.trim()
     filter.value = q ? { filename: q } : {}
-    fetchProcesses({ page: 1, size: size.value })
+    return fetchProcesses({ page: 1, size: size.value })
   }
 
   async function fetchProcesses(opts?: { page?: number; size?: number }) {
+    if (opts?.page) page.value = opts.page
+    if (opts?.size) size.value = opts.size
+    const isCurrent = requests.begin()
     loading.value = true
-    const p = opts?.page ?? page.value
-    const s = opts?.size ?? size.value
     try {
-      const result = await listMyProcesses(p, s, filter.value)
-      processes.value = Array.isArray(result?.data) ? result.data : []
-
-      if (result?.meta) {
-        meta.current_page = result.meta.current_page ?? p
-        meta.total_pages = result.meta.total_pages ?? 1
-        meta.total_records = result.meta.total_records ?? processes.value.length
-      }
-      page.value = p
-      size.value = s
+      const result = await listMyProcesses(page.value, size.value, filter.value)
+      if (!isCurrent()) return
+      processes.value = result.data
+      pager.setMeta(result.meta)
     } catch (e) {
+      if (!isCurrent()) return
       console.error('Failed to fetch processes:', e)
       processes.value = []
     } finally {
-      loading.value = false
+      if (isCurrent()) loading.value = false
     }
   }
 
-  function goToPage(np: number) {
-    const clamped = Math.max(1, Math.min(meta.total_pages || 1, np))
-    if (clamped === page.value) return
-    fetchProcesses({ page: clamped, size: size.value })
-  }
-
-  function changeSize(newSize: number) {
-    size.value = newSize
-    page.value = 1
-    fetchProcesses({ page: 1, size: newSize })
-  }
-
   // ── Delete ──────────────────────────────────────────────────────
-  const deletingId = ref<string | null>(null)
-
   async function deleteResult(id: string) {
-    deletingId.value = id
     try {
       await deleteProcess(id)
       // 从服务端刷新当前页，保持 meta 一致
@@ -161,8 +126,6 @@ export function useWorkspaceDashboard() {
     } catch (e) {
       console.error('Failed to delete process:', e)
       throw e
-    } finally {
-      deletingId.value = null
     }
   }
 
@@ -176,13 +139,12 @@ export function useWorkspaceDashboard() {
     loading,
     recentResults,
     summary,
-    deletingId,
     page,
     size,
-    meta,
-    pagination,
-    goToPage,
-    changeSize,
+    meta: pager.meta,
+    pagination: pager.pageRange,
+    goToPage: pager.goToPage,
+    changeSize: pager.changeSize,
     deleteResult,
     applySearch,
   }

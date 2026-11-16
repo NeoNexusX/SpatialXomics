@@ -152,15 +152,16 @@ const api = axios.create({ baseURL: ENV.apiBase })
 // Public API response interceptor
 api.interceptors.response.use((response) => response, error_catch)
 
+/** 后端错误体里的说明；没有响应体时是 axios 自己的 message */
+function backendDetail(error: any): unknown {
+  const data = error?.response?.data
+  return data?.detail ?? data?.message ?? data?.msg ?? error?.message
+}
+
 export function extractBackendError(error: any, fallback?: string): string {
   // Non-axios throws carry no backend payload; use the caller's fallback when given.
   if (fallback !== undefined && !axios.isAxiosError(error)) return fallback
-  const candidate =
-    error?.response?.data?.detail ??
-    error?.response?.data?.message ??
-    error?.response?.data?.msg ??
-    error?.message
-  return formatErrorMessage(candidate)
+  return formatErrorMessage(backendDetail(error))
 }
 
 /**
@@ -169,13 +170,9 @@ export function extractBackendError(error: any, fallback?: string): string {
  */
 export function isPermissionDenied(error: any): boolean {
   if (error?.response?.status === 403) return true
-  // 不走 extractBackendError：它对非 axios 错误会直接返回 fallback，绕过后端文本
-  const detail =
-    error?.response?.data?.detail ??
-    error?.response?.data?.message ??
-    error?.response?.data?.msg ??
-    error?.message
-  return /permission\s+denied|forbidden|not\s+(the\s+)?owner/i.test(formatErrorMessage(detail))
+  return /permission\s+denied|forbidden|not\s+(the\s+)?owner/i.test(
+    formatErrorMessage(backendDetail(error)),
+  )
 }
 
 export { auth_api, api }

@@ -12,7 +12,6 @@ import {
   addMembers,
   createCollection,
   deleteCollection,
-  getCollection,
   getPublicCollection,
   listAllCollections,
   listCollections,
@@ -58,12 +57,7 @@ describe('collectionApi', () => {
     const res = await listCollections(2, 10)
 
     expect(authPost).toHaveBeenCalledWith('/collections/list', {}, { params: { page: 2, size: 10 } })
-    expect(res.meta).toEqual({
-      current_page: 2,
-      current_records: 10,
-      total_pages: 3,
-      total_records: 25,
-    })
+    expect(res.meta).toEqual({ current_page: 2, total_pages: 3, total_records: 25 })
     expect(res.data).toHaveLength(1)
     expect(res.data.map((r) => r.name)).toEqual(['a'])
     expect(res.data[0]!.publicId).toBe('bB2cD4fG6hJ8kL0m')
@@ -87,12 +81,7 @@ describe('collectionApi', () => {
     authPost.mockResolvedValueOnce({ data: [row, row] })
     const plain = await listCollections(1, 10)
     expect(plain.data).toHaveLength(2)
-    expect(plain.meta).toEqual({
-      current_page: 1,
-      current_records: 0,
-      total_pages: 1,
-      total_records: 0,
-    })
+    expect(plain.meta).toEqual({ current_page: 1, total_pages: 1, total_records: 2 })
 
     authPost.mockResolvedValueOnce({ data: { items: [row] } })
     const items = await listCollections(1, 10)
@@ -122,14 +111,6 @@ describe('collectionApi', () => {
     )
     expect(res.data).toHaveLength(1)
     expect(res.meta.total_records).toBe(1)
-  })
-
-  it('getCollection maps the detail response', async () => {
-    authGet.mockResolvedValueOnce({ data: detailBody })
-    const d = await getCollection(CID)
-    expect(authGet).toHaveBeenCalledWith(`/collections/${CID}`)
-    expect(d.publicId).toBe(CID)
-    expect(d.members).toEqual([{ publicId: 'qW3rT5yU7iO9pA1s', imagePath: 'images/file_42/', filename: 'a.imzML', size: 0, status: '', isPublic: false, experimentType: null }])
   })
 
   it('createCollection posts payload and returns mapped detail', async () => {
@@ -197,11 +178,11 @@ describe('collectionApi', () => {
   })
 
   it('wraps axios errors into CollectionApiError with status and backend detail', async () => {
-    authGet.mockRejectedValueOnce({
+    authDelete.mockRejectedValueOnce({
       response: { status: 409, data: { detail: 'invalid collection members' } },
       message: 'Request failed with status code 409',
     })
-    const err = await getCollection(CID).catch((e) => e)
+    const err = await deleteCollection(CID).catch((e) => e)
     expect(err.status).toBe(409)
     expect(err.backendMessage).toBe('invalid collection members')
     expect(err.message).toBe('invalid collection members')

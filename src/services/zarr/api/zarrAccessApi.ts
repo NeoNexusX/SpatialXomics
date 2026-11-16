@@ -10,6 +10,7 @@
  */
 
 import { auth_api } from '@/shared/api/httpClient'
+import { unwrap } from '@/shared/api/response'
 import type { ZarrAccessResponse } from '../types/zarr'
 
 /**
@@ -23,7 +24,7 @@ import type { ZarrAccessResponse } from '../types/zarr'
  */
 export async function getZarrAccess(runId: string): Promise<ZarrAccessResponse> {
   if (!runId) throw new Error('[zarrAccessApi] runId is required')
-  const { data } = await auth_api.get<ZarrAccessResponse>(`/processes/${runId}/zarr`)
+  const data = await unwrap(auth_api.get<ZarrAccessResponse>(`/processes/${runId}/zarr`))
   if (!data?.sts_token?.AccessKeyId) {
     throw new Error('[zarrAccessApi] invalid zarr access response: missing sts_token')
   }

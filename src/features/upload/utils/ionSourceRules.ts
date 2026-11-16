@@ -10,7 +10,7 @@
  */
 
 /** 单个字段的规则片段（是否必填及展示文案） */
-export interface IonSourceFieldRule {
+interface IonSourceFieldRule {
   required: boolean
   label: string
   placeholder?: string

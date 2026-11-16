@@ -62,5 +62,5 @@ export function useUserQuota() {
     }
   }
 
-  return { quotaData, quota, loading, error, fetchQuota }
+  return { quota, loading, error, fetchQuota }
 }

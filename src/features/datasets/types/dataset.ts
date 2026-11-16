@@ -92,6 +92,20 @@ export interface FilePublicResponse {
   [key: string]: unknown
 }
 
+// POST /processes/mine 列表里的一条处理记录
+export interface ProcessItem {
+  id: number
+  status: string
+  params_json: string
+  /** 源文件对外标识（16 位字符串 public_id），后端字段 source_file_public_id */
+  source_file_public_id: string
+  error_message: string | null
+  created_at: string
+  started_at: string | null
+  finished_at: string | null
+  filename?: string
+}
+
 // GET /stats/processing - Processing statistics for current user
 export interface ProcessingStats {
   processing: number

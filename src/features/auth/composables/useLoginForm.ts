@@ -26,16 +26,10 @@ export function useLoginForm() {
 
     isLoading.value = true
     try {
-      const response = await loginApi({
+      const { access_token } = await loginApi({
         username: username.value,
         password: password.value,
       })
-
-      if (response.status !== 200) {
-        throw new Error(response.data?.message || t('auth.toast.serverUnreachable'))
-      }
-
-      const { access_token } = response.data
       if (!access_token) throw new Error(t('auth.toast.invalidToken'))
 
       // Await login(): authStore.login internally awaits fetchUser(), so the

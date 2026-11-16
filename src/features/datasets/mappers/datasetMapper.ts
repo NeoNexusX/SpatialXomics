@@ -1,21 +1,7 @@
-import type { File, FilePublicId } from '@/features/datasets/types/dataset'
+import type { File } from '@/features/datasets/types/dataset'
+import { toFilePublicId } from '../utils/publicId'
 
 const DISPLAY_EXTENSIONS = ['.zip', '.imzml', '.ibd', '.mzml', '.csv']
-
-/** 后端契约：public_id 恒为 16 位字母数字串 */
-const PUBLIC_ID_RE = /^[A-Za-z0-9]{16}$/
-
-/**
- * public_id 是硬性接口契约字段：缺失/非法直接抛错。静默兜底（如 String(undefined)）
- * 会把脏 id 顺着列表 key、路由 state 扩散成 "undefined" 路径，比渲染失败更难查。
- */
-export function toFilePublicId(value: unknown): FilePublicId {
-  const id = typeof value === 'string' ? value.trim() : ''
-  if (!PUBLIC_ID_RE.test(id)) {
-    throw new Error(`Backend contract violation: invalid file public_id ${JSON.stringify(value)}`)
-  }
-  return id
-}
 
 function stripKnownExtension(filename: string): string {
   const lower = filename.toLowerCase()

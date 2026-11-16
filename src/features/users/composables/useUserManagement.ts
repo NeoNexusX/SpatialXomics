@@ -1,8 +1,10 @@
-import { computed, onMounted, reactive, ref, watchEffect } from 'vue'
+import { useLatestRequest } from '@/shared/composables/useLatestRequest'
+import { usePagination } from '@/shared/composables/usePagination'
+import { onMounted, reactive, ref, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/shared/auth/authStore'
 import { useToast } from '@/shared/composables/useToast'
-import { buildPageList } from '@/shared/utils/pagination'
+import { useConfirmDelete } from '@/shared/composables/useConfirmDelete'
 import { getConfig } from '@/shared/config/runtimeConfig'
 import {
   deleteAdminUser,
@@ -14,29 +16,20 @@ import type { AdminUser, UserListFilters, UserQuotaLimits } from '@/features/use
 import { t } from '@/i18n'
 
 export function useUserManagement() {
+  const requests = useLatestRequest()
   // External composables
   const authStore = useAuthStore()
   const router = useRouter()
   const { showToast } = useToast()
 
-  // Pagination — same pattern as useDatasetList
-  const currentPage = ref(1)
-  const pageSize = ref<number>(getConfig().pagination.defaultPageSize)
+  const pager = usePagination(() => fetchUsers())
+  const { page: currentPage, size: pageSize } = pager
   const pageSizeOptions = getConfig().pagination.pageSizeOptions
-  const meta = reactive({ current_page: 1, total_pages: 1, total_records: 0 })
-
-  const pageRange = computed<(number | string)[]>(() =>
-    buildPageList(meta.current_page, meta.total_pages),
-  )
-
-  const from = computed(() => (meta.total_records ? (currentPage.value - 1) * pageSize.value + 1 : 0))
-  const to = computed(() => Math.min(currentPage.value * pageSize.value, meta.total_records))
 
   // State
   const users = ref<AdminUser[]>([])
   const loading = ref(true)
   const error = ref('')
-  const isConfirmOpen = ref(false)
 
   const filters = ref<UserListFilters>({
     username: '',
@@ -45,7 +38,6 @@ export function useUserManagement() {
     region: '',
   })
 
-  const isDrawerOpen = ref(false)
   const selectedUser = ref<AdminUser | null>(null)
 
   // Quota state
@@ -77,26 +69,21 @@ export function useUserManagement() {
   }
 
   const fetchUsers = async () => {
+    const isCurrent = requests.begin()
     loading.value = true
     error.value = ''
     try {
       const res = await listAdminUsers(filters.value, currentPage.value, pageSize.value)
-      users.value = res.data?.data || []
-      if (res.data?.meta) {
-        meta.current_page = res.data.meta.current_page || currentPage.value
-        meta.total_pages = res.data.meta.total_pages || 1
-        meta.total_records = res.data.meta.total_records || users.value.length
-      } else {
-        meta.current_page = currentPage.value
-        meta.total_pages = Math.ceil(users.value.length / pageSize.value) || 1
-        meta.total_records = users.value.length
-      }
+      if (!isCurrent()) return
+      users.value = res.data
+      pager.setMeta(res.meta)
     } catch (err: any) {
+      if (!isCurrent()) return
       console.error('Failed to load users:', err)
       error.value =
         err.message || t('common.feedback.loadFailed', { target: t('users.management.target') })
     } finally {
-      loading.value = false
+      if (isCurrent()) loading.value = false
     }
   }
 
@@ -111,22 +98,8 @@ export function useUserManagement() {
     fetchUsers()
   }
 
-  const goToPage = (np: number) => {
-    const clamped = Math.max(1, Math.min(meta.total_pages || 1, np))
-    if (clamped === currentPage.value) return
-    currentPage.value = clamped
-    fetchUsers()
-  }
-
-  const changeSize = (newSize: number) => {
-    pageSize.value = newSize
-    currentPage.value = 1
-    fetchUsers()
-  }
-
   const openDrawer = (user: AdminUser) => {
     selectedUser.value = user
-    isDrawerOpen.value = true
     quotaLimits.value = {
       max_total_file_size: user.max_total_file_size ?? 0,
       max_file_count: user.max_file_count ?? 0,
@@ -136,7 +109,6 @@ export function useUserManagement() {
   }
 
   const closeDrawer = () => {
-    isDrawerOpen.value = false
     selectedUser.value = null
   }
 
@@ -144,8 +116,7 @@ export function useUserManagement() {
     if (!selectedUser.value) return
     quotaLoading.value = true
     try {
-      const res = await updateUserQuota(selectedUser.value.id, { ...quotaLimits.value })
-      const data = res.data || {}
+      const data = (await updateUserQuota(selectedUser.value.id, { ...quotaLimits.value })) || {}
       quotaLimits.value = {
         max_total_file_size: data.max_total_file_size ?? quotaLimits.value.max_total_file_size,
         max_file_count: data.max_file_count ?? quotaLimits.value.max_file_count,
@@ -160,30 +131,17 @@ export function useUserManagement() {
     }
   }
 
-  const promptDeleteUser = () => {
-    if (selectedUser.value) isConfirmOpen.value = true
-  }
-
-  const cancelDeleteUser = () => {
-    isConfirmOpen.value = false
-  }
-
-  const executeDeleteUser = async () => {
-    if (!selectedUser.value) return
-    loading.value = true
-    try {
-      await deleteAdminUser(selectedUser.value.id)
-      showToast(t('common.feedback.deleted'), 'success')
-      isConfirmOpen.value = false
+  const deleteConfirm = useConfirmDelete({
+    onDelete: async (id: number) => {
+      await deleteAdminUser(id)
       closeDrawer()
       fetchStats()
       fetchUsers()
-    } catch (err: any) {
-      console.error('Failed to delete user:', err)
-      showToast(err.message || t('common.feedback.deleteFailed'), 'error')
-    } finally {
-      loading.value = false
-    }
+    },
+  })
+
+  const promptDeleteUser = () => {
+    if (selectedUser.value) deleteConfirm.open(selectedUser.value.id)
   }
 
   // Watchers
@@ -221,28 +179,23 @@ export function useUserManagement() {
     loading,
     error,
     authStore,
-    isConfirmOpen,
+    deleteConfirm,
     filters,
-    isDrawerOpen,
     selectedUser,
     stats,
     currentPage,
     pageSize,
     pageSizeOptions,
-    meta,
-    pageRange,
-    from,
-    to,
+    meta: pager.meta,
+    pageRange: pager.pageRange,
     fetchUsers,
     resetFilters,
     handleSearch,
-    goToPage,
-    changeSize,
+    goToPage: pager.goToPage,
+    changeSize: pager.changeSize,
     openDrawer,
     closeDrawer,
     promptDeleteUser,
-    cancelDeleteUser,
-    executeDeleteUser,
     quotaLimits,
     quotaLoading,
     saveUserQuota,

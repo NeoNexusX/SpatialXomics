@@ -1,4 +1,5 @@
 import { fileURLToPath, URL } from 'node:url'
+import { HttpsProxyAgent } from 'https-proxy-agent'
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
@@ -9,6 +10,41 @@ import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import tailwindcss from '@tailwindcss/vite';
 import vueI18n from '@intlify/unplugin-vue-i18n/vite'
+import { parseFrontmatter, parseMarkdown } from 'comark/parse'
+import breaks from 'comark/plugins/breaks'
+import frontmatter from 'comark/plugins/frontmatter'
+import html from 'comark/plugins/html'
+import taskList from 'comark/plugins/task-list'
+import cjkFriendly from 'markdown-it-cjk-friendly'
+
+/**
+ * 动态（/news）的 Markdown 在构建时解析，浏览器只拿结果，不用下载解析器。
+ * 文件是 src/features/news/content/<语言>/<YYYY-MM-DD-标识>.md：
+ * - 带 ?meta 导入只得到 frontmatter 里的 title、summary，给列表页
+ * - 直接导入得到整篇的 Comark 文档树，详情页用 MarkdownDocument 渲染
+ * 插件和助手一样没开 components、attributes，原因见 markdownSyntax.ts。
+ * 文件名或 frontmatter 不对时构建直接失败，并指出是哪个文件。
+ */
+const NEWS_PARSER = {
+  registerDefaultPlugins: false,
+  plugins: [frontmatter(), html(), taskList(), breaks(), { name: 'cjk-friendly', markdownItPlugins: [cjkFriendly] }],
+}
+
+function newsMarkdown(): Plugin {
+  return {
+    name: 'news-markdown',
+    async transform(code, id) {
+      const match = /\/features\/news\/content\/[^/]+\/([^/]+)\.md(\?meta)?$/.exec(id)
+      if (!match) return
+      const { title, summary } = parseFrontmatter(code).data
+      if (!/^\d{4}-\d{2}-\d{2}-/.test(match[1]!) || !title || !summary) {
+        this.error('动态的文件名要以 YYYY-MM-DD- 开头，frontmatter 要有 title 和 summary')
+      }
+      const value = match[2] ? { title, summary } : await parseMarkdown(code, NEWS_PARSER)
+      return `export default ${JSON.stringify(value)}`
+    },
+  }
+}
 
 /**
  * 构建期预压缩：为产物额外写出 .gz / .br，配合 nginx 的 gzip_static / brotli_static。
@@ -154,6 +190,17 @@ export default defineConfig(({ mode }) => {
   const envDir = fileURLToPath(new URL('./env', import.meta.url))
   const env = loadEnv(mode, envDir, 'VITE_')
   const backendUrl = env.VITE_BACKEND_URL || 'http://localhost:8000'
+  // Mainland dev networks often cannot reach Wayback directly. Allow a server-only
+  // proxy override; default to the local Clash HTTP proxy, and use "direct" to disable.
+  const hmdbArchiveProxyUrl =
+    process.env.HMDB_ARCHIVE_PROXY ??
+    process.env.HTTPS_PROXY ??
+    process.env.https_proxy ??
+    'http://127.0.0.1:7897'
+  const hmdbArchiveProxyAgent =
+    hmdbArchiveProxyUrl.toLowerCase() === 'direct'
+      ? undefined
+      : new HttpsProxyAgent(hmdbArchiveProxyUrl)
 
   return {
     envDir: envDir,
@@ -161,6 +208,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       vue(),
       vueDevTools(),
+      newsMarkdown(),
       tailwindcss(),
       vueI18n({
         include: [fileURLToPath(new URL('./src/i18n/locales/**', import.meta.url))],
@@ -182,12 +230,76 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true,
       proxy: {
+        // Keep Wayback XML server-side: archive responses have no CORS headers, and 2id_
+        // redirects to an external host. Rewrite that redirect back through this same origin.
+        '/hmdb-archive': {
+          target: 'https://web.archive.org',
+          changeOrigin: true,
+          ...(hmdbArchiveProxyAgent ? { agent: hmdbArchiveProxyAgent } : {}),
+          rewrite: (path) => {
+            const request = new URL(path, 'http://localhost')
+            const match = /^\/hmdb-archive\/(HMDB\d{5,})\.xml$/.exec(request.pathname)
+            const snapshot = request.searchParams.get('snapshot')
+            if (!match || (snapshot && !/^\d{14}$/.test(snapshot))) {
+              return '/__invalid_hmdb_archive_request__'
+            }
+            return `/web/${snapshot ? `${snapshot}id_` : '2id_'}/https://hmdb.ca/metabolites/${match[1]}.xml`
+          },
+          // Reject invalid requests locally (mirrors llmRelayPlugin's 400) and
+          // rewrite the 2id_ redirect back to this origin with ?snapshot=.
+          // The Location check stays case-sensitive on purpose: nginx's
+          // proxy_redirect regex below is the production counterpart and is
+          // also case-sensitive — keep the two relays diagnosing identically.
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq, req, res) => {
+              if (req.url?.includes('__invalid_hmdb_archive_request__')) {
+                // Answer invalid requests locally (same posture as
+                // llmRelayPlugin's 400) — never spend an upstream round trip
+                // on a garbage path.
+                proxyReq.destroy()
+                if (!res.headersSent) {
+                  res.writeHead(400, { 'Content-Type': 'application/json' })
+                  res.end(
+                    JSON.stringify({
+                      error: { message: 'invalid /hmdb-archive request: expected /hmdb-archive/HMDB######.xml' },
+                    }),
+                  )
+                }
+              }
+            })
+            proxy.on('proxyRes', (proxyRes) => {
+              const location = proxyRes.headers.location
+              if (proxyRes.statusCode !== 301 && proxyRes.statusCode !== 302) return
+              // Wayback answers 2id_ redirects with BOTH http and https, and
+              // canonicalises the host to www.hmdb.ca (seen 2026-11-11):
+              // https://web.archive.org/web/<ts>id_/https://www.hmdb.ca/metabolites/HMDB0007861.xml
+              // An exact-scheme/host regex turned every such capture into a 502.
+              const match =
+                typeof location === 'string' &&
+                /^https?:\/\/web\.archive\.org\/web\/(\d{14})id_\/https?:\/\/(?:www\.)?hmdb\.ca\/metabolites\/(HMDB\d{5,})\.xml$/.exec(
+                  location,
+                )
+              if (match) {
+                proxyRes.headers.location = `/hmdb-archive/${match[2]}.xml?snapshot=${match[1]}`
+              } else {
+                proxyRes.statusCode = 502
+                delete proxyRes.headers.location
+              }
+            })
+          },
+        },
+        // Live KEGG tools use the official REST API via same-origin requests.
+        '/kegg-rest': {
+          target: 'https://rest.kegg.jp',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/kegg-rest/, ''),
+        },
         '/api': {
           target: backendUrl,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, '')
         },
-        // AI 助手 LLM 中转（仅 dev）：浏览器直连外部 LLM 端点会受本机代理/CORS 影响
+        // SXO-Harness LLM 中转（仅 dev）：浏览器直连外部 LLM 端点会受本机代理/CORS 影响
         // （系统代理转发 502、长 SSE 流被掐断），经 vite dev server 服务端转发规避。
         // 生产环境不走这里（同源 nginx 转发或浏览器直连 BYOK 端点）。
         // - /llm-proxy：env 默认端点（VITE_LLM_PROXY_URL）
@@ -264,14 +376,11 @@ export default defineConfig(({ mode }) => {
               // 重型库：仅特定路由用到，保持独立懒加载 chunk
               if (id.includes('node_modules/echarts/') || id.includes('node_modules/zrender/')) return 'vendor-echarts'
               if (id.includes('node_modules/ali-oss/')) return 'vendor-oss'
-              // AI 聊天框架库（TDesign/MateChat/ElementPlusX/DeepChat）不设任何
-              // 特殊规则：它们只被各 Chat* 异步组件引用，Rollup 默认分包会把
-              // 各自的依赖树自然归入对应懒加载 chunk，不会进首屏（此前这里曾维护
-              // 一份 ~40 项的排除正则，但与下方「其余 node_modules 全部交默认分包」
-              // 完全重复——删掉，新增框架/升级依赖不再需要手改构建配置）。
+              // SXO-Harness的依赖（AI SDK、reka-ui、Comark、shiki）不设特殊规则：它们只被助手的
+              // 异步组件引用，Rollup 默认分包会把它们归入懒加载 chunk，不会进首屏。
               // 其余 node_modules：不强制聚合进单一 vendor，交 Rollup 默认分包。
               // 项目通用库会被 Rollup 归入首屏共享 chunk（效果同旧 vendor 但自主分配），
-              // 仅 AI 助手用的大库则自然落到各自懒加载 chunk。
+              // 仅 SXO-Harness用的库则自然落到各自懒加载 chunk。
               return
             }
           },

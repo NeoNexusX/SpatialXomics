@@ -68,7 +68,7 @@ export function useResultMeta(runId: Ref<string>) {
     () => stateName.value || metadataAttrsRef.value?.name || processName.value,
   )
 
-  // 极性同步到模块级 polarityRef（AI 助手的数据集概览读取它）
+  // 极性同步到模块级 polarityRef（SXO-Harness的数据集概览读取它）
   watch(
     () => acquisition.value.polarity,
     (p) => (polarityRef.value = p),

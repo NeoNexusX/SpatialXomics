@@ -4,7 +4,7 @@ The **Database** entry in the top navigation bar opens the platform's built-in r
 
 **Author:** Chen Kejiang
 
-**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) or email **jydong@xmu.edu.cn**.
+**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) or email **jydong@xmu.edu.cn**.
 
 ::: tip When the annotation service is down
 Page data comes from the backend annotation service. When the service is unavailable, the page shows an error message — click **Retry** to reload; once the service recovers, retrying brings back the full database.

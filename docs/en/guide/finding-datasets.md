@@ -4,7 +4,7 @@ Search, filter, and sort public and personal datasets on SpatialXomics.
 
 **Author:** Chen Kejiang
 
-**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) or email **jydong@xmu.edu.cn**.
+**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) or email **jydong@xmu.edu.cn**.
 
 ## Search by Name
 
@@ -44,7 +44,6 @@ Click **Add filter**, choose your criteria, then click **Apply**.
 | **Filename** | Text | `0e75ee_Human_Brain_MALDI_20_Positive` |
 | **Experiment Type** | Multi-select | imzML, Other |
 | **Submitted By** | Text | Submitter's username |
-| **Owner** | Text | Dataset owner (shown on Public Datasets only) |
 | **Organism** | Multi-select | Human, Mouse, Rat, Zebrafish… |
 | **Organism Part** | Multi-select | Brain, Heart, Liver, Tumor, Whole organism… |
 | **Condition** | Multi-select | Control, Disease, Cancer, Drug-treated, Genetic modification… |
@@ -58,7 +57,7 @@ Click **Add filter**, choose your criteria, then click **Apply**.
 | **Ionisation Source** | Multi-select | MALDI, DESI, SIMS, AP-MALDI, LDI… |
 | **Analyzer** | Multi-select | Orbitrap Exploris 480, Q Exactive HF, timsTOF fleX, TOF… |
 
-**Multi-select** filters are tag inputs: pick values from the vocabulary dropdown or type your own; multiple values within one field are OR-ed. The **Owner** filter is not shown on **My Datasets** — that list is always limited to your own uploads.
+**Multi-select** filters are tag inputs: pick values from the vocabulary dropdown or type your own; multiple values within one field are OR-ed.
 
 ## Sort
 

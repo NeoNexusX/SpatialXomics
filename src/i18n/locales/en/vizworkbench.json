@@ -67,7 +67,7 @@
       "log": "Log",
       "ticNorm": "TIC",
       "ticNormHint": "Divide each pixel by its total ion current (pre-computed stats/tic)",
-      "exportPng": "Export current view as PNG",
+      "exportImage": "Export current view",
       "zoomOut": "Zoom out",
       "zoomIn": "Zoom in",
       "resetZoom": "Reset zoom"
@@ -79,7 +79,6 @@
       "loadFailed": "Load failed, click to retry",
       "remove": "Remove channel m/z {mz}",
       "add": "Add m/z {mz}",
-      "empty": "Add the current m/z to start overlaying.",
       "full": "Maximum of {max} channels reached.",
       "enableFirst": "Enable overlay mode first",
       "colorsInUse": "All channel colors are in use",

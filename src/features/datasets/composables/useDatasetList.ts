@@ -1,17 +1,18 @@
-import { computed, reactive, ref } from 'vue'
+import { useLatestRequest } from '@/shared/composables/useLatestRequest'
+import { usePagination } from '@/shared/composables/usePagination'
+import { reactive, ref } from 'vue'
 import { mapItemToDataset } from '@/features/datasets/mappers/datasetMapper'
-import { buildPageList } from '@/shared/utils/pagination'
-import { getConfig } from '@/shared/config/runtimeConfig'
+import type { Page } from '@/shared/api/response'
 import type { File } from '@/features/datasets/types/dataset'
 import type { FileListSort } from '@/features/datasets/api/datasetApi'
 import { t } from '@/i18n'
 
-type Fetcher = (
+export type DatasetFetcher = (
   filters: Record<string, any>,
   page: number,
   size: number,
   sort?: FileListSort,
-) => Promise<any>
+) => Promise<Page<unknown>>
 
 /** 前端排序键 → 后端 sort_by 白名单（submission_time=上传时间，size_bytes=文件大小） */
 function toServerSort(key: string): FileListSort['sortBy'] {
@@ -20,7 +21,7 @@ function toServerSort(key: string): FileListSort['sortBy'] {
 
 export function useDatasetList(
   // Arguments
-  fetcher: Fetcher,
+  fetcher: DatasetFetcher,
   opts?: { defaultFilters?: Record<string, any>; initialSort?: string; initialDesc?: boolean },
 ) {
   const defaultFilters = opts?.defaultFilters || {}
@@ -28,23 +29,18 @@ export function useDatasetList(
   const initialDesc = opts?.initialDesc ?? true
 
   // State
+  const requests = useLatestRequest()
   const datasets = ref<File[]>([])
   const loading = ref(false)
   const error = ref('')
 
-  const meta = reactive({ current_page: 1, current_records: 0, total_pages: 1, total_records: 0 })
-  const page = ref<number>(1)
-  const size = ref<number>(getConfig().pagination.defaultPageSize)
+  const pager = usePagination(() => fetchFiles())
+  const { page, size } = pager
 
   const filters = reactive({ ...defaultFilters })
 
   const currentSort = ref<string>(initialSort)
   const sortDesc = ref<boolean>(initialDesc)
-
-  // Computed
-  const pagination = computed<(number | string)[]>(() =>
-    buildPageList(meta.current_page, meta.total_pages),
-  )
 
   // Methods
   const normalizeFilters = (f: Record<string, any>) => {
@@ -63,39 +59,29 @@ export function useDatasetList(
   }
 
   const fetchFiles = async (opts?: { page?: number; size?: number }) => {
+    if (opts?.page) page.value = opts.page
+    if (opts?.size) size.value = opts.size
+    const isCurrent = requests.begin()
     loading.value = true
     error.value = ''
-    const p = opts?.page ?? page.value
-    const s = opts?.size ?? size.value
     const sort: FileListSort = {
       sortBy: toServerSort(currentSort.value),
       order: sortDesc.value ? 'desc' : 'asc',
     }
     try {
-      // fetcher 现已返回解包后的响应体（{ data, meta }），不再是 axios response
-      const data = (await fetcher(normalizeFilters(filters as Record<string, any>), p, s, sort)) || {}
-
-      if (data.meta) {
-        meta.current_page = data.meta.current_page || p
-        meta.current_records =
-          data.meta.current_records || (Array.isArray(data.data) ? data.data.length : 0)
-        meta.total_pages = data.meta.total_pages || 1
-        meta.total_records = data.meta.total_records || meta.current_records
-      }
-
-      // 排序已由服务端完成（同值行按 public_id 倒序兜底），前端不再重排
-      datasets.value = Array.isArray(data.data)
-        ? data.data.map((it: any, idx: number) => mapItemToDataset(it, idx))
-        : []
-      page.value = p
-      size.value = s
+      const res = await fetcher(normalizeFilters(filters as Record<string, any>), page.value, size.value, sort)
+      if (!isCurrent()) return
+      // The server owns ordering and may clamp an out-of-range page.
+      datasets.value = res.data.map((it, idx) => mapItemToDataset(it, idx))
+      pager.setMeta(res.meta)
     } catch (err: any) {
+      if (!isCurrent()) return
       // 不向外显底层错误内容（状态码/堆栈），统一一句话；原因留控制台
       console.error('[useDatasetList] load failed:', err)
       error.value = t('common.feedback.loadFailed', { target: t('datasets.list.target') })
       datasets.value = []
     } finally {
-      loading.value = false
+      if (isCurrent()) loading.value = false
     }
   }
 
@@ -114,32 +100,19 @@ export function useDatasetList(
     fetchFiles({ page: 1, size: size.value })
   }
 
-  const goToPage = (np: number) => {
-    if (np < 1) np = 1
-    if (np > (meta.total_pages || 1)) np = meta.total_pages || 1
-    page.value = np
-    fetchFiles({ page: np, size: size.value })
-  }
-
-  const changeSize = (newSize: number) => {
-    size.value = newSize
-    page.value = 1
-    fetchFiles({ page: 1, size: newSize })
-  }
-
   return {
     datasets,
     loading,
     error,
-    meta,
+    meta: pager.meta,
     page,
     size,
     filters,
     fetchFiles,
     applyFilters,
     handleSort,
-    goToPage,
-    changeSize,
-    pagination,
+    goToPage: pager.goToPage,
+    changeSize: pager.changeSize,
+    pagination: pager.pageRange,
   }
 }

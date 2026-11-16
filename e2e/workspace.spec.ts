@@ -8,7 +8,6 @@ import { test, expect } from '@playwright/test'
  *
  * 涉及真实后端任务的链路不在本文件：
  *   - Peak Alignment 链路（submit → 查看 → 清理）见 new-analysis.spec.ts
- *   - Explore（raw-convert）链路见 datasets.spec.ts
  */
 
 test.describe('Workspace', () => {

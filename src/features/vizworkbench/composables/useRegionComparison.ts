@@ -33,9 +33,7 @@ import type { KmeansCluster } from '@/features/vizworkbench/composables/useOverl
 import type { ConfirmedROI } from '@/features/vizworkbench/composables/useROI'
 import type { ImportedMask } from '@/features/vizworkbench/composables/useImportedMasks'
 import {
-  COMPARISON_A_OVERLAY_ALPHA,
   COMPARISON_A_RGB,
-  COMPARISON_B_OVERLAY_ALPHA,
   COMPARISON_B_RGB,
   rgbCss,
   type RGB,
@@ -90,10 +88,6 @@ export interface RegionThumbnailRegion {
   mask: Uint8Array
 }
 
-// ---------- constants ----------
-
-/** m/z bin width (Da) for processed-mode region comparison. */
-
 /**
  * Category from per-ion stats. Pure so it can run both at scan time and
  * again client-side when the user adjusts the enrichment ratio — the
@@ -112,6 +106,8 @@ function categorize(
   if (detRatio > 0 && 1 / detRatio >= enrichmentRatio) return 'b-enriched'
   return 'shared'
 }
+
+/** m/z bin width (Da) for processed-mode region comparison. */
 const PROCESSED_BIN_WIDTH = 0.01
 
 // ---------- composable ----------
@@ -127,7 +123,6 @@ export function useRegionComparison(deps: {
   ionRows: Ref<number>
   dataMode: Ref<DataMode | null>
   onSelectMzIndex: (idx: number) => void | Promise<void>
-  setComparisonOverlay: (rgba: Uint8ClampedArray | null) => void
 }) {
   const regionAIds = ref<string[]>([])
   const regionBIds = ref<string[]>([])
@@ -153,7 +148,6 @@ export function useRegionComparison(deps: {
       return cat === c.category ? c : { ...c, category: cat }
     })
   })
-  const overlayVisible = ref(false)
   /** Breakdown of how many ions were filtered out and why. */
   const filterStats = ref<{ total: number; kept: number; filtered: number }>({
     total: 0,
@@ -161,18 +155,16 @@ export function useRegionComparison(deps: {
     filtered: 0,
   })
 
-  let cancelled = false
+  /** 每次比较一个代次，取消或开始新比较都会让进行中的那次作废 */
+  let currentRun = 0
 
   // 组件卸载时取消进行中的比较，避免后台扫描继续吃 CPU/网络
   onScopeDispose(() => {
-    cancelled = true
+    currentRun++
   })
-  // Cached per-member 2D raster masks (with their sources) + dims for overlay
-  // building on result click. Members are kept separate so the overlay can
-  // paint each member in its own identity color.
-  let cachedMembersA: { source: RegionSource; raster: Uint8Array }[] = []
-  let cachedMembersB: { source: RegionSource; raster: Uint8Array }[] = []
-  let cachedDims: { width: number; height: number } | null = null
+  // Sources of the last comparison, for involvesRoi / involvesImportedMask.
+  let lastSourcesA: RegionSource[] = []
+  let lastSourcesB: RegionSource[] = []
 
   const availableRegions = computed<RegionOption[]>(() => {
     const regions: RegionOption[] = []
@@ -440,13 +432,12 @@ export function useRegionComparison(deps: {
     const sourcesB = regionBIds.value.map(parseRegion).filter((s): s is RegionSource => !!s)
     if (!sourcesA.length || !sourcesB.length) return
 
+    const run = ++currentRun
+    const cancelled = () => run !== currentRun
     comparing.value = true
-    cancelled = false
     progress.value = 0
     error.value = null
     results.value = []
-    overlayVisible.value = false
-    deps.setComparisonOverlay(null)
 
     try {
       // Build per-member rasters, then OR-combine into one group mask per side
@@ -460,18 +451,15 @@ export function useRegionComparison(deps: {
       const [height, width] = store.spatialShape
       const rasterA = combineRasters(membersA, width * height)
       const rasterB = combineRasters(membersB, width * height)
-      cachedMembersA = membersA
-      cachedMembersB = membersB
-      cachedDims = { width, height }
-
-      if (cancelled) return
+      lastSourcesA = membersA.map((member) => member.source)
+      lastSourcesB = membersB.map((member) => member.source)
 
       // Convert to 1D coordinates-order masks
       const [maskA, maskB] = await Promise.all([
         store.buildPixelMask(rasterA),
         store.buildPixelMask(rasterB),
       ])
-      if (cancelled) return
+      if (cancelled()) return
 
       if (maskA.pixelCount === 0 || maskB.pixelCount === 0) {
         error.value = t('vizworkbench.compare.emptyRegion')
@@ -490,9 +478,9 @@ export function useRegionComparison(deps: {
           (done, total) => {
             progress.value = Math.round((done / total) * 100)
           },
-          () => cancelled,
+          cancelled,
         )
-        if (cancelled) return
+        if (cancelled()) return
         if (binCount === 0) {
           error.value = t('vizworkbench.compare.noBins')
           return
@@ -527,9 +515,9 @@ export function useRegionComparison(deps: {
           (done, total) => {
             progress.value = Math.round((done / total) * 100)
           },
-          () => cancelled,
+          cancelled,
         )
-        if (cancelled) return
+        if (cancelled()) return
         if (!stats) {
           error.value = t('vizworkbench.compare.needsPixelMajor')
           return
@@ -558,10 +546,11 @@ export function useRegionComparison(deps: {
 
       results.value = comparisons
     } catch (e) {
+      if (cancelled()) return
       console.error('[useRegionComparison] compare failed:', e)
       error.value = t('vizworkbench.compare.failed')
     } finally {
-      comparing.value = false
+      if (!cancelled()) comparing.value = false
     }
   }
 
@@ -571,46 +560,6 @@ export function useRegionComparison(deps: {
    *  Processed mode has no ion image - the row click is a no-op. */
   function selectMz(ionIndex: number) {
     deps.onSelectMzIndex(ionIndex)
-  }
-
-  /** Build and show the overlay highlighting the two groups in their fixed
-   *  identity colors. B is painted after A with lower alpha so overlap shows
-   *  through instead of reading as B-only. */
-  function showOverlay() {
-    if (!cachedDims || (!cachedMembersA.length && !cachedMembersB.length)) return
-    const { width, height } = cachedDims
-    const n = width * height
-    const rgba = new Uint8ClampedArray(n * 4)
-    const paint = (
-      members: { source: RegionSource; raster: Uint8Array }[],
-      c: RGB,
-      alpha: number,
-    ) => {
-      for (const m of members) {
-        for (let i = 0; i < n; i++) {
-          if (!m.raster[i]) continue
-          rgba[i * 4] = c.r
-          rgba[i * 4 + 1] = c.g
-          rgba[i * 4 + 2] = c.b
-          rgba[i * 4 + 3] = alpha
-        }
-      }
-    }
-    paint(cachedMembersA, COMPARISON_A_RGB, COMPARISON_A_OVERLAY_ALPHA)
-    paint(cachedMembersB, COMPARISON_B_RGB, COMPARISON_B_OVERLAY_ALPHA)
-    // else: transparent (alpha stays 0)
-    deps.setComparisonOverlay(rgba)
-    overlayVisible.value = true
-  }
-
-  function hideOverlay() {
-    deps.setComparisonOverlay(null)
-    overlayVisible.value = false
-  }
-
-  function toggleRegionOverlay() {
-    if (overlayVisible.value) hideOverlay()
-    else showOverlay()
   }
 
   // ---------- thumbnail ----------
@@ -654,13 +603,13 @@ export function useRegionComparison(deps: {
   // ---------- cleanup ----------
 
   function cancel() {
-    cancelled = true
+    currentRun++
+    comparing.value = false
   }
 
   /** True when the last comparison involved a member matching `pred`. */
   function involves(predicate: (source: RegionSource) => boolean): boolean {
-    const has = (members: { source: RegionSource }[]) => members.some((m) => predicate(m.source))
-    return has(cachedMembersA) || has(cachedMembersB)
+    return lastSourcesA.some(predicate) || lastSourcesB.some(predicate)
   }
 
   /** True when the last comparison involved an ROI (either side). With an id,
@@ -678,17 +627,14 @@ export function useRegionComparison(deps: {
   }
 
   function reset() {
-    cancelled = true
+    currentRun++
     results.value = []
     error.value = null
     progress.value = 0
     comparing.value = false
-    overlayVisible.value = false
     filterStats.value = { total: 0, kept: 0, filtered: 0 }
-    cachedMembersA = []
-    cachedMembersB = []
-    cachedDims = null
-    deps.setComparisonOverlay(null)
+    lastSourcesA = []
+    lastSourcesB = []
   }
 
   return {
@@ -703,12 +649,9 @@ export function useRegionComparison(deps: {
     error,
     results,
     categorizedResults,
-    overlayVisible,
     filterStats,
     availableRegions,
     canCompare,
-    selectedRegionsA,
-    selectedRegionsB,
     colorA,
     colorB,
     // Actions
@@ -718,8 +661,6 @@ export function useRegionComparison(deps: {
     involvesRoi,
     involvesImportedMask,
     selectMz,
-    toggleRegionOverlay,
-    hideOverlay,
     buildThumbnailRegions,
   }
 }

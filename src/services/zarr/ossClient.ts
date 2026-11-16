@@ -34,7 +34,13 @@ export class OssError extends Error {
 
 export interface OssClient {
   getObjectArrayBuffer(key: string): Promise<ArrayBuffer>
-  listObjects(prefix: string, maxKeys?: number): Promise<string[]>
+}
+
+/** Object key of a path inside a zarr folder. */
+export function ossKey(folder: string, relativePath: string): string {
+  const rel = relativePath.replace(/^\/+/, '')
+  if (!folder) return rel
+  return folder.endsWith('/') ? `${folder}${rel}` : `${folder}/${rel}`
 }
 
 function classifyError(err: unknown, objectKey: string): OssError {
@@ -209,32 +215,5 @@ export function createOssClient(
     }
   }
 
-  async function listObjects(prefix: string, maxKeys = 200): Promise<string[]> {
-    await ensureFreshCredentials()
-    const client = await getClient()
-    try {
-      const out: string[] = []
-      let marker: string | undefined
-
-      while (out.length < maxKeys) {
-        const resp = await client.list(
-          { prefix, 'max-keys': String(maxKeys - out.length), marker },
-        )
-        const objs = resp.objects ?? []
-        for (const o of objs) out.push(o.name)
-        if (!resp.isTruncated || !resp.nextMarker) break
-        marker = resp.nextMarker
-      }
-      return out
-    } catch (err) {
-      // List failure should not block the main flow; degrade to an empty list.
-      console.warn('[ossClient] listObjects failed:', (err as Error).message)
-      return []
-    }
-  }
-
-  return {
-    getObjectArrayBuffer,
-    listObjects,
-  }
+  return { getObjectArrayBuffer }
 }

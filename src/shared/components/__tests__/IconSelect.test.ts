@@ -5,6 +5,7 @@ import IconSelect from '../IconSelect.vue'
 const mountSelect = (props: Record<string, unknown> = {}) =>
   mount(IconSelect, {
     props: { modelValue: '', options: ['profile', 'centroid'], placeholder: 'Select...', ...props },
+    global: { stubs: { SvgIcon: true } },
   })
 
 const placeholderOption = (wrapper: ReturnType<typeof mountSelect>) => wrapper.find('option')
@@ -81,5 +82,17 @@ describe('IconSelect selected-value display', () => {
     expect(select.classes()).toContain('icon-select-native')
     // 选项列表仍是全称
     expect(select.findAll('option').map((o) => o.text())).toEqual(['Select...', 'profile', 'centroid'])
+  })
+})
+
+describe('IconSelect focus events', () => {
+  it('forwards focus and blur from the native select', async () => {
+    const wrapper = mountSelect()
+
+    await wrapper.find('select').trigger('focus')
+    await wrapper.find('select').trigger('blur')
+
+    expect(wrapper.emitted('focus')).toHaveLength(1)
+    expect(wrapper.emitted('blur')).toHaveLength(1)
   })
 })

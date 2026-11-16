@@ -1,0 +1,12 @@
+{
+  "news": {
+    "title": "News",
+    "subtitle": "Release notes and announcements",
+    "notice": "Notice",
+    "readMore": "Read more",
+    "newer": "Newer",
+    "older": "Older",
+    "empty": "No news yet",
+    "notFound": "This news item doesn't exist"
+  }
+}

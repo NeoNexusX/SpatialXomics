@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs'
 import { defineConfig } from 'vitepress'
 
 // ============================================================
@@ -12,7 +13,8 @@ import { defineConfig } from 'vitepress'
 //     docs/zh/dev/*.md  → 简体中文，URL 带 /zh 前缀
 // ============================================================
 
-const REPO = 'https://github.com/NeoNexusX/MassVision'
+const REPO = 'https://github.com/NeoNexusX/SpatialXomics'
+const diagramFile = (file: string) => new URL(`../archit_image/${file}`, import.meta.url)
 const YEAR = new Date().getFullYear()
 
 const en = {
@@ -31,6 +33,7 @@ const en = {
           { text: 'Collections', link: '/guide/collections' },
           { text: 'Dataset Overview', link: '/guide/dataset-overview' },
           { text: 'Data Visualization', link: '/guide/data-visualization' },
+          { text: 'SXO-Harness Agent', link: '/guide/sxo-harness' },
           { text: 'Database', link: '/guide/database' },
           { text: 'Upload Data', link: '/guide/upload-data' },
           { text: 'Dataset Analysis', link: '/guide/dataset-analysis' },
@@ -45,6 +48,8 @@ const en = {
         items: [
           { text: 'Tech Stack', link: '/dev/tech-stack' },
           { text: 'Frontend Architecture', link: '/dev/frontend-architecture' },
+          { text: 'Agent Architecture', link: '/dev/agent-architecture' },
+          { text: 'Testing and E2E', link: '/dev/testing' },
           { text: 'Icon Guidelines', link: '/dev/icon-guidelines' },
           { text: 'Documentation Maintenance', link: '/dev/doc-maintenance' },
         ],
@@ -76,10 +81,11 @@ const zh = {
           { text: '数据集合', link: '/zh/guide/collections' },
           { text: '数据集总览', link: '/zh/guide/dataset-overview' },
           { text: '数据可视化', link: '/zh/guide/data-visualization' },
+          { text: 'SXO-Harness 助手', link: '/zh/guide/sxo-harness' },
           { text: '数据库', link: '/zh/guide/database' },
           { text: '上传数据集', link: '/zh/guide/upload-data' },
           { text: '数据集分析', link: '/zh/guide/dataset-analysis' },
-          { text: '工作区', link: '/zh/guide/workspace' },
+          { text: '工作台', link: '/zh/guide/workspace' },
           { text: '导航说明', link: '/zh/guide/navigation' },
         ],
       },
@@ -90,6 +96,8 @@ const zh = {
         items: [
           { text: '技术栈', link: '/zh/dev/tech-stack' },
           { text: '前端架构边界', link: '/zh/dev/frontend-architecture' },
+          { text: 'Agent 架构', link: '/zh/dev/agent-architecture' },
+          { text: '测试与 E2E', link: '/zh/dev/testing' },
           { text: '图标使用规范', link: '/zh/dev/icon-guidelines' },
           { text: '文档维护', link: '/zh/dev/doc-maintenance' },
         ],
@@ -116,6 +124,33 @@ export default defineConfig({
   // 豁免 SPA 路由路径：/mydatasets 和 /datasets 是前端路由，非文档页面
   ignoreDeadLinks: [/^\/mydatasets/, /^\/datasets/],
   lastUpdated: true,       // 启用「最后更新时间」（读取 git 提交时间）
+  vite: {
+    plugins: [
+      {
+        name: 'arch-diagrams',
+        enforce: 'pre',
+        // 名字写错要让构建失败：组件在服务端渲染时抛错只会打日志，构建照样成功
+        transform(code, id) {
+          if (!id.endsWith('.md')) return
+          for (const [, name] of code.matchAll(/<ArchDiagram\b[^>]*\bname="([^"]+)"/g)) {
+            if (!existsSync(diagramFile(`${name}.html`))) this.error(`Unknown architecture diagram: ${name}`)
+          }
+        },
+        // 开发服务器把 .html 请求都当成文档页面，架构图要原样返回。
+        // 构建时不需要：ArchDiagram 的 ?url 导入会把它们输出到 assets/。
+        configureServer(server) {
+          server.middlewares.use((req, res, next) => {
+            const [path, query = ''] = (req.url ?? '').split('?')
+            const name = path!.match(/\/archit_image\/([\w.-]+\.html)$/)?.[1]
+            // ?url、?import 是 Vite 自己的模块请求，要继续交给它
+            if (!name || /\b(url|import)\b/.test(query)) return next()
+            res.setHeader('Content-Type', 'text/html; charset=utf-8')
+            res.end(readFileSync(diagramFile(name)))
+          })
+        },
+      },
+    ],
+  },
   markdown: {
     math: true,            // 数学公式（需依赖 markdown-it-mathjax3）
     // 提示容器(::: tip/warning/danger/details)、代码导入(<<< @/path)、

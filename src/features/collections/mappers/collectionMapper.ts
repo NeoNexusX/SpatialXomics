@@ -1,5 +1,5 @@
 import type { FilePublicResponse } from '@/features/datasets/types/dataset'
-import { toFilePublicId } from '@/features/datasets/mappers/datasetMapper'
+import { toFilePublicId } from '@/features/datasets/utils/publicId'
 import { METADATA_FIELDS } from '../constants/metadataFields'
 import { normalizeMetadataList } from '../utils/metadataPatch'
 import type {

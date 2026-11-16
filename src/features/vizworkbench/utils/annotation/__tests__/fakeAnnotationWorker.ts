@@ -6,7 +6,7 @@
 
 import { vi } from 'vitest'
 
-export interface FakeAnnotationWorker {
+interface FakeAnnotationWorker {
   onmessage: ((e: MessageEvent) => void) | null
   onerror: (() => void) | null
   terminated: boolean

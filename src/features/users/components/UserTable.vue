@@ -14,8 +14,6 @@ defineProps<{
   totalPages: number
   totalItems: number
   pageSize: number
-  from: number
-  to: number
   pageRange: (number | string)[]
 }>()
 

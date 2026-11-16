@@ -68,7 +68,7 @@ const strengthLabel = computed(() => passwordStrengthLabel(props.passwordScore))
           @focus="clearError('email')"
         />
       </div>
-      <div class="min-h-[56px flex flex-col justify-center]">
+      <div class="min-h-[56px] flex flex-col justify-center">
         <IconInput
           v-model="form.password"
           icon-type="password"

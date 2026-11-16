@@ -125,7 +125,7 @@ export function useDownloadProgress() {
    */
   const handleDownloadRaw = (
     publicId?: string,
-    options?: { getFallbackFilename?: () => string | undefined; isPublic?: boolean },
+    options?: { isPublic?: boolean },
   ) =>
     runRawDownload(
       publicId,

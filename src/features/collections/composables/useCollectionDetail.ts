@@ -1,6 +1,7 @@
-import { computed, onMounted, shallowRef, ref } from 'vue'
+import { computed, onMounted, shallowRef, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/shared/auth/authStore'
+import { useLatestRequest } from '@/shared/composables/useLatestRequest'
 import { collectionErrorMessage, getPublicCollection } from '../api/collectionApi'
 import { isCollectionApiError } from '../types/collection'
 import type { CollectionDetail } from '../types/collection'
@@ -35,21 +36,26 @@ export function useCollectionDetail() {
     () => !!detail.value && (detail.value.ownerUsername === auth.user?.username || auth.isAdmin),
   )
 
+  const requests = useLatestRequest()
+
   async function fetch() {
     if (isStale.value) return
+    const isCurrent = requests.begin()
     loading.value = true
     error.value = ''
     notFound.value = false
     try {
-      detail.value = await getPublicCollection(publicId.value)
+      const next = await getPublicCollection(publicId.value)
+      if (isCurrent()) detail.value = next
     } catch (err: any) {
+      if (!isCurrent()) return
       notFound.value = isCollectionApiError(err) && err.status === 404
       error.value = collectionErrorMessage(
         err,
         t('common.feedback.loadFailed', { target: t('collections.overview.target') }),
       )
     } finally {
-      loading.value = false
+      if (isCurrent()) loading.value = false
     }
   }
 
@@ -58,6 +64,8 @@ export function useCollectionDetail() {
   }
 
   onMounted(fetch)
+  // 同一路由换了参数时组件不会重建（如浏览器前进后退）
+  watch(publicId, fetch)
 
   return { detail, loading, error, notFound, isStale, canEdit, publicId, fetch, applyDetail }
 }

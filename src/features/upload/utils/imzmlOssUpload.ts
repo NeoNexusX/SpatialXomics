@@ -1,6 +1,6 @@
 import { type ImzmlFilePair, type UnifiedUploadProgress, type PartRetryInfo } from './imzmlHelper'
 import { prepareUpload, NON_DETERMINISTIC_ZIP } from './imzmlCompress'
-import { auth_api } from '@/shared/api/httpClient'
+import { preflightUpload, requestOssUpload, type OssUploadResponse } from '@/features/upload/api/uploadApi'
 import {
   saveUploadSession,
   loadUploadSession,
@@ -17,19 +17,6 @@ import { PartQueue } from './partQueue'
 import { UploadProgressMeter } from './zipSizeEstimator'
 import { ConcurrencyGovernor } from './concurrencyGovernor'
 import { t } from '@/i18n'
-
-// POST /files/upload 的返回
-export interface OssUploadResponse {
-  oss_sts_token: {
-    AccessKeyId: string
-    AccessKeySecret: string
-    SecurityToken: string
-    Expiration: string
-  }
-  oss_bucket: string
-  oss_path: string
-  oss_region_id: string
-}
 
 export interface UploadImzmlOssConfig {
   files?: ImzmlFilePair
@@ -74,7 +61,7 @@ const mismatchedSource = () => t('upload.error.mismatchedSource')
  */
 export type FailureDisposition = 'discard-session' | 'reset-parts' | 'keep-session'
 
-export function dispositionFor(err: unknown, zipMismatch: boolean): FailureDisposition {
+function dispositionFor(err: unknown, zipMismatch: boolean): FailureDisposition {
   if (zipMismatch || (err as { message?: unknown } | null)?.message === NON_DETERMINISTIC_ZIP) {
     return 'discard-session'
   }
@@ -189,8 +176,7 @@ export async function uploadImzmlZipFileOSS({
         message: t('upload.progress.checkingServer'),
       })
 
-      const preflightRes = await auth_api.post(
-        '/files/preflight',
+      const preflightData = await preflightUpload(
         {
           filename: normalizedFilename,
           size: sourceBytes,
@@ -200,9 +186,8 @@ export async function uploadImzmlZipFileOSS({
           ...metadata,
           storage_type: 'oss',
         },
-        { signal },
+        signal,
       )
-      const preflightData = preflightRes.data || preflightRes
       filePublicId = preflightData.public_id
       if (!filePublicId) throw new Error('Preflight did not return public_id')
 
@@ -226,11 +211,7 @@ export async function uploadImzmlZipFileOSS({
       // 阶段 3：取 OSS 凭证（压缩之前 —— 压缩产物直接就要往上传）
       // -----------------------------------------------------------
       onProgress?.({ stage: 'preflight', percent: 100, message: t('upload.progress.fetchingCredentials') })
-      const uploadRes = await auth_api.post(
-        '/files/upload',
-        new URLSearchParams({ filename: normalizedFilename, pre_public_id: filePublicId }),
-      )
-      ossData = uploadRes.data || uploadRes
+      ossData = await requestOssUpload(normalizedFilename, filePublicId)
 
       if (!ossData.oss_sts_token || !ossData.oss_bucket || !ossData.oss_path) {
         throw new Error('Backend did not return complete OSS credentials')

@@ -111,9 +111,9 @@ describe('annotation database', () => {
     expect('origin' in db.candidates[0]![4]!).toBe(false)
   })
 
-  it('still reads the older adduct-expanded format by formula', () => {
+  it.each(['formula', 'formula_ion'])('still reads the older adduct-expanded format with a %s column', (column) => {
     const csv = [
-      'formula,Ion type,Exp. m/z,Candidate_1,Candidate_2,Candidate_3',
+      `${column},Ion type,Exp. m/z,Candidate_1,Candidate_2,Candidate_3`,
       'C40H66O5,[M+H]+,627.498302,anhydride,FA 40:7;O3,',
       'C40H66O5,[M+K]+,665.454733,anhydride,FA 40:7;O3,',
       'C6H12O6,[M+Na]+,203.052610,Glucose,Galactose,nan',

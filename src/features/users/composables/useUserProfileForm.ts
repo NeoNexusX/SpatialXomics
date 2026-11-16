@@ -182,8 +182,7 @@ export function useUserProfileForm() {
     loading.value = true
     fetchQuota()
     try {
-      const res = await getCurrentUser()
-      applyUserData(res.data || {})
+      applyUserData((await getCurrentUser()) || {})
     } catch (error: any) {
       console.error('Failed to fetch user profile:', error)
       if (error.response && error.response.status === 401) {
@@ -224,8 +223,8 @@ export function useUserProfileForm() {
     }
 
     try {
-      const refreshRes = await getCurrentUser()
-      if (refreshRes.data) applyUserData({ ...formData, ...refreshRes.data })
+      const refreshed = await getCurrentUser()
+      if (refreshed) applyUserData({ ...formData, ...refreshed })
     } catch (refreshError) {
       console.warn('Silent refresh failed after save:', refreshError)
       failed = true

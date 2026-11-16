@@ -10,6 +10,7 @@
  * 字符串，t() 的 key 保持静态字面量，与 datasets/constants/vocabLabels.ts 的
  * 约定一致（可被类型检查与 ESLint 校验，切语言时随渲染刷新）。
  */
+import type { Page } from '@/shared/api/response'
 
 /** 行数据：键为列 key；各库的精确行类型需满足此形状 */
 export type DatabaseRow = Record<string, string | number>
@@ -45,7 +46,7 @@ export interface DatabaseListParams {
 }
 
 /** 数值区间值（如质量范围）；min/max 可只填一边 */
-export interface DatabaseRangeValue {
+interface DatabaseRangeValue {
   min?: number
   max?: number
 }
@@ -55,7 +56,7 @@ export type DatabaseFilterValue = string | DatabaseRangeValue
 export type DatabaseFilterValues = Record<string, DatabaseFilterValue>
 
 /** select 控件选项（origin 这类词表：值固定写死、文案走 i18n） */
-export interface DatabaseSelectOption {
+interface DatabaseSelectOption {
   value: string
   label: () => string
 }
@@ -73,7 +74,7 @@ export interface DatabaseSelectControl {
 }
 
 /** number-range 控件：数值区间（如质量），可只填一边，随「搜索」提交 */
-export interface DatabaseRangeControl {
+interface DatabaseRangeControl {
   kind: 'number-range'
   key: string
   label: () => string
@@ -84,17 +85,8 @@ export interface DatabaseRangeControl {
 /** 工具栏上关键词之外的筛选控件 */
 export type DatabaseFilterControl = DatabaseSelectControl | DatabaseRangeControl
 
-/** 分页信封的 meta，与 datasetApi / userAdminApi 的服务端分页响应一致 */
-export interface DatabasePageMeta {
-  current_page: number
-  total_pages: number
-  total_records: number
-  /** SI_DB 等新接口额外回传的本页行数（旧接口没有，可缺省） */
-  current_records?: number
-}
-
 /** 整库下载入口（如 SI_DB 的全量 CSV）。成功提示由 run 自理；失败抛本地化 Error，由调用方 toast */
-export interface DatabaseDownloadAction {
+interface DatabaseDownloadAction {
   label: () => string
   run: () => Promise<void>
 }
@@ -119,11 +111,6 @@ export interface DatabaseCsvImport {
    * 大小不一致时视为过期、重新下载。探测失败（如后端不可用）时仍可复用本地副本。
    */
   probe?: () => Promise<{ fileName: string; size: number }>
-}
-
-export interface DatabaseListResult {
-  data: DatabaseRow[]
-  meta: DatabasePageMeta
 }
 
 /** 数据源描述符：注册进 DATABASE_SOURCES 即出现在页面 tab 中 */
@@ -156,4 +143,4 @@ export interface DatabaseSource {
  * 本地化错误、由页面的错误态 + 重试承接。新数据库只需实现本契约并注册进
  * sources/index.ts。
  */
-export type DatabaseFetcher = (params: DatabaseListParams) => Promise<DatabaseListResult>
+export type DatabaseFetcher = (params: DatabaseListParams) => Promise<Page<DatabaseRow>>

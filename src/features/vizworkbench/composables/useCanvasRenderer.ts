@@ -1,5 +1,5 @@
 import { onBeforeUnmount, type Ref } from 'vue'
-import { buildLUT } from '../utils/colormapLut'
+import { buildLUT } from '@/shared/viz/colormapLut'
 import { computeFitTransform } from '../utils/fitTransform'
 import {
   CHANNEL_BACKGROUND,

@@ -41,7 +41,7 @@ const onGoToPage = (p: number) => emit('go-to-page', p)
     <!-- Error state -->
     <div
       v-else-if="error"
-      class="p-4 bg-error/10 dark:bg-error/10/30 rounded mb-4 border border-error/20 text-error kawaru-text-100"
+      class="p-4 bg-error/10 rounded mb-4 border border-error/20 text-error kawaru-text-100"
     >
       {{ error }}
     </div>

@@ -10,7 +10,7 @@ const {
   loading,
   error,
   authStore,
-  isConfirmOpen,
+  deleteConfirm,
   filters,
   currentPage,
   pageSize,
@@ -18,16 +18,12 @@ const {
   meta,
   stats,
   pageRange,
-  from,
-  to,
   fetchUsers,
   resetFilters,
   handleSearch,
   openDrawer,
   closeDrawer,
   promptDeleteUser,
-  cancelDeleteUser,
-  executeDeleteUser,
   goToPage,
   changeSize,
   quotaLimits,
@@ -82,8 +78,6 @@ const {
         :page-size="pageSize"
         :total-pages="meta.total_pages"
         :total-items="meta.total_records"
-        :from="from"
-        :to="to"
         :page-range="pageRange"
         @search="handleSearch"
         @reset-filters="resetFilters"
@@ -105,14 +99,14 @@ const {
 
     <!-- Delete Confirmation Modal -->
     <ConfirmDialog
-      :open="isConfirmOpen"
+      :open="deleteConfirm.isOpen"
       :title="$t('users.management.deleteTitle')"
       :message="$t('users.management.deleteMessage', { name: selectedUser?.username ?? '' })"
       :confirm-label="$t('users.management.deleteConfirm')"
       :danger="true"
-      :loading="loading"
-      @confirm="executeDeleteUser"
-      @cancel="cancelDeleteUser"
+      :loading="deleteConfirm.deleting"
+      @confirm="deleteConfirm.confirm"
+      @cancel="deleteConfirm.cancel"
     />
   </div>
 </template>

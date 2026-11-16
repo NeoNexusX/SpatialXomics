@@ -1,7 +1,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSendEmailCode } from '@/shared/composables/useSendEmailCode'
-import { api } from '@/shared/api/httpClient'
+import { resetPassword } from '@/shared/auth/authApi'
 import { useToast } from '@/shared/composables/useToast'
 import { SESSION_KEYS } from '@/shared/config'
 import { t } from '@/i18n'
@@ -145,7 +145,7 @@ export function useForgotPassword() {
 
     loading.reset = true
     try {
-      await api.post('/password_reset', {
+      await resetPassword({
         email: form.email,
         verify_code: form.verify_code,
         new_password: form.new_password,

@@ -59,7 +59,7 @@ export function useZoomPan(
     zoomAt(mx, my, zoom.value * factor)
   }
 
-  function onPanStart(e: MouseEvent, containerRef: HTMLElement | null) {
+  function onPanStart(e: MouseEvent) {
     if (zoom.value <= 1 || e.button !== 0) return
     e.preventDefault()
     const startX = e.clientX - panX.value
@@ -86,5 +86,5 @@ export function useZoomPan(
     if (activePanUp) document.removeEventListener('mouseup', activePanUp)
   })
 
-  return { zoom, panX, panY, resetZoom, zoomIn, zoomOut, setZoom, onWheel, onPanStart }
+  return { zoom, panX, panY, resetZoom, zoomIn, zoomOut, onWheel, onPanStart }
 }

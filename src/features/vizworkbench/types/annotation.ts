@@ -162,14 +162,14 @@ export interface Molecule {
   missing: MissingAdduct[]
 }
 
-export interface MissingAdduct {
+interface MissingAdduct {
   adduct: AdductId
   theoMz: number
   /** 理论 m/z 超出参与匹配的峰的 m/z 范围 */
   outOfRange: boolean
 }
 
-export type SpatialState = 'queued' | 'done' | 'na' | 'error'
+type SpatialState = 'queued' | 'done' | 'na' | 'error'
 
 export interface IonScores {
   /** 质量误差分 0..1 */

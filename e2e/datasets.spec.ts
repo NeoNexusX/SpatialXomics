@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Locator } from '@playwright/test'
-import { sizeToMB, ALGO_DATASET_NAMES } from './utils.js'
+import { sizeToMB, startRawDownload, ALGO_DATASET_NAMES } from './utils.js'
 
 const MAX_DOWNLOAD_MB = 300
 
@@ -30,114 +30,36 @@ async function findVisualizableDatasetCard(page: Page): Promise<{ card: Locator;
 }
 
 /**
- * 下载用例共用体（/mydatasets 与 /datasets 各跑一遍），按浏览器分档：
- *
- * chromium —— 随机选一张 <300MB 的卡做真实下载（download 事件 + 文件名校验），
- *   限流窗口内的第二次点击被拦截。真实下载只在这一个浏览器做。
- * firefox/webkit —— 不做真实下载：连跑时后端排队可到 55s+（甚至超过 90s 事件
- *   等待）、还会继续消耗账号限流配额，正是历史 flake 的来源。只点一次下载
- *   按钮、断言限流提示（服务端 403 对限流请求短路排队，提示是即时的；
- *   chromium 先跑已耗配额，所以这是常见形态）。15s 内没出现说明窗口已过——
- *   本浏览器无从断言提示，按环境因素 skip，**绝不回落到等真实下载事件**
- *   （那正是要消灭的 flake 路径）。
- *
- * 两侧原本各有一份逐行相同的实现，收敛到一处，精修过的时序逻辑不再漂移。
+ * 真实下载（/mydatasets 与 /datasets 各跑一遍）：后端真实签发 + 浏览器真实访问 OSS，
+ * 只在 chromium 上跑。按钮、限流提示、资料校验这些前端行为在各浏览器上由
+ * datasets.offline.spec.ts 确定地验证，这里不再重复，也不多耗账号的下载配额。
  */
-async function downloadRandomCardThenRateLimited(
-  page: Page,
-  path: '/mydatasets' | '/datasets',
-  browserName: string,
-) {
+async function expectRealDownloadStarts(page: Page, path: '/mydatasets' | '/datasets') {
   await page.goto(path)
   await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 15_000 })
 
   const downloadBtns = page.locator('button').filter({ hasText: /Download/ })
   await downloadBtns.first().waitFor({ state: 'visible', timeout: 10_000 })
-  const count = await downloadBtns.count()
 
-  // 过滤出文件 < 300MB 的卡片索引
-  const eligible: number[] = []
-  for (let i = 0; i < count; i++) {
-    const card = downloadBtns.nth(i).locator('..').locator('..')
-    const sizeText = await card.locator('p:has-text("File Size:")').innerText()
-    if (sizeToMB(sizeText) < MAX_DOWNLOAD_MB) eligible.push(i)
+  // 选第一张 < 300MB 的卡，失败时可复现
+  let pick = -1
+  for (let i = 0, count = await downloadBtns.count(); i < count && pick < 0; i++) {
+    const sizeText = await downloadBtns.nth(i).locator('..').locator('..').locator('p:has-text("File Size:")').innerText()
+    if (sizeToMB(sizeText) < MAX_DOWNLOAD_MB) pick = i
   }
-  test.skip(eligible.length === 0, `No card under ${MAX_DOWNLOAD_MB}MB on this backend`)
+  test.skip(pick < 0, `No card under ${MAX_DOWNLOAD_MB}MB on this backend`)
 
-  const pick = eligible[Math.floor(Math.random() * eligible.length)]!
-  const card = downloadBtns.nth(pick).locator('..').locator('..')
   // 卡片里还有一个内联的 Share Dataset 确认弹窗（h3 常驻 DOM），
   // 用 aria-label 前缀钉死数据集名那个 h3
-  const cardName = await card.locator('h3[aria-label^="Dataset name:"]').innerText()
-  await expect(card.locator('h3[aria-label^="Dataset name:"]')).not.toBeEmpty()
-  console.log(`[download/${path.slice(1)}] random pick: ${cardName}`) // 随机选卡留痕，flake 时可复现
+  const card = downloadBtns.nth(pick).locator('..').locator('..')
+  const cardName = (await card.locator('h3[aria-label^="Dataset name:"]').innerText()).replace('Dataset name: ', '').trim()
+  expect(cardName).not.toBe('')
 
-  // waitForEvent 必须注册在 click 之前：小文件时下载事件可能在任何 toast 等待
-  // 结束前就已发出，事后注册会错过事件。显式给超时：playwright.config 的
-  // actionTimeout: 0 会一路传成它的默认超时（无限等），干烧到全局超时 fail
-  const downloadP = page.waitForEvent('download', { timeout: 90_000 })
-  downloadP.catch(() => {}) // 走限流分支时别让 90s 后的超时 rejection 变 unhandled
-  await downloadBtns.nth(pick).click()
-
-  if (browserName !== 'chromium') {
-    // ---- 轻量模式（firefox/webkit）：只断言入口点击与限流提示 ----
-    // 限流提示是即时的（服务端 403 "Download limit reached" 是账号级配额、跨浏览器
-    // 共享，chromium 先跑所以这里是常见形态；客户端冷却 "Download is limited" 是兜底）。
-    const limited = await page
-      .getByText(/Download is limited|Download limit reached/)
-      .waitFor({ timeout: 15_000 })
-      .then(
-        () => true,
-        () => false,
-      )
-    if (!limited) {
-      // 窗口已过：本浏览器无从断言限流提示（回落到等真实下载事件正是历史 flake
-      // 的来源，实测后端排队可超过 90s 事件等待，不做）。按钮可点本身已验证。
-      test.skip(true, 'rate-limit window not active on this browser — prompt not assertable')
-    }
-    return
-  }
-
-  // ---- chromium：真实下载 + 限流拦截 ----
-  // 限流 toast 先到就按环境因素跳过
-  const limited = await Promise.race([
-    downloadP.then(() => false),
-    page
-      .getByText(/Download is limited|Download limit reached/)
-      .waitFor({ timeout: 8_000 })
-      .then(
-        () => true,
-        () => false,
-      ),
-  ])
-  if (limited) {
-    test.skip(true, 'rate-limit window exhausted by sibling download tests in this run')
-    return
-  }
-  const download = await downloadP // 90s：覆盖后端排队实测的 55s+，也给后续断言留余量
-  const filename = download.suggestedFilename()
-  expect(filename).toContain(cardName!.replace('Dataset name: ', ''))
-  await expect(page.getByText('Download started')).toBeVisible()
-
-  // 立即取消下载：delete() 会等整个文件下完（大文件几十秒起），
-  // 文件名断言不依赖下载完成，cancel 即可（WebKit 偶发超时，忽略）
-  try {
-    await download.cancel()
-  } catch {
-    /* ok */
-  }
-
-  // 冷却其实在下 iframe 的微任务里就起算了（completeDownload 早于浏览器 download
-  // 事件），这 2s 只是等 "Download started" 成功 toast（3s 自动消失）先散场。
-  // 第二张选另一张符合条件的卡；没有就重复同一张
-  await page.waitForTimeout(2000)
-  const others = eligible.filter((i) => i !== pick)
-  const second = others.length > 0 ? others[Math.floor(Math.random() * others.length)]! : pick
-  await downloadBtns.nth(second).click()
-  // 必须用 getByText 钉死限流 toast 本身，不能 locator('.toast') + toContainText：
-  // 命中多个 .toast 时直接 strict mode violation，且不进重试、当场失败——成功
-  // toast 只要还剩零点几秒寿命，就会把限流断言顶爆
-  await expect(page.getByText(/Download is limited/)).toBeVisible({ timeout: 10_000 })
+  // 只验证下载已开始：不等文件下完，后面立刻取消，省 OSS 流量
+  const downloads = await startRawDownload(page, downloadBtns.nth(pick))
+  test.skip(downloads === null, 'Account download quota exhausted (HTTP 403)')
+  for (const download of downloads!) expect(download.suggestedFilename()).toContain(cardName)
+  await Promise.all(downloads!.map((download) => download.cancel().catch(() => {})))
 }
 
 /**
@@ -252,17 +174,11 @@ test.describe('My Datasets', () => {
     await expect(page.getByRole('button', { name: 'Delete' }).first()).toBeVisible()
   })
 
-  /**
-   * 下载：chromium 做真实下载 + 限流拦截；firefox/webkit 只点一次入口、
-   * 断言限流提示（或下载已开始的少见形态）。分档逻辑见共用体。
-   */
-  test('download — real download + rate limit on chromium, entry feedback elsewhere', async ({
-    page,
-    browserName,
-  }) => {
-    // 真实下载受后端排队影响：连续跑多个下载（多浏览器/连跑）时首次下载阶段可到 55s+
+  test('download — starts the real imzML + ibd download', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', '其余浏览器由 datasets.offline.spec.ts 覆盖')
+    // 后端排队实测可到 55s+，留足单次下载的等待
     test.setTimeout(120_000)
-    await downloadRandomCardThenRateLimited(page, '/mydatasets', browserName)
+    await expectRealDownloadStarts(page, '/mydatasets')
   })
 
   /** Overview 在新标签页打开，public_id 进路径参数（刷新不丢），可读取 private 数据。 */
@@ -346,7 +262,6 @@ test.describe('My Datasets', () => {
     await expect(page.locator('dialog.modal-open')).toHaveCount(0)
   })
 
-  /**
   /**
    * 进入可视化结果（轻量入口用例）：已转换数据集的卡片按钮是 Visualize，
    * 点击直接跳 /vizworkbench 查看已有默认运行——不建任务、不等待、无需清理。
@@ -484,17 +399,10 @@ test.describe('Public Datasets', () => {
     await expectFileSizeSortApplied(page, '/datasets', '/files/list_files')
   })
 
-  /**
-   * 下载（与 My Datasets 侧共用一体，走 /files/list_files 公开端点）：
-   * chromium 真实下载 + 限流拦截，其余浏览器只断言入口反馈。
-   */
-  test('download — real download + rate limit on chromium, entry feedback elsewhere', async ({
-    page,
-    browserName,
-  }) => {
-    // 真实下载受后端排队影响：连续跑多个下载（多浏览器/连跑）时首次下载阶段可到 55s+
+  test('download — starts the real imzML + ibd download', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', '其余浏览器由 datasets.offline.spec.ts 覆盖')
     test.setTimeout(120_000)
-    await downloadRandomCardThenRateLimited(page, '/datasets', browserName)
+    await expectRealDownloadStarts(page, '/datasets')
   })
 
   /** 随机进入一张卡的 Overview（新标签页），验证内容后返回。 */

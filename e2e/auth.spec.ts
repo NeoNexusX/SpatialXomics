@@ -27,25 +27,26 @@ test.describe('Unauthenticated', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
 
   // ── 登录 ──
-  // 账号密码与 auth.setup.ts 保持一致，从环境变量读取（CI: GitHub Secrets，本地: .env.local）
+  // 账号密码与 auth.setup.ts 保持一致，从环境变量读取（CI: GitHub Secrets，本地: 当前 shell export）
 
   test('can login with valid credentials', async ({ page }) => {
     const username = process.env.E2E_USERNAME
     const password = process.env.E2E_PASSWORD
     if (!username || !password) {
-      throw new Error('缺少 E2E_USERNAME / E2E_PASSWORD 环境变量，请在 CI secrets 或本地 .env.local 中配置')
+      throw new Error('缺少 E2E_USERNAME / E2E_PASSWORD，请在 CI secrets 或当前 shell 中 export')
     }
 
     await page.goto('/login')
 
-    await page.fill('input[placeholder="Username"]', process.env.E2E_USERNAME!)
-    await page.fill('input[placeholder="Password"]', process.env.E2E_PASSWORD!)
+    await page.fill('input[placeholder="Username"]', username)
+    await page.fill('input[placeholder="Password"]', password)
 
     await page.click('button:has-text("Sign In")')
 
-    // 成功 toast + 跳转到默认落地页
-    await expect(page.locator('.toast')).toContainText('Login successful')
-    await expect(page).toHaveURL(/\/datasets/)
+    // 成功 toast + 跳转到默认落地页。每个项目的第一条用例赶上浏览器冷启动，
+    // 登录请求又要走真实后端，默认 5s 不够（webkit 上偶发）
+    await expect(page.locator('.toast')).toContainText('Login successful', { timeout: 15_000 })
+    await expect(page).toHaveURL(/\/datasets/, { timeout: 15_000 })
   })
 
   test('shows error with invalid credentials', async ({ page }) => {
@@ -249,7 +250,7 @@ test.describe('Authenticated', () => {
     const username = process.env.E2E_USERNAME
     const password = process.env.E2E_PASSWORD
     if (!username || !password) {
-      throw new Error('缺少 E2E_USERNAME / E2E_PASSWORD 环境变量，请在 CI secrets 或本地 .env.local 中配置')
+      throw new Error('缺少 E2E_USERNAME / E2E_PASSWORD，请在 CI secrets 或当前 shell 中 export')
     }
 
     await page.goto('/profile')

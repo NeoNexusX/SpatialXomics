@@ -4,7 +4,7 @@ Explore ion images, TIC plots, and spectra interactively. Covers UMAP/KMeans clu
 
 **Author:** Chen Kejiang
 
-**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) or email **jydong@xmu.edu.cn**.
+**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) or email **jydong@xmu.edu.cn**.
 
 ## Dataset Status
 
@@ -123,7 +123,7 @@ Displays the spatial intensity distribution for the selected m/z value.
 | **Colormap** | Viridis, Inferno (default), Magma, Hot, Gray. |
 | **Intensity Scale** | Linear / Log / TIC. TIC normalization divides each pixel by its total ion current and needs pre-computed stats on Continuous data. |
 | **Reset** | Restore all controls to defaults. |
-| **PNG** | Export the current image with a transparent background. |
+| **JPG / PNG** | Export the current image. JPG (white background) is the default; hover the button to choose PNG (transparent, lossless). |
 
 ### Display Range & Gamma (Right Strip)
 
@@ -244,9 +244,9 @@ The total score of a row is a weighted sum of three parts. The weights can be ch
 
 | Part | Default weight | Meaning |
 | --- | --- | --- |
-| Mass | 0.6 | Higher for smaller mass errors (1 at zero error, about 0.14 at the tolerance edge) |
-| Adduct fit | 0.1 | How well the adduct suits the acquisition conditions |
-| Spatial | 0.3 | 0.2 × spatial chaos + 0.8 × same-molecule co-localization (below) |
+| Mass | 0.4 | Higher for smaller mass errors (1 at zero error, about 0.14 at the tolerance edge) |
+| Adduct fit | 0.2 | How well the adduct suits the acquisition conditions |
+| Spatial | 0.4 | 0.2 × spatial chaos + 0.8 × same-molecule co-localization (below) |
 
 The FDR is estimated with a target-decoy approach: each formula is also paired with chemically implausible adducts (such as [M+Pt]⁺) as decoys, which go through the same matching and scoring. Each row gets a q-value; smaller is more credible.
 

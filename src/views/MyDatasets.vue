@@ -97,7 +97,7 @@
         :size="size"
         :pagination="pagination"
         :is-my-dataset="true"
-        :deletingId="deletingId"
+        :deletingId="deleteConfirm.deletingId"
         :packingIds="packingIds"
         @view-overview="viewOverview"
         @download="handleDownloadRaw"
@@ -220,18 +220,11 @@ async function refreshFileStatus() {
   checkingFiles.value = false
 }
 
-const deletingId = ref<string | null>(null)
-
 const deleteConfirm = useConfirmDelete({
   onDelete: async (id) => {
-    deletingId.value = id
-    try {
-      await deleteFile(id)
-      fetchFiles({ page: page.value, size: size.value })
-      fetchQuota()
-    } finally {
-      deletingId.value = null
-    }
+    await deleteFile(id)
+    fetchFiles({ page: page.value, size: size.value })
+    fetchQuota()
   },
 })
 

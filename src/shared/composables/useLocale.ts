@@ -12,7 +12,6 @@ import { i18n, loadCoreMessages, loadActiveFeatureMessages, LOCALES, type Locale
  */
 
 export type { Locale }
-export { LOCALES }
 
 function isLocale(v: unknown): v is Locale {
   return LOCALES.some((l) => l.value === v)
@@ -88,6 +87,5 @@ export function toggleLocale(): Promise<void> {
 
 export function useLocale() {
   const locale = computed(() => i18n.global.locale.value)
-  const isZh = computed(() => locale.value === 'zh-CN')
-  return { locale, isZh, nextLocale, setLocale, toggleLocale, LOCALES }
+  return { locale, nextLocale, toggleLocale }
 }

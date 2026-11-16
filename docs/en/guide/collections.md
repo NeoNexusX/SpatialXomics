@@ -4,7 +4,7 @@ Browse, create, and share collections — curated groups of public datasets with
 
 **Author:** Chen Kejiang
 
-**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/MassVision/issues) or email **jydong@xmu.edu.cn**.
+**Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) or email **jydong@xmu.edu.cn**.
 
 ## Open the Collections Page
 
@@ -83,11 +83,11 @@ Owners and admins can manage members on the detail page:
   ![e76d5da425ab50194ce54ed4ecee5868](https://cdn.neonexus.top/docs/20261008161347873.jpg_view)
 - **Reorder:** in edit mode, drag members or use the move up/down buttons; if the order was changed elsewhere, the page shows a notice and refreshes to the latest order.
 - **Limit:** a collection holds at most 300 datasets.
-- **Download:** each member can be downloaded individually.
+- **Download:** each member can be downloaded individually; see [Dataset Overview](./dataset-overview) for the rules.
 
 ## Share a Collection
 
-Click **Share** on the detail page to copy the collection's public link — an address starting with `/collections/` followed by the collection's public id. Anyone with the link can view a read-only page (member list and metadata) **without signing in**; if the collection does not exist or is no longer public, the page shows a unified notice.
+Click **Share** on the detail page to copy the collection's public link — an address starting with `/collections/` followed by the collection's public id. Anyone with the link can view a read-only page (member list and metadata) **after signing in**; signed-out visitors go to the sign-in page first and return automatically. If the collection does not exist or is no longer public, the page shows a unified notice.
 
 Because collections are public upon creation, there is no separate visibility switch.
 

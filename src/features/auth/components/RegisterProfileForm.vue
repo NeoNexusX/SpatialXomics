@@ -14,7 +14,6 @@ defineProps<{
   researchFieldOptions: readonly string[]
   validateField: (field: any) => void
   clearError: (field: any) => void
-  register: () => void
 }>()
 </script>
 

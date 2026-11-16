@@ -38,6 +38,7 @@
         :required="required"
         @change="onChange"
         @focus="emit('focus')"
+        @blur="emit('blur')"
       >
         <option
           v-if="placeholderText"
@@ -125,6 +126,7 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'change', value: string): void
   (e: 'focus'): void
+  (e: 'blur'): void
 }>()
 
 const placeholderText = computed(() => props.placeholder ?? t('common.input.selectPlaceholder'))

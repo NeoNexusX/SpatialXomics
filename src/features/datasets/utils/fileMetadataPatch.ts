@@ -9,7 +9,7 @@ import type { FileMetadataPatch } from '@/features/datasets/api/datasetApi'
  */
 
 /** 11 个可改字段：snake_case 键 = PATCH 载荷键 */
-export const FILE_METADATA_KEYS = [
+const FILE_METADATA_KEYS = [
   'organism',
   'organism_part',
   'condition',

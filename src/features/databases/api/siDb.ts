@@ -9,6 +9,7 @@
 import { isAxiosError } from 'axios'
 import { t } from '@/i18n'
 import { useToast } from '@/shared/composables/useToast'
+import { downloadUrl } from '@/shared/utils/download'
 import { formatBytes } from '@/shared/utils/format'
 import type { DatabaseFetcher, DatabaseFilterValues } from '../types/database'
 import { getSiDbDownload, listSiDb, type SiDbFilters } from './siDbApi'
@@ -96,13 +97,8 @@ export async function downloadSiDbCsv(): Promise<void> {
     throw new Error(t('databases.hmdb.downloadFailed'))
   }
 
-  const link = document.createElement('a')
-  link.href = info.url
   // 跨域时 download 属性被忽略，文件名以响应头为准；同源时兜底用第一步回传的
-  link.setAttribute('download', info.filename)
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  downloadUrl(info.url, info.filename)
 
   const { showToast } = useToast()
   showToast(

@@ -28,11 +28,11 @@ defineProps<{
       <!-- 偶数项（i=0,2,4…）：左侧日期，右侧特性；奇数项：反过来 -->
       <template v-if="i % 2 === 0">
         <div class="timeline-start">
-          <span class="tl-date">{{ localized(item.date) }}</span>
-          <span class="badge badge-primary tl-badge kawaru-text-87">v{{ item.version }}</span>
+          <span class="tl-date kawaru-text-112">{{ localized(item.date) }}</span>
+          <span class="badge badge-primary tl-badge kawaru-text-95">v{{ item.version }}</span>
         </div>
         <div class="timeline-end">
-          <div class="timeline-box">
+          <div class="timeline-box kawaru-text-75">
             <ul class="tl-features">
               <li v-for="(feat, j) in item.features" :key="j">{{ localized(feat) }}</li>
             </ul>
@@ -41,15 +41,15 @@ defineProps<{
       </template>
       <template v-else>
         <div class="timeline-start">
-          <div class="timeline-box">
+          <div class="timeline-box kawaru-text-75">
             <ul class="tl-features">
               <li v-for="(feat, j) in item.features" :key="j">{{ localized(feat) }}</li>
             </ul>
           </div>
         </div>
         <div class="timeline-end">
-          <span class="tl-date">{{ localized(item.date) }}</span>
-          <span class="badge badge-primary tl-badge kawaru-text-87">v{{ item.version }}</span>
+          <span class="tl-date kawaru-text-112">{{ localized(item.date) }}</span>
+          <span class="badge badge-primary tl-badge kawaru-text-95">v{{ item.version }}</span>
         </div>
       </template>
       <hr />
@@ -62,13 +62,14 @@ defineProps<{
 <style scoped>
 /* 模板上的 kawaru-text-home-timeline 只给布局 em 当参照——.tl-icon 的 2em、
    hr 的 min-height:4em、.timeline-start 的 gap/padding/min-width。
-   文字字号一律 calc(var(--kawaru-fs) * k)，各自独立。 */
+   文字字号在模板上各自挂 kawaru-text-<档> 档位类，这里只保留行高与布局。 */
 .timeline {
   height: 100%;
 }
 
 .tl-date {
-  font-size: calc(var(--kawaru-fs) * 1.125);
+  /* 112 档在模板上；行高沿用原来的 1.5 */
+  line-height: 1.5;
   font-weight: 600;
   color: oklch(var(--color-base-content) / 0.5);
   white-space: nowrap;
@@ -84,7 +85,6 @@ defineProps<{
   text-align: left;
 }
 .timeline-box {
-  font-size: calc(var(--kawaru-fs) * 0.75);
   line-height: 1.6;
 }
 .tl-features {
@@ -106,7 +106,6 @@ defineProps<{
    padding 用 em，跟随本元素字号等比缩放。 */
 .tl-badge {
   height: auto;
-  font-size: calc(var(--kawaru-fs) * 0.95);
   font-weight: 600;
   line-height: 1.3;
   padding: 0.15em 0.55em;

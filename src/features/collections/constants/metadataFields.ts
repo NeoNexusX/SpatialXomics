@@ -20,7 +20,7 @@ import { COLLECTION_TYPES, MEMBER_TYPES } from './collectionVocab'
 
 export type MetadataGroupId = 'general' | 'citation' | 'sample' | 'acquisition'
 
-export type MetadataFieldType = 'text' | 'long' | 'list' | 'date'
+type MetadataFieldType = 'text' | 'long' | 'list' | 'date'
 
 export interface MetadataFieldDef {
   key: keyof CollectionMetadata

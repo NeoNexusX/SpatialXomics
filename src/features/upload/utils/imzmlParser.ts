@@ -110,13 +110,15 @@ function parsePolarity(params: ImzMLParam[]): 'positive' | 'negative' | undefine
   return undefined
 }
 
-function parseIonSource(params: ImzMLParam[]): string | undefined {
+/** 全部参数的名称和取值，小写、连字符换成空格，方便按词匹配 */
+function paramsText(params: ImzMLParam[]): string {
   const norm = (s: string) =>
     s.toLowerCase().replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
+  return params.map((p) => norm(`${p.name || ''} ${p.value || ''}`)).join(' ')
+}
 
-  const allText = params
-    .map((p) => norm(`${p.name || ''} ${p.value || ''}`))
-    .join(' ')
+function parseIonSource(params: ImzMLParam[]): string | undefined {
+  const allText = paramsText(params)
 
   // 1) Accession-priority sources — standard MS CV terms
   const accPriority: [string, string][] = [
@@ -148,12 +150,7 @@ function parseIonSource(params: ImzMLParam[]): string | undefined {
 }
 
 function parseAnalyzer(params: ImzMLParam[]): string | undefined {
-  const norm = (s: string) =>
-    s.toLowerCase().replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
-
-  const allText = params
-    .map((p) => norm(`${p.name || ''} ${p.value || ''}`))
-    .join(' ')
+  const allText = paramsText(params)
 
   // 1) Specific instrument model text recognition
   if (/\borbitrap\s+exploris\s+480\b/i.test(allText) || /\bexploris\s+480\b/i.test(allText)) return 'Orbitrap Exploris 480'
@@ -206,12 +203,6 @@ function parsePixelSize(params: ImzMLParam[]): { pixelSizeX?: number; pixelSizeY
 }
 
 /* helpers */
-function extractFirstNumber(p: ImzMLParam): string | undefined {
-  const s = (p.value || p.name || '').toString()
-  const m = s.match(/(\d+(?:\.\d+)?)/)
-  return m ? m[1] : undefined
-}
-
 function parseSpectrumMode(text: string): 'profile' | 'centroid' | undefined {
   if (text.includes('MS:1000127')) return 'centroid'
   if (text.includes('MS:1000128')) return 'profile'

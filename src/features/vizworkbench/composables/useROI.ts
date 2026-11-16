@@ -1,4 +1,4 @@
-import { ref, shallowRef, markRaw, type Ref } from 'vue'
+import { ref, shallowRef, markRaw } from 'vue'
 import { roiColorAt, rgbCss } from '@/features/vizworkbench/utils/regionPalette'
 
 export type ROIType = 'rectangle' | 'freehand'
@@ -33,11 +33,7 @@ export interface DraftROI {
   path: ROIPoint[]
 }
 
-export function useROI(
-  // Arguments
-  imageWidth: Ref<number>,
-  imageHeight: Ref<number>,
-) {
+export function useROI() {
   // State
   const selectedTool = ref<ROIType | null>(null)
   const draft = ref<DraftROI | null>(null)

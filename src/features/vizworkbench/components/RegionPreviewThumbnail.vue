@@ -25,7 +25,7 @@ import {
   type RGB,
 } from '@/features/vizworkbench/utils/regionPalette'
 
-export interface ThumbnailRegion {
+interface ThumbnailRegion {
   value: string
   label: string
   color: RGB

@@ -2,19 +2,25 @@
 import type { PropType } from 'vue'
 import CollectionCard from '@/features/collections/components/CollectionCard.vue'
 import PaginationFooter from '@/shared/components/PaginationFooter.vue'
-import type { CollectionListMeta, CollectionSummary } from '@/features/collections/types/collection'
+import type { PageMeta } from '@/shared/api/response'
+import type { CollectionSummary } from '@/features/collections/types/collection'
 
 defineProps({
   collections: { type: Array as PropType<CollectionSummary[]>, required: true },
   loading: { type: Boolean, required: true },
   error: { type: String, required: true },
-  meta: { type: Object as PropType<CollectionListMeta>, required: true },
+  meta: { type: Object as PropType<PageMeta>, required: true },
   size: { type: Number, required: true },
   pagination: { type: Array as PropType<(number | string)[]>, required: true },
   /** 当前已应用的搜索词（区分「还没有集合」与「搜索无结果」两种空态） */
   searchApplied: { type: String, required: true },
   /** 逐卡片判定 Delete 显隐（所有者或管理员；列表含他人集合） */
   canEdit: {
+    type: Function as PropType<(collection: CollectionSummary) => boolean>,
+    required: true,
+  },
+  /** 逐卡片判定归属徽标（严格归属，不含管理员） */
+  isMine: {
     type: Function as PropType<(collection: CollectionSummary) => boolean>,
     required: true,
   },
@@ -48,10 +54,7 @@ defineEmits<{
     </div>
 
     <!-- Error state -->
-    <div
-      v-else-if="error"
-      class="p-4 bg-error/10 dark:bg-error/10/30 rounded mb-4 border border-error/20 text-error"
-    >
+    <div v-else-if="error" class="p-4 bg-error/10 rounded mb-4 border border-error/20 text-error">
       {{ error }}
     </div>
 
@@ -97,6 +100,7 @@ defineEmits<{
         :key="collection.publicId"
         :collection="collection"
         :can-edit="canEdit(collection)"
+        :is-mine="isMine(collection)"
         :image-paths="memberImagePaths[collection.publicId]"
         :cover-loading="coverLoading[collection.publicId]"
         @view="$emit('view', $event)"

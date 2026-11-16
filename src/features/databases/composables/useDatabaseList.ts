@@ -1,7 +1,8 @@
+import { useLatestRequest } from '@/shared/composables/useLatestRequest'
+import { usePagination } from '@/shared/composables/usePagination'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/shared/auth/authStore'
-import { buildPageList } from '@/shared/utils/pagination'
 import { DATABASE_SOURCES } from '../sources'
 import type {
   DatabaseFilterValue,
@@ -14,13 +15,12 @@ import type {
  * 数据库浏览页的列表状态：当前数据源 + 关键词/筛选控件 + 分页。
  *
  * 页面要求登录（未登录时视图层渲染登录引导）：未登录不取数；登入/登出时随
- * auth store 的 token 变化自动取数或清空。骨架照抄 useUserManagement（同款
- * meta 信封、页码钳位与重置逻辑）。数据源切换是内存操作：关键词、筛选与页码
- * 复位后按新 source 的 fetcher 重新拉取。
+ * auth store 的 token 变化自动取数或清空。数据源切换是内存操作：关键词、筛选
+ * 与页码复位后按新 source 的 fetcher 重新拉取。
  */
 export function useDatabaseList() {
+  const requests = useLatestRequest()
   const auth = useAuthStore()
-  const loggedIn = computed(() => !!auth.token)
 
   const sources = DATABASE_SOURCES
   const activeId = ref(DATABASE_SOURCES[0]!.id)
@@ -28,18 +28,12 @@ export function useDatabaseList() {
     () => DATABASE_SOURCES.find((s) => s.id === activeId.value) ?? DATABASE_SOURCES[0]!,
   )
 
-  // Pagination — same pattern as useUserManagement. 本页每页条数独立于全局
-  // config.json：参考库单页信息量大，默认 50、可切 100（后端 size 上限 100，
-  // 不再提供更大的档位）。
+  // 本页每页条数独立于全局 config.json：参考库单页信息量大，默认 50、可切 100
+  // （后端 size 上限 100，不再提供更大的档位）。
   const PAGE_SIZE_OPTIONS = [50, 100]
-  const currentPage = ref(1)
-  const pageSize = ref<number>(PAGE_SIZE_OPTIONS[0]!)
   const pageSizeOptions = PAGE_SIZE_OPTIONS
-  const meta = reactive({ current_page: 1, total_pages: 1, total_records: 0 })
-
-  const pageRange = computed<(number | string)[]>(() =>
-    buildPageList(meta.current_page, meta.total_pages),
-  )
+  const pager = usePagination(() => fetchPage(), PAGE_SIZE_OPTIONS[0])
+  const { page: currentPage, size: pageSize } = pager
 
   // State
   const rows = ref<DatabaseRow[]>([])
@@ -62,15 +56,15 @@ export function useDatabaseList() {
 
   /** 未登录 / 登出：清空列表与分页，视图层显示登录引导 */
   const clearRows = () => {
+    requests.invalidate()
+    pager.reset()
     rows.value = []
-    meta.current_page = 1
-    meta.total_pages = 1
-    meta.total_records = 0
     loading.value = false
     error.value = ''
   }
 
   const fetchPage = async () => {
+    const isCurrent = requests.begin()
     // 页面要求登录：匿名不取数（不打扰后端、也不闪一帧样本数据）
     if (!auth.token) {
       clearRows()
@@ -85,18 +79,18 @@ export function useDatabaseList() {
         page: currentPage.value,
         size: pageSize.value,
       })
+      if (!isCurrent()) return
       rows.value = res.data
-      meta.current_page = res.meta?.current_page || currentPage.value
-      meta.total_pages = res.meta?.total_pages || 1
-      meta.total_records = res.meta?.total_records || rows.value.length
+      pager.setMeta(res.meta)
     } catch (e) {
+      if (!isCurrent()) return
       console.error('Failed to load database page:', e)
       error.value =
         e instanceof Error && e.message
           ? e.message
           : t('common.feedback.loadFailed', { target: t('databases.title') })
     } finally {
-      loading.value = false
+      if (isCurrent()) loading.value = false
     }
   }
 
@@ -127,19 +121,6 @@ export function useDatabaseList() {
     handleSearch()
   }
 
-  const goToPage = (np: number) => {
-    const clamped = Math.max(1, Math.min(meta.total_pages || 1, np))
-    if (clamped === currentPage.value) return
-    currentPage.value = clamped
-    fetchPage()
-  }
-
-  const changeSize = (newSize: number) => {
-    pageSize.value = newSize
-    currentPage.value = 1
-    fetchPage()
-  }
-
   onMounted(fetchPage)
 
   // 同标签页登录/登出、其他标签页会话变化都会更新 store.token：
@@ -150,13 +131,13 @@ export function useDatabaseList() {
       if (token) fetchPage()
       else clearRows()
     },
+    { flush: 'sync' },
   )
 
   return {
     sources,
     activeId,
     activeSource,
-    loggedIn,
     rows,
     loading,
     error,
@@ -167,13 +148,13 @@ export function useDatabaseList() {
     currentPage,
     pageSize,
     pageSizeOptions,
-    meta,
-    pageRange,
+    meta: pager.meta,
+    pageRange: pager.pageRange,
     fetchPage,
     switchSource,
     handleSearch,
     resetSearch,
-    goToPage,
-    changeSize,
+    goToPage: pager.goToPage,
+    changeSize: pager.changeSize,
   }
 }

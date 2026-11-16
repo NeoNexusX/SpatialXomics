@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mount } from '@vue/test-utils'
 
 vi.mock('@/features/datasets/api/datasetApi', () => ({
   listMyProcesses: vi.fn(),
@@ -16,6 +17,18 @@ import { useWorkspaceDashboard } from '../useWorkspaceDashboard'
 const listMock = vi.mocked(listMyProcesses)
 const statsMock = vi.mocked(getProcessingStats)
 
+/** composable 里有 onMounted，要挂在组件上才和真实页面一致 */
+function mountDashboard() {
+  let dash!: ReturnType<typeof useWorkspaceDashboard>
+  mount({
+    setup() {
+      dash = useWorkspaceDashboard()
+      return () => null
+    },
+  })
+  return dash
+}
+
 describe('useWorkspaceDashboard.applySearch', () => {
   beforeEach(() => {
     listMock.mockReset().mockResolvedValue({
@@ -26,7 +39,7 @@ describe('useWorkspaceDashboard.applySearch', () => {
   })
 
   it('sends only the filename filter and resets to page 1', async () => {
-    const dash = useWorkspaceDashboard()
+    const dash = mountDashboard()
 
     await dash.applySearch('mouse')
 
@@ -35,7 +48,7 @@ describe('useWorkspaceDashboard.applySearch', () => {
   })
 
   it('trims the query before sending', async () => {
-    const dash = useWorkspaceDashboard()
+    const dash = mountDashboard()
 
     await dash.applySearch('  kidney  ')
 
@@ -43,7 +56,7 @@ describe('useWorkspaceDashboard.applySearch', () => {
   })
 
   it('clears the filter on empty query', async () => {
-    const dash = useWorkspaceDashboard()
+    const dash = mountDashboard()
 
     await dash.applySearch('mouse')
     await dash.applySearch('')

@@ -20,7 +20,7 @@ vi.mock('../../utils/annotation/engineClient', () => ({
   createEngineClient: () => ({ dispose: vi.fn(), loadDb: vi.fn() }),
 }))
 vi.mock('../../utils/annotation/dbStore', () => ({ loadStoredDb: async () => null }))
-vi.mock('@/features/assistant/providers/analysisContext', () => ({
+vi.mock('@/features/agent/bridge/analysisContext', () => ({
   registerContextProviders: vi.fn(),
   unregisterContextProviders: vi.fn(),
 }))
