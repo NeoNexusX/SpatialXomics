@@ -6,6 +6,17 @@ Search, filter, and sort public and personal datasets on SpatialXomics.
 
 **Feedback:** Found a bug or have a suggestion? Open a [GitHub Issue](https://github.com/NeoNexusX/SpatialXomics/issues) or email **jydong@xmu.edu.cn**.
 
+## Edit File Metadata
+
+In **My Datasets**, click a card's **Edit** button to update sample attributes, polarity, ionisation source, analyzer, horizontal/vertical pixel size, resolving power, and m/z. Only changed fields are submitted, and the card updates after saving.
+
+- Text accepts up to 128 characters. Choose **Other** for custom text, preserving case, Unicode, and symbols, or **Not specified** to clear a field.
+- Numbers accept non-negative decimals. Leave blank or enter 0 for an unspecified value.
+- If the server changes numeric precision, the dialog stays open, shows the submitted and saved values, and fills the form with the values actually saved.
+- The dialog shows the number of changed fields. **Reset** restores the values from when the dialog opened; **Cancel** closes without saving.
+- Validation errors appear beside the relevant fields. Correct them to retry. Controls are temporarily disabled while saving.
+- Spectrum and storage modes describe the original file and are read-only. Filename, experiment type, and visibility are not edited here.
+
 ## Search by Name
 
 ### Dataset Naming Convention

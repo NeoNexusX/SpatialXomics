@@ -307,13 +307,6 @@ export interface AppConfig {
     /** 验证码最大尝试次数 */
     maxAttempts: number
   }
-  /** 团队轮播（DeveloperCarousel 自动滚动） */
-  carousel: {
-    /** 自动逐张步进的间隔（ms）：每隔多久平滑翻过一张卡；设 0 禁用自动播放 */
-    interval: number
-    /** 滚到末尾后停留多久（ms）再平滑返回开头 */
-    endPause: number
-  }
   /** 统一导航（navbar / drawer 按路由二选一）；缺省时只渲染空导航骨架 */
   nav?: NavConfig
   /** 悬浮按钮（NavFab）；缺省时 NavFab 不渲染任何子项，但仍渲染主按钮以切换 drawer */

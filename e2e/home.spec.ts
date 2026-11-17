@@ -3,9 +3,10 @@ import { test, expect } from '@playwright/test'
 /**
  * 首页 E2E 测试
  * ============
- * 首页为公开页（无需登录），由 4 个滚动场景组成：
- *   Hero → Features → Stats → Footer
- * 页面使用 scroll-snap，每个场景占满视口。
+ * 首页为公开页（无需登录），是浅灰底上的一串圆角面板：
+ *   Hero → Stats（概览、开发动态与内部滚动叠卡）→ Team（含页脚）
+ * window 滚动 + Lenis 平滑；宽屏下面板在同一上沿停住、由下一张盖上来（sticky 叠层）。
+ * 入场动画在元素进入视口时才播，之前是隐藏的（visibility: hidden），断言前要先把区块滚进视口。
  *
  * 首页内容来自 public/content.json + 后端 /stats/* 接口。
  * 后端不可用时，Stats 卡片标题仍然渲染，数字显示 loading 或 error。
@@ -19,61 +20,30 @@ import { test, expect } from '@playwright/test'
 test('hero scene renders with title and join button', async ({ page }) => {
   await page.goto('/', { waitUntil: 'domcontentloaded' })
 
-  // 页面根容器挂载
-  await expect(page.locator('[aria-label="MassVision home scenes"]')).toBeVisible()
-
   // Hero 场景可见
   await expect(page.locator('#hero')).toBeVisible()
 
   // "Join to start" 按钮（已登录时不跳 /register，路由守卫会踢到 /profile）
   await expect(page.locator('a:has-text("Join to start")')).toBeVisible()
 
-  // 向下滚动提示箭头
-  await expect(page.locator('.scroll-cue')).toBeVisible()
-})
-
-// ── Features（第 2 屏，内容来自 public/content.json）──
-
-test('features scene renders gallery words and default card', async ({ page }) => {
-  await page.goto('/', { waitUntil: 'domcontentloaded' })
-
-  // 期望词表不硬编码：读与页面同源的 content.json（与 per-page 用例读 config.json 同法）
-  const content = await (await page.request.get('/content.json')).json()
-  // word 支持双语对象（{ en, zh-CN }）或旧纯字符串；项目 locale 固定 en-US，取 en。
-  const words: string[] = content.features.items.map(
-    (it: { word: string | { en?: string } }) =>
-      typeof it.word === 'string' ? it.word : (it.word.en ?? ''),
-  )
-  const firstTitle: string = content.features.items[0].title.en
-
-  // 平滑滚动在吸附边界可能来回抖动、远程图片加载也会持续改变布局，
-  // scrollIntoViewIfNeeded 可能一直等不到「稳定」；设上限，超时则瞬时滚动兜底。
-  await page
-    .locator('#features')
-    .scrollIntoViewIfNeeded({ timeout: 5_000 })
-    .catch(() =>
-      page.evaluate(() =>
-        document.querySelector('#features')?.scrollIntoView({ behavior: 'instant', block: 'start' }),
-      ),
-    )
-
-  // 画廊词全部渲染；介绍卡默认显示第一项的标题（active=0）。
-  // 词用 .first()：激活项的词同时出现在画廊格和下方介绍卡的 h3 里，双命中会炸 strict mode。
-  // 悬停换卡的联动不在此断言：其稳定性依赖境外 OSS 首图加载与换卡布局变化，
-  // Chromium/WebKit 还会因布局重算 hover 把静止指针判为 mouseleave，跨浏览器表现不一。
-  const scene = page.locator('#features')
-  for (const word of words) {
-    await expect(scene.getByText(word, { exact: true }).first()).toBeVisible()
+  // Hero keeps one primary action. Dataset access lives inside its KPI card.
+  const hero = page.locator('#hero')
+  for (const name of ['View Datasets', 'Upload data', 'Quick start']) {
+    await expect(hero.getByRole('link', { name })).toHaveCount(0)
   }
-  await expect(scene.getByText(firstTitle)).toBeVisible()
+  await expect(hero.locator('.hero-media img')).toHaveCount(2)
+  await expect(hero.locator('.hero-media button')).toHaveCount(0)
 })
 
-// ── Stats（第 3 屏，有后端数据 /stats/*）──
+// ── Stats（第 2 张面板，有后端数据 /stats/*）──
 
 test('stats scene shows section heading and stat card labels', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
 
-  // 滚动到 Stats 场景（同样设上限 + 瞬时滚动兜底，理由见 features 用例）
+  // 滚动到 Stats 面板。平滑滚动在停靠边界可能来回抖动、远程图片加载也会持续改变布局，
+  // scrollIntoViewIfNeeded 可能一直等不到「稳定」；设上限，超时则瞬时滚动兜底。
   await page
     .locator('#stats')
     .scrollIntoViewIfNeeded({ timeout: 5_000 })
@@ -86,42 +56,141 @@ test('stats scene shows section heading and stat card labels', async ({ page }) 
   // 标题
   await expect(page.getByRole('heading', { name: 'Stats' })).toBeVisible()
 
-  // 四个环形图卡片标题（固定文本，不依赖后端数据）
-  for (const title of ['Organism', 'Organism Parts', 'Ion Source Types', 'Analyzer']) {
-    await expect(page.locator('text=' + title).first()).toBeVisible()
-  }
+  // 卡片仅随页面滚动，无分页和数量标记；开发动态属于同一统计区。
+  const stats = page.locator('#stats')
+  const distribution = page.locator('#distribution')
+  await expect(distribution.getByRole('navigation')).toHaveCount(0)
+  // The left modules enter first; the first right card becomes interactive only
+  // after landing. Sample native scroll rather than duplicating GSAP distances.
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate(async () => {
+          window.scrollBy({ top: 64, behavior: 'instant' })
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        })
+        return distribution.locator('[data-stack-card]').first().getAttribute('inert')
+      },
+      { timeout: 10_000, intervals: [32] },
+    )
+    .toBeNull()
+  await expect(distribution.getByRole('heading', { name: 'Organism', exact: true })).toBeVisible()
+  await expect(stats.locator('#activity').getByRole('link', { name: 'Development' })).toBeVisible()
+  await expect(
+    stats.locator('.kpi-card').getByRole('link', { name: 'View Datasets' }),
+  ).toHaveAttribute('href', '/datasets')
 
-  // 四张 stat 卡片标题（固定文本）
-  for (const title of ['Total Users', 'Total Datasets', 'Total Downloads', 'Website Visits']) {
+  // 四张数字卡标题（固定文本）
+  for (const title of ['Total Users', 'Total Datasets', 'Total Downloads', 'Total Visits']) {
     await expect(page.getByText(title)).toBeVisible()
   }
 
-  // 数据加载完成 → 卡片数字有值（等待 loading spinner 消失）
+  // 数据加载完成 → 数字卡有值（加载中的数字带 aria-busy）
   // /stats/* 走远程后端，慢网络下 5s 默认超时不够，放宽到 15s
-  await expect(page.locator('.stat-value .loading')).toHaveCount(0, { timeout: 15_000 })
+  await expect(page.locator('.kpi-value[aria-busy="true"]')).toHaveCount(0, { timeout: 15_000 })
 
-  // 每张 stat 卡片旁边有数字
-  const values = page.locator('.stat-value')
+  // 每张数字卡都有数字
+  const values = page.locator('.kpi-value')
   for (let i = 0; i < 4; i++) {
     await expect(values.nth(i)).toContainText(/\d/)
   }
 })
 
-// ── Footer（末屏，无后端依赖）──
+test('the last stacked card closes the bottom before the team section enters', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  const stack = page.locator('#distribution')
+  await expect(stack).toHaveAttribute('data-stacked', '')
+  const cards = stack.locator('[data-stack-card]')
+  const last = cards.last()
+
+  // Small native scroll increments sample the final reading interval, without
+  // importing the animation's distance formula into the test.
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate(async () => {
+          window.scrollBy({ top: 96, behavior: 'instant' })
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        })
+        return last.getAttribute('inert')
+      },
+      { timeout: 10_000, intervals: [32] },
+    )
+    .toBeNull()
+  await expect(last).not.toHaveAttribute('inert')
+  const bounds = await cards.evaluateAll((elements) =>
+    elements.map((element) => {
+      const { top, bottom } = element.getBoundingClientRect()
+      return { top, bottom }
+    }),
+  )
+  for (let index = 1; index < bounds.length; index++) {
+    expect(bounds[index]!.top).toBeGreaterThanOrEqual(bounds[index - 1]!.top)
+    expect(bounds[index]!.bottom).toBeGreaterThan(bounds[index - 1]!.bottom)
+    expect(
+      Math.abs(bounds[index]!.bottom - bounds[index]!.top - (bounds[0]!.bottom - bounds[0]!.top)),
+    ).toBeLessThan(2)
+  }
+  const statsTop = await page.locator('#stats').evaluate((element) => ({
+    actual: element.getBoundingClientRect().top,
+    expected: parseFloat(getComputedStyle(element).top),
+  }))
+  expect(Math.abs(statsTop.actual - statsTop.expected)).toBeLessThan(2)
+  expect(
+    await page.locator('#team').evaluate((element) => element.getBoundingClientRect().top),
+  ).toBeGreaterThanOrEqual(800)
+})
+
+// ── Team + 页脚（末尾，无后端依赖）──
 
 test('footer shows team info, powered by, and copyright', async ({ page }) => {
   await page.goto('/', { waitUntil: 'domcontentloaded' })
 
-  // 滚动到底部（scroll-snap 页面，用键盘 End 键滚到底）
-  await page.locator('.home-scroll').press('End')
+  // 滚动到底部：Lenis 不接管键盘，End 键走原生滚动。
+  // 先等首页渲染出来（路由要等 content.json 和首页 chunk），否则 End 时页面还没有高度、什么都没滚
+  await page.locator('#team').waitFor()
+  await page.keyboard.press('End')
 
   // 团队标题
   await expect(page.getByText('The Team')).toBeVisible()
-  await expect(page.getByText('Built by people who love science and engineering.')).toBeVisible()
+  await expect(page.getByText('Built by people who love science and engineering.')).toHaveCount(0)
 
   // Powered by
-  await expect(page.getByText('Powered by')).toBeVisible()
+  await expect(page.locator('#team footer').getByText('Powered by')).toBeVisible()
 
   // 版权（年份动态，只断言固定部分）
   await expect(page.getByText('All rights reserved by Bionet')).toBeVisible()
 })
+
+for (const scenario of [
+  { name: 'mobile', width: 390, reducedMotion: 'no-preference' as const },
+  { name: 'reduced motion', width: 1280, reducedMotion: 'reduce' as const },
+]) {
+  test(`${scenario.name} keeps all distribution cards in normal document flow`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: scenario.width, height: 800 })
+    await page.emulateMedia({ reducedMotion: scenario.reducedMotion })
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    const distribution = page.locator('#distribution')
+    await expect(distribution.getByRole('heading')).toHaveCount(4)
+    await expect(distribution.getByRole('navigation')).toHaveCount(0)
+    const cards = distribution.locator('article')
+    const bounds = await cards.evaluateAll((items) =>
+      items.map((item) => {
+        const { top, bottom } = item.getBoundingClientRect()
+        return { top, bottom }
+      }),
+    )
+    for (let index = 1; index < bounds.length; index++) {
+      expect(bounds[index]!.top).toBeGreaterThanOrEqual(bounds[index - 1]!.bottom)
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      scenario.width,
+    )
+  })
+}

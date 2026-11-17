@@ -23,7 +23,7 @@ i {
 
 /* SvgIcon 的默认尺寸（比相邻文字大一号）。必须用 :where() 清零特异性：
    Tailwind 把任意值工具类（.h-\[1.125em\]）排在命名刻度（.h-5/.h-7…）之后，
-   若默认尺寸写在组件 class 里会反过来压制调用方传入的所有 h-*/w-* 尺寸类；
+   若默认尺寸写在组件 class 里会反过来压制调用方传入的高度、宽度工具类。
    :where 规则特异性为 0，任何单类工具类都稳定胜出。 */
 :where([data-svg-icon]) {
   height: 1.125em;
@@ -103,8 +103,7 @@ i:lang(zh-CN) {
 
    不适用（勿强行套档位）：
    - 依赖 vh 的整屏展示字（Hero）：档位只跟视口宽走，复刻不了高度约束。
-   - 依赖 cqi/cqw 的组件（DeveloperCard、FeatureGallery 悬停词、IonImageViewer
-     缩放控件）：要跟随自身容器宽度。
+   - 依赖 cqi/cqw 的组件（DeveloperCard、IonImageViewer 缩放控件）：要跟随自身容器宽度。
    - 纯布局 em 盒子（h-[4.5em]、gap-[0.5em]）：读所在元素字号，与本体系正交。
    ============================================================================ */
 :root {
@@ -178,36 +177,14 @@ i:lang(zh-CN) {
    只设 font-size 不设 line-height，交给调用处的 leading-*（产物里排在本区之后）。
    ---------------------------------------------------------------------------- */
 
-/* Hero 主标题（单位）。min(…, 9.5vh) 让矮屏按高度收敛，保证整屏放得下。 */
+/* Hero 名称居中，以单行完整展示为限；窄屏收紧，矮屏跟随高度。 */
 @utility kawaru-text-home-title {
-  font-size: clamp(2.5rem, min(12vw, 9.5vh), 8rem);
+  font-size: clamp(2rem, min(8.8vw, 14vh), 8.5rem);
 }
 
-/* FooterScene "The Team"（单位）。48→144px，斜率远陡于基准。 */
-@utility kawaru-text-home-team {
-  font-size: clamp(3rem, 12vw, 9rem);
-}
-
-/* 场景级 h2（StatsScene "Stats" 等）。28.8px→56px。 */
-@utility kawaru-text-home-scene {
-  font-size: clamp(1.8rem, 1rem + 4vw, 3.5rem);
-}
-
-/* 环形图卡片（单位）。给 DonutStatSection 的 h-[4.5em] 图表盒当高度参照。 */
-@utility kawaru-text-home-donut {
-  font-size: clamp(1rem, 12vw, 4rem);
-}
-
-/* FeatureGallery（单位）。给悬停词 text-[min(20.5cqw,2.5em)] 当 em 参照——
-   那处要跟容器宽度(cqw)走，档位替代不了。 */
-@utility kawaru-text-home-gallery {
-  font-size: clamp(0.8rem, 1.1vw, 2rem);
-}
-
-/* VersionTimeline（单位）。给 .tl-icon{2em}、hr{min-height:4em}、
-   .timeline-start 的 gap/padding/min-width 等布局 em 当参照。 */
-@utility kawaru-text-home-timeline {
-  font-size: clamp(0.8rem, 1.1vw, 3rem);
+/* 轮播关键词为主标题的次级字号；行高和裁切由 Hero 的局部样式管理。 */
+@utility kawaru-text-home-keyword {
+  font-size: clamp(1.65rem, min(3.6vw, 5.5vh), 3.5rem);
 }
 
 /* 页面主标题。斜率 1.7vw 远陡于基准的 0.4vw，等比档位两头不靠
@@ -232,26 +209,6 @@ i:lang(zh-CN) {
 @utility kawaru-field-icon {
   width: calc(var(--kawaru-fs) * 1.45);
   height: calc(var(--kawaru-fs) * 1.45);
-}
-
-/* ---------- 场景叙事：进场动画（v-reveal 指令）---------- */
-.reveal {
-  opacity: 0;
-  transform: translateY(28px);
-  transition:
-    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.reveal.is-visible {
-  opacity: 1;
-  transform: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .reveal {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
 }
 
 /* 隐藏滚动条（横向轮播 / 场景容器）但保留可滚动 */

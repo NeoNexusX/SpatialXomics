@@ -26,12 +26,12 @@ describe('getContent', () => {
   })
 
   it('returns the loaded content afterwards', async () => {
-    mockContent({ timeline: [{ date: '2024 Q1', version: '1.0', features: ['first'] }] })
+    mockContent({ team: [{ name: 'Ada', role: 'PI' }] })
     const { loadContent, getContent } = await freshModule()
 
     await loadContent()
 
-    expect(getContent().timeline).toHaveLength(1)
+    expect(getContent().team).toHaveLength(1)
   })
 })
 
@@ -42,8 +42,6 @@ describe('loadContent', () => {
 
     expect(await loadContent()).toEqual({
       hero: { taglines: [], gallery: [] },
-      features: { items: [] },
-      timeline: [],
       team: [],
       contact: {},
       githubHeatmap: undefined,
@@ -53,8 +51,6 @@ describe('loadContent', () => {
   it('keeps the authored sections as-is', async () => {
     const raw: HomeContent = {
       hero: { taglines: ['FREE'], gallery: ['a.png'] },
-      features: { items: [{ word: 'OPEN' }] },
-      timeline: [{ date: '2024 Q1', version: '1.0', features: ['first'] }],
       team: [{ name: 'Ada', role: 'PI' }],
       contact: { email: 'a@b.c' },
       githubHeatmap: { owner: 'BioNet-XMU', repo: 'MassVision' },
@@ -85,7 +81,7 @@ describe('loadContent', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
     const { loadContent } = await freshModule()
 
-    await expect(loadContent()).resolves.toMatchObject({ timeline: [] })
+    await expect(loadContent()).resolves.toMatchObject({ team: [] })
   })
 
   it('shares one request between concurrent callers', async () => {

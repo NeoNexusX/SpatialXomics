@@ -5,12 +5,10 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
 import SvgIcon from './shared/components/SvgIcon.vue'
-import { vReveal } from './shared/directives/reveal'
 import { loadConfig } from './shared/config/runtimeConfig'
 import { initTheme } from './shared/composables/useTheme'
 import { initLocale } from './shared/composables/useLocale'
 import { i18n, loadCoreMessages } from './i18n'
-
 
 /**
  * 启动顺序很关键：必须先 await loadConfig() 拉到 config.json，再动态导入 App 与 router。
@@ -41,9 +39,6 @@ async function bootstrap() {
 
   // Register SvgIcon globally so templates can use <SvgIcon /> without local import
   app.component('SvgIcon', SvgIcon)
-
-  // Register v-reveal so templates can use scroll-reveal entrance animation
-  app.directive('reveal', vReveal)
 
   app.mount('#app')
 }

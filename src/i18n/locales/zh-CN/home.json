@@ -4,12 +4,19 @@
       "join": "立即加入",
       "datasets": "查看数据集"
     },
+    "hero": {
+      "lead": "面向组学数据的开放云平台。",
+      "scroll": "向下滚动",
+      "galleryTitle": "空间图谱",
+      "viewAlt": "组织切片 · 视图 {index}",
+      "imageUnavailable": "图像暂时无法加载"
+    },
     "stats": {
       "title": "统计",
       "datasetsTotal": "共 {count} 个数据集",
       "totalDatasets": "数据集总数",
       "totalDownloads": "下载总数",
-      "websiteVisits": "网站访问量",
+      "websiteVisits": "网站访问总量",
       "organismParts": "组织部位",
       "ionSourceTypes": "离子源类型",
       "loadFailed": {
@@ -20,26 +27,39 @@
         "platform": "平台概览加载失败",
         "visits": "访问量统计加载失败"
       },
-      "tooltip": "{count} 个数据集（{percent}%）"
+      "distribution": "数据集分布",
+      "other": "其他",
+      "datasetUnit": "数据集"
+    },
+    "visitsHistory": {
+      "title": "访问趋势",
+      "recordedRequests": "已记录请求",
+      "requestCount": "{count} 次请求",
+      "metricHelp": "统计已接入接口的请求次数，不代表独立访客 UV 或页面浏览 PV。",
+      "date": "日期（UTC）",
+      "partial": "今日截至当前",
+      "missingValue": "数据缺失，不代表零访问",
+      "noObservations": "该时段暂无已采集数据",
+      "unavailable": "统计暂不可用",
+      "loadFailed": "访问详情加载失败"
+    },
+    "activity": {
+      "title": "开发动态"
     },
     "heatmap": {
       "summary": "提交活跃度概览",
       "total": "总计：",
       "activeDays": "活跃天数：",
-      "lastDays": "最近 {days} 天",
-      "branch": "分支：",
       "commits": "次提交",
       "rateLimited": "GitHub API 达到限流（剩余 {remaining} 次），将在 {time} 重置",
       "unknownTime": "未知时间",
       "loadFailed": "GitHub 活跃度加载失败",
       "tooltip": "{date}：{count} 次提交",
-      "defaultTitle": "{owner}/{repo} 提交活跃度",
       "less": "少",
       "more": "多"
     },
     "footer": {
       "team": "团队介绍",
-      "tagline": "由热爱科学与工程的人共同打造。",
       "poweredBy": "技术支持",
       "copyright": "Copyright © {year} - Bionet 保留所有权利",
       "website": "Bionet 实验室网站",
@@ -49,9 +69,6 @@
       "recruitment": "加入实验室",
       "computingFramework": "计算框架",
       "aliyun": "阿里云"
-    },
-    "scenes": {
-      "ariaLabel": "MassVision 首页场景"
     },
     "team": {
       "carousel": "开发团队"

@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { localized } from '@/shared/config/localizedText'
 import type { TeamMember } from '@/features/home/config/contentConfig'
+import { ossImage } from '../../utils/ossImage'
 
 /**
  * 开发者卡片 —— 竖向矩形（portrait），3D 悬浮采用 daisyUI `hover-3d`（纯 CSS）。
@@ -50,7 +51,7 @@ const initials = computed(() =>
             >
               <img
                 v-if="showImage"
-                :src="member.avatar"
+                :src="ossImage(member.avatar!, 320)"
                 :alt="memberName"
                 loading="lazy"
                 decoding="async"
@@ -110,7 +111,7 @@ const initials = computed(() =>
   width: 100%;
 }
 
-/* ---- 内容随卡片宽度等比缩放（cqi = 卡片宽度的 1%；容器在 .carousel-item 上声明）----
+/* ---- 内容随卡片宽度等比缩放（cqi = 卡片宽度的 1%；容器在轨道的 .dev-cell 上声明）----
    百分比以 250px 满宽为基准取像素占比；clamp 的下限是窄卡的可读/观感底线，
    上限是满卡时的既有尺寸。卡片越窄，头像、字号、内边距一起按比例缩小，3:4 盒内不挤不溢。 */
 .card-body {
@@ -144,7 +145,8 @@ const initials = computed(() =>
 /* 无边卡片：纯 base 色填充，去掉金属边框 */
 .card-face {
   border: none;
-  background: var(--color-base-100);
+  /* 首页团队面板是白底，卡片改用 --home-card 给的灰；其他地方仍是 base-100 */
+  background: var(--home-card, var(--color-base-100));
 }
 
 /* 无障碍：减少动态时关闭旋转/放大 */

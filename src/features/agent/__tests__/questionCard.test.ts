@@ -115,7 +115,9 @@ describe('QuestionCard', () => {
     expect(activeQuestion(card)).toBe('Which adduct?')
     expect(lastDrafts()[0]).toMatchObject({ selected: ['[M+Na]+'], touched: true })
 
-    await choice(card, '[M+H]+ (Recommended)').trigger('click', { detail: 1 })
+    choice(card, '[M+H]+ (Recommended)').element.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }),
+    )
     await settle()
     expect(activeQuestion(card)).toBe('Which regions?')
     expect(lastDrafts()[0]).toMatchObject({ selected: ['[M+H]+ (Recommended)'] })

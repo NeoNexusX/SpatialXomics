@@ -20,7 +20,9 @@
           :placeholder="$t('common.input.example', { value: 50 })"
           @keyup.enter="addSolvent"
         />
-        <span v-if="percentageError" class="kawaru-text-75 text-error mt-0.5">{{ percentageError }}</span>
+        <span v-if="percentageError" class="kawaru-text-75 text-error mt-0.5">{{
+          percentageError
+        }}</span>
       </div>
 
       <div class="flex-[2] min-w-0">
@@ -30,6 +32,8 @@
           :label-of="vocabLabel"
           :placeholder="$t('common.input.selectShort')"
           :other-placeholder="$t('common.input.specifyOther')"
+          :custom-input-mode="customInputMode"
+          :max-length="maxLength"
           hide-label
         />
       </div>
@@ -58,7 +62,7 @@
         <button
           class="btn btn-ghost btn-xs text-error kawaru-text-68"
           @click="removeSolvent(index)"
-:title="$t('common.action.remove')"
+          :title="$t('common.action.remove')"
         >
           <SvgIcon type="close" class="h-4 w-4" />
         </button>
@@ -83,6 +87,8 @@ import { t } from '@/i18n'
 const props = defineProps<{
   modelValue: string
   solventOptions: readonly string[]
+  customInputMode?: 'normalized' | 'verbatim'
+  maxLength?: number
 }>()
 
 const emit = defineEmits<{
@@ -113,7 +119,10 @@ const percentageError = computed(() => {
 // Parse existing solvent string into entries
 const solventEntries = computed(() => {
   if (!props.modelValue) return []
-  return props.modelValue.split(',').map(s => s.trim()).filter(Boolean)
+  return props.modelValue
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
 })
 
 /** 条目形如 "50% Water"：提交的仍是这个英文串，只把溶剂名部分换成显示文字 */
@@ -124,7 +133,12 @@ function entryLabel(entry: string): string {
 
 // Can add check
 const canAdd = computed(() => {
-  return percentage.value !== null && percentage.value >= 1 && percentage.value <= 100 && selectedSolvent.value.trim() !== ''
+  return (
+    percentage.value !== null &&
+    percentage.value >= 1 &&
+    percentage.value <= 100 &&
+    selectedSolvent.value.trim() !== ''
+  )
 })
 
 // Add solvent
@@ -142,9 +156,8 @@ function addSolvent() {
   }
 
   const newEntry = `${percentage.value}% ${selectedSolvent.value.trim()}`
-  const currentEntries = solventEntries.value.length > 0
-    ? [...solventEntries.value, newEntry]
-    : [newEntry]
+  const currentEntries =
+    solventEntries.value.length > 0 ? [...solventEntries.value, newEntry] : [newEntry]
 
   emit('update:modelValue', currentEntries.join(', '))
 

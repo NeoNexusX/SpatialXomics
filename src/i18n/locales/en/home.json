@@ -4,12 +4,19 @@
       "join": "Join to start",
       "datasets": "View Datasets"
     },
+    "hero": {
+      "lead": "An open cloud platform for omics data.",
+      "scroll": "Scroll",
+      "galleryTitle": "Spatial atlas",
+      "viewAlt": "Tissue section · view {index}",
+      "imageUnavailable": "Image unavailable"
+    },
     "stats": {
       "title": "Stats",
       "datasetsTotal": "{count} datasets total",
       "totalDatasets": "Total Datasets",
       "totalDownloads": "Total Downloads",
-      "websiteVisits": "Website Visits",
+      "websiteVisits": "Total Visits",
       "organismParts": "Organism Parts",
       "ionSourceTypes": "Ion Source Types",
       "loadFailed": {
@@ -20,26 +27,39 @@
         "platform": "Failed to load platform overview",
         "visits": "Failed to load visits stats"
       },
-      "tooltip": "{count} dataset ({percent}%) | {count} datasets ({percent}%)"
+      "distribution": "Dataset breakdown",
+      "other": "Others",
+      "datasetUnit": "datasets"
+    },
+    "visitsHistory": {
+      "title": "Visit history",
+      "recordedRequests": "recorded requests",
+      "requestCount": "{count} requests",
+      "metricHelp": "Counts requests to tracked endpoints, not unique visitors (UV) or page views (PV).",
+      "date": "Date (UTC)",
+      "partial": "Today so far",
+      "missingValue": "Missing data, not confirmed zero visits",
+      "noObservations": "No recorded data for this period",
+      "unavailable": "Statistics temporarily unavailable",
+      "loadFailed": "Failed to load visit history"
+    },
+    "activity": {
+      "title": "Development"
     },
     "heatmap": {
       "summary": "Commit activity summary",
       "total": "Total:",
       "activeDays": "Active days:",
-      "lastDays": "Last {days} days",
-      "branch": "Branch:",
       "commits": "commits",
       "rateLimited": "GitHub API rate limited (remaining {remaining}), resets at {time}",
       "unknownTime": "unknown time",
       "loadFailed": "Failed to load GitHub activity",
       "tooltip": "{date}: {count} commit | {date}: {count} commits",
-      "defaultTitle": "{owner}/{repo} Commit Activity",
       "less": "Less",
       "more": "More"
     },
     "footer": {
       "team": "The Team",
-      "tagline": "Built by people who love science and engineering.",
       "poweredBy": "Powered by",
       "copyright": "Copyright © {year} - All rights reserved by Bionet",
       "website": "Bionet Lab Website",
@@ -49,9 +69,6 @@
       "recruitment": "Join the Lab",
       "computingFramework": "Computing Framework",
       "aliyun": "Aliyun"
-    },
-    "scenes": {
-      "ariaLabel": "MassVision home scenes"
     },
     "team": {
       "carousel": "Development team"

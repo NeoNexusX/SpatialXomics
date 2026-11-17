@@ -108,7 +108,17 @@
     },
     "metadata": {
       "title": "编辑元信息",
-      "notOwner": "你不是该数据集的所有者，无法修改。"
+      "notOwner": "你不是该数据集的所有者，无法修改。",
+      "tooLong": "最多 {max} 个字符。",
+      "invalidNumber": "必须是大于等于 0 的数字。",
+      "invalidFields": "部分字段不合法，请检查高亮的字段。",
+      "readOnly": "只读",
+      "notSpecified": "未填写",
+      "numberHint": "支持小数；留空或填 0 表示未填写。",
+      "textHint": "选择“其他”可自定义文本，最多 {max} 个字符，保留大小写和符号。选择“未填写”可清空字段。",
+      "readOnlyHint": "谱图模式和存储模式由上传文件决定，不能在此修改。",
+      "changedCount": "已修改 {count} 项",
+      "savedWithAdjustments": "已保存。服务器调整了以下数值：{changes}。表单已显示实际保存值，请核对。"
     },
     "my": {
       "searchPlaceholder": "搜索我的数据集",
