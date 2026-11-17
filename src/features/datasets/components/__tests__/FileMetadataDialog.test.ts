@@ -236,25 +236,12 @@ describe('FileMetadataDialog', () => {
     expect(wrapper.emitted('close')).toHaveLength(1)
   })
 
-  it('shows spectrum_mode / storage_mode as read-only values, not editable selects', async () => {
+  it('omits read-only file-format fields from the metadata editor', async () => {
     const wrapper = await openDialog()
 
-    const spectrum = wrapper.find('[data-field="spectrum_mode"] input')
-    expect((spectrum.element as HTMLInputElement).value).toBe('profile')
-    expect(spectrum.attributes('disabled')).toBeDefined()
-    expect(spectrum.attributes('readonly')).toBeDefined()
-
-    const storage = wrapper.find('[data-field="storage_mode"] input')
-    expect((storage.element as HTMLInputElement).value).toBe('processed')
-    expect(storage.attributes('disabled')).toBeDefined()
-    expect(storage.attributes('readonly')).toBeDefined()
-
-    // 只读值不再占据可编辑下拉：任何 select 都不会选中这两种枚举
-    const selectValues = wrapper
-      .findAll('select')
-      .map((s) => (s.element as HTMLSelectElement).value)
-    expect(selectValues).not.toContain('profile')
-    expect(selectValues).not.toContain('processed')
+    expect(wrapper.find('[data-field="spectrum_mode"]').exists()).toBe(false)
+    expect(wrapper.find('[data-field="storage_mode"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Read-only')
   })
 
   // 回归：solvent 曾被漏出弹窗（其余样本属性都能改，只有它没有对应控件）

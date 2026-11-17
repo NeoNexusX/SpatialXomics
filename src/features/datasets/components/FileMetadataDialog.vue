@@ -252,9 +252,6 @@ function close() {
         >
           {{ $t('upload.form.sampleMetadata') }}
         </h4>
-        <p class="kawaru-text-75 text-base-content/60 mb-3">
-          {{ $t('datasets.metadata.textHint', { max: FILE_METADATA_MAX_STRING_LENGTH }) }}
-        </p>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
           <div v-for="field in textFields" :key="field.key" :data-field="field.key" class="min-w-0">
             <SelectWithOther
@@ -284,39 +281,6 @@ function close() {
               {{ fieldError('solvent') }}
             </span>
           </div>
-        </div>
-
-        <h4
-          class="mt-6 mb-4 border-b border-base-content/10 pb-2 kawaru-text-100 text-base-content/60 font-medium"
-        >
-          {{ $t('datasets.metadata.readOnly') }}
-        </h4>
-        <p class="kawaru-text-75 text-base-content/60 mb-3">
-          {{ $t('datasets.metadata.readOnlyHint') }}
-        </p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <label class="flex flex-col gap-1 min-w-0" data-field="spectrum_mode">
-            <span class="kawaru-text-81 font-medium text-base-content/70">{{
-              $t('common.meta.spectrumMode')
-            }}</span>
-            <input
-              class="input input-bordered w-full kawaru-text-100"
-              :value="dataset?.spectrumMode || '—'"
-              readonly
-              disabled
-            />
-          </label>
-          <label class="flex flex-col gap-1 min-w-0" data-field="storage_mode">
-            <span class="kawaru-text-81 font-medium text-base-content/70">{{
-              $t('common.meta.storageMode')
-            }}</span>
-            <input
-              class="input input-bordered w-full kawaru-text-100"
-              :value="dataset?.storageMode || '—'"
-              readonly
-              disabled
-            />
-          </label>
         </div>
       </fieldset>
 

@@ -112,11 +112,8 @@
       "tooLong": "Must be at most {max} characters.",
       "invalidNumber": "Must be a number greater than or equal to 0.",
       "invalidFields": "Some fields are invalid. Please check the highlighted fields.",
-      "readOnly": "Read-only",
       "notSpecified": "Not specified",
       "numberHint": "Use 0 or leave blank for an unspecified value. Decimals are allowed.",
-      "textHint": "Choose Other to enter custom text (up to {max} characters). Case and symbols are preserved. Choose Not specified to clear a field.",
-      "readOnlyHint": "Spectrum and storage modes describe the uploaded file format and cannot be edited.",
       "changedCount": "Fields changed: {count}",
       "savedWithAdjustments": "Saved. The server adjusted these numbers: {changes}. The form now shows the saved values."
     },
