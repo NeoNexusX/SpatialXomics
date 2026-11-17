@@ -5,21 +5,23 @@
  * 最终值先以隐形文字占好宽度，计数过程中布局不抖；读屏器只读最终值。
  * 「减少动态」下直接显示最终值。
  */
-import { onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
+import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from 'vue'
 import { formatNumber } from '@/shared/utils/format'
-import { gsap, motionAllowed } from '../motion/gsap'
+import { gsap, MOTION } from '../motion/gsap'
 
 const props = defineProps<{ value: number }>()
 
 const el = useTemplateRef<HTMLElement>('el')
-const shown = ref(formatNumber(props.value))
-let ctx: gsap.Context | undefined
+const shown = shallowRef(formatNumber(props.value))
+let media: gsap.MatchMedia | undefined
+let played = false
 
 onMounted(() => {
-  if (!motionAllowed()) return
-  const state = { value: 0 }
-  shown.value = formatNumber(0)
-  ctx = gsap.context(() => {
+  media = gsap.matchMedia()
+  media.add(MOTION.media, () => {
+    if (played) return
+    const state = { value: 0 }
+    shown.value = formatNumber(0)
     gsap.to(state, {
       value: props.value,
       duration: 1.6,
@@ -28,7 +30,14 @@ onMounted(() => {
       onUpdate: () => {
         shown.value = formatNumber(Math.round(state.value))
       },
+      onComplete: () => {
+        played = true
+      },
     })
+    return () => {
+      played = true
+      shown.value = formatNumber(props.value)
+    }
   })
 })
 
@@ -36,12 +45,13 @@ onMounted(() => {
 watch(
   () => props.value,
   (value) => {
-    ctx?.revert()
+    played = true
+    media?.revert()
     shown.value = formatNumber(value)
   },
 )
 
-onBeforeUnmount(() => ctx?.revert())
+onBeforeUnmount(() => media?.revert())
 </script>
 
 <template>

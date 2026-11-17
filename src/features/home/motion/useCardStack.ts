@@ -1,5 +1,5 @@
-import { onBeforeUnmount, onMounted, shallowRef, watch, nextTick, type Ref } from 'vue'
-import { gsap, ScrollTrigger } from './gsap'
+import { inject, onBeforeUnmount, onMounted, shallowRef, watch, nextTick, type Ref } from 'vue'
+import { gsap, homeMotionRefreshKey, ScrollTrigger } from './gsap'
 import { activeStackCard, cardStackLayout } from './cardStackLayout'
 import type { HomeSectionContext } from './homeSectionContext'
 
@@ -12,8 +12,10 @@ export function useCardStack(
 ) {
   const active = shallowRef(0)
   const enhanced = shallowRef(false)
+  const requestRefresh = inject(homeMotionRefreshKey, () => ScrollTrigger.refresh(true))
   let media: gsap.MatchMedia | undefined
   let mounted = false
+  let setupPending = false
 
   function setup() {
     media?.revert()
@@ -40,24 +42,33 @@ export function useCardStack(
         element.setAttribute('data-stacked', '')
         enhanced.value = true
         let layout = cardStackLayout(cards.length, element.clientHeight)
-        const timeline = gsap.timeline()
+        const timeline = gsap.timeline({ paused: true })
         const stickyTop = () => parseFloat(getComputedStyle(panel).top) || 0
+        let measuredGeometry = ''
 
         const measure = () => {
-          const localTop = viewport.getBoundingClientRect().top - panel.getBoundingClientRect().top
-          const entry = window.innerHeight - stickyTop() - localTop + 24
+          // Read geometry together, before changing styles or rebuilding any tweens.
+          const panelTop = panel.getBoundingClientRect().top
+          const top = stickyTop()
+          const stageHeight = element.clientHeight
+          const localTop = viewport.getBoundingClientRect().top - panelTop
+          const entry = window.innerHeight - top - localTop + 24
           const introEntries = introElements.map((target) => {
             // Measure the resting position even when refresh runs halfway through
             // a slide. Every card starts wholly below the same viewport edge.
-            const top =
-              target.getBoundingClientRect().top -
-              panel.getBoundingClientRect().top -
-              Number(gsap.getProperty(target, 'y'))
-            return window.innerHeight - stickyTop() - top + 24
+            const localTop =
+              target.getBoundingClientRect().top - panelTop - Number(gsap.getProperty(target, 'y'))
+            return window.innerHeight - top - localTop + 24
           })
-          layout = cardStackLayout(cards.length, element.clientHeight, entry, introEntries)
+          const clearance = Math.max(0, window.innerHeight - top - panel.offsetHeight)
+          const geometry = [stageHeight, entry, clearance, ...introEntries]
+            .map((value) => value.toFixed(2))
+            .join(',')
+          // Fonts, images and other triggers may refresh without moving this stack.
+          if (geometry === measuredGeometry) return
+          measuredGeometry = geometry
+          layout = cardStackLayout(cards.length, stageHeight, entry, introEntries)
           element.style.setProperty('--stack-trail', `${layout.trail}px`)
-          const clearance = Math.max(0, window.innerHeight - stickyTop() - panel.offsetHeight)
           scene?.setDwell(layout.dwell + clearance)
 
           // Resize changes both landing positions and phase lengths. Rebuild the
@@ -121,7 +132,7 @@ export function useCardStack(
           onRefresh: (self) => updateActive(self.progress),
         })
         nextTick(() => {
-          if (mounted) ScrollTrigger.refresh()
+          if (mounted) requestRefresh()
         })
         return () => {
           ScrollTrigger.removeEventListener('refreshInit', measure)
@@ -139,17 +150,31 @@ export function useCardStack(
         }
       },
     )
-    ScrollTrigger.refresh()
+    requestRefresh()
   }
 
-  watch([keys, () => scene?.introElements?.()], async () => {
+  async function scheduleSetup() {
+    if (setupPending) return
+    setupPending = true
     await nextTick()
+    setupPending = false
     if (mounted) setup()
-  })
-  onMounted(async () => {
+  }
+
+  watch(
+    [
+      root,
+      keys,
+      () => scene?.panel.value,
+      () => scene?.anchor.value,
+      () => scene?.introElements?.(),
+    ],
+    scheduleSetup,
+    { flush: 'post' },
+  )
+  onMounted(() => {
     mounted = true
-    await nextTick()
-    if (mounted) setup()
+    scheduleSetup()
   })
   onBeforeUnmount(() => {
     mounted = false

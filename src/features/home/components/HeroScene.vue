@@ -19,7 +19,7 @@ const { pre: namePre, x: nameX, post: namePost } = getBrandParts()
 </script>
 
 <template>
-  <HomeSection id="hero" stack surface="hero">
+  <HomeSection id="hero" surface="hero">
     <template v-if="gallery.length" #background>
       <HeroGallery :images="gallery" />
     </template>
@@ -126,7 +126,7 @@ const { pre: namePre, x: nameX, post: namePost } = getBrandParts()
   align-items: center;
   gap: 1rem;
   margin-top: auto;
-  padding-top: clamp(13rem, 32vh, 21rem);
+  padding-top: 1.5rem;
 }
 .hero-lead {
   max-width: 34em;

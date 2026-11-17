@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, useTemplateRef } from 'vue'
+import { useResizeObserver } from '@vueuse/core'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useAuthStore } from '@/shared/auth/authStore'
@@ -18,6 +19,16 @@ import type {
 } from '@/shared/config/runtimeConfig'
 
 const router = useRouter()
+const emit = defineEmits<{ resize: [height: number] }>()
+const navbarElement = useTemplateRef<HTMLElement>('navbarElement')
+useResizeObserver(
+  navbarElement,
+  () => {
+    emit('resize', navbarElement.value?.getBoundingClientRect().height ?? 0)
+  },
+  { box: 'border-box' },
+)
+onBeforeUnmount(() => emit('resize', 0))
 const authStore = useAuthStore()
 const { user, isAdmin } = storeToRefs(authStore)
 const { isDark, toggleTheme } = useTheme()
@@ -77,12 +88,15 @@ const onUserAction = async (action: 'logout') => {
 </script>
 
 <template>
-  <!-- relative z-40：让下拉菜单盖过页面内容自建的 stacking context（仍低于 drawer/fab 的 9998/9999）。
+  <!-- sticky z-40：顶栏随滚动保持在顶部，下拉菜单盖过页面内容的 stacking context。
 
        字号一律挂档位，逐处独立。daisyUI 的 .btn / .menu-title 自带固定 font-size，
        所以每处都要显式覆盖。尺寸（[--size:…em]、w-[16em]）继续用 em，
        读所在元素字号，换档时自动跟着缩放。 -->
-  <div class="navbar page-navbar relative z-40 px-2 md:px-6 kawaru-text-100">
+  <div
+    ref="navbarElement"
+    class="navbar page-navbar sticky top-0 z-40 shrink-0 px-2 md:px-6 kawaru-text-100"
+  >
     <!-- start: 品牌 + 移动端汉堡菜单（小屏合并展示全部分组与用户菜单） -->
     <div class="navbar-start">
       <div class="dropdown">

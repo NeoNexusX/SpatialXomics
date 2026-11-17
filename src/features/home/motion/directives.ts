@@ -8,15 +8,18 @@
  * 脚本出错时内容照样可见。开启「减少动态」时什么都不做。卸载时 revert，切分和内联样式全部还原。
  */
 import type { Directive } from 'vue'
-import { gsap, MOTION, motionAllowed, SplitText } from './gsap'
+import { gsap, MOTION, SplitText } from './gsap'
 import './motion.css'
 
 type RevealOptions = { delay?: number }
 
-const contexts = new WeakMap<Element, gsap.Context>()
+const contexts = new WeakMap<Element, gsap.MatchMedia>()
 
 function bind(el: Element, setup: () => void) {
-  if (motionAllowed()) contexts.set(el, gsap.context(setup))
+  const media = gsap.matchMedia()
+  contexts.set(el, media)
+  // Revert immediately if the OS preference changes while the page is open.
+  media.add(MOTION.media, setup)
 }
 
 function unbind(el: Element) {

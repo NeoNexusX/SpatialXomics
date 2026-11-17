@@ -50,7 +50,7 @@ const failures = computed(
 
 <template>
   <div>
-    <ul class="kpi-grid" tabindex="0" data-lenis-prevent :aria-label="$t('home.stats.title')">
+    <ul class="kpi-grid" tabindex="0" :aria-label="$t('home.stats.title')">
       <li
         v-for="card in cards"
         :key="card.key"
@@ -96,6 +96,7 @@ const failures = computed(
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.625rem;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: thin;
   padding: 2px;
   margin: -2px;
@@ -148,7 +149,7 @@ const failures = computed(
   outline: 2px solid currentColor;
   outline-offset: -4px;
 }
-@media (min-width: 1024px) and (max-height: 780px) {
+@media (min-width: 1024px) and (max-height: 900px) {
   .kpi-card {
     padding: 0.75rem;
   }

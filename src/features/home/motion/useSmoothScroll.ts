@@ -1,8 +1,8 @@
 import Lenis from 'lenis'
 import 'lenis/dist/lenis.css'
-import { onBeforeUnmount, onMounted, watch, type Ref } from 'vue'
-import { useDebounceFn, usePreferredReducedMotion, useResizeObserver } from '@vueuse/core'
-import { gsap, ScrollTrigger } from './gsap'
+import { onBeforeUnmount, onMounted, provide, watch, type Ref } from 'vue'
+import { usePreferredReducedMotion, useResizeObserver } from '@vueuse/core'
+import { gsap, homeMotionRefreshKey, ScrollTrigger } from './gsap'
 
 /**
  * 首页的平滑滚动：Lenis 只在首页存在期间接管 window 滚动，离开首页即销毁。
@@ -15,7 +15,32 @@ import { gsap, ScrollTrigger } from './gsap'
 export function useSmoothScroll(rootRef: Readonly<Ref<HTMLElement | null>>) {
   const reducedMotion = usePreferredReducedMotion()
   let lenis: Lenis | null = null
+  let mounted = false
+  let pendingRefresh = false
+  let refreshTimer: ReturnType<typeof setTimeout> | undefined
+  let refreshFrame = 0
   const raf = (time: number) => lenis?.raf(time * 1000)
+
+  function flushRefresh() {
+    refreshFrame = 0
+    if (!mounted || !pendingRefresh || ScrollTrigger.isScrolling()) return
+    pendingRefresh = false
+    lenis?.resize()
+    ScrollTrigger.refresh()
+  }
+
+  function requestRefresh() {
+    if (!mounted) return
+    pendingRefresh = true
+    clearTimeout(refreshTimer)
+    cancelAnimationFrame(refreshFrame)
+    // Coalesce async content, font and stack changes, then measure after Vue paints.
+    refreshTimer = setTimeout(() => {
+      refreshTimer = undefined
+      refreshFrame = requestAnimationFrame(flushRefresh)
+    }, 100)
+  }
+  provide(homeMotionRefreshKey, requestRefresh)
 
   function stop() {
     gsap.ticker.remove(raf)
@@ -37,18 +62,32 @@ export function useSmoothScroll(rootRef: Readonly<Ref<HTMLElement | null>>) {
     gsap.ticker.add(raf)
   }
 
-  useResizeObserver(
-    rootRef,
-    useDebounceFn(() => ScrollTrigger.refresh(), 200),
-  )
-  watch(reducedMotion, start)
-
-  onMounted(() => {
-    window.scrollTo(0, 0)
+  useResizeObserver(rootRef, requestRefresh)
+  watch(reducedMotion, () => {
     start()
+    requestRefresh()
   })
 
+  onMounted(() => {
+    mounted = true
+    window.scrollTo(0, 0)
+    start()
+    // Defer layout refreshes during scrolling so an async response cannot reset a scrub.
+    ScrollTrigger.addEventListener('scrollEnd', requestRefreshIfPending)
+    requestRefresh()
+    document.fonts?.ready.then(requestRefresh)
+  })
+
+  function requestRefreshIfPending() {
+    if (pendingRefresh) requestRefresh()
+  }
+
   onBeforeUnmount(() => {
+    mounted = false
+    pendingRefresh = false
+    clearTimeout(refreshTimer)
+    cancelAnimationFrame(refreshFrame)
+    ScrollTrigger.removeEventListener('scrollEnd', requestRefreshIfPending)
     stop()
     window.scrollTo(0, 0)
   })

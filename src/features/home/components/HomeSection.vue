@@ -5,8 +5,8 @@ import { homeSectionKey } from '../motion/homeSectionContext'
 /**
  * 首页面板：统一圆角边界和停靠位置；统计面板在边界内承载叠卡。
  *
- * 宽屏下每张面板一样高（约一屏，底下露出下一张的上缘），开了 stack 的面板停在顶部，
- * 由下一张面板整张盖上来，正好盖住、不会多出一截。窄屏下高度跟内容走，不叠层。
+ * 宽屏下每张面板共用一屏可用高度，默认停靠在顶栏下，由下一张圆角面板覆盖。
+ * 窄屏下高度跟内容走，不叠层。
  * 留白、配色等量在 HomeView 根节点上定义。
  */
 defineOptions({ inheritAttrs: false })
@@ -19,7 +19,7 @@ const props = withDefaults(
     /** 同一时间轴上先于叠卡入场的内容，由使用者显式传入。 */
     introElements?: readonly HTMLElement[]
   }>(),
-  { stack: false, surface: 'panel', introElements: () => [] },
+  { stack: true, surface: 'panel', introElements: () => [] },
 )
 
 const panel = useTemplateRef<HTMLElement>('panel')
@@ -49,6 +49,9 @@ provide(homeSectionKey, {
     <div class="home-panel__inner">
       <div class="home-panel__body">
         <slot />
+        <div v-if="$slots.footer" class="home-panel__footer">
+          <slot name="footer" />
+        </div>
       </div>
     </div>
   </section>
@@ -82,7 +85,6 @@ provide(homeSectionKey, {
   z-index: -1;
 }
 .home-panel--stats {
-  --home-panel-h: calc(100svh - 2 * var(--home-inset));
   --home-max: none;
   --home-pad-x: clamp(1.25rem, 2.4vw, 2.5rem);
   border-color: color-mix(in oklab, var(--color-base-content) 12%, transparent);
@@ -92,7 +94,6 @@ provide(homeSectionKey, {
   overflow: clip;
 }
 .home-panel--hero {
-  min-height: clamp(34rem, 88svh, 56rem);
   isolation: isolate;
   overflow: clip;
   border-color: transparent;
@@ -110,6 +111,10 @@ provide(homeSectionKey, {
   flex-direction: column;
   min-height: 0;
 }
+.home-panel__footer {
+  margin-top: auto;
+  flex: none;
+}
 
 @media (min-width: 1024px) {
   .home-panel {
@@ -117,8 +122,8 @@ provide(homeSectionKey, {
   }
 }
 
-@media (min-width: 1024px) and (max-height: 780px) {
-  .home-panel--stats {
+@media (min-width: 1024px) and (max-height: 900px) {
+  .home-panel:not(.home-panel--hero) {
     --home-pad-y: 1rem;
   }
 }
@@ -128,10 +133,18 @@ provide(homeSectionKey, {
 @media (min-width: 1024px) and (min-height: 680px) and (prefers-reduced-motion: no-preference) {
   .home-panel--stack {
     position: sticky;
-    top: var(--home-inset);
+    top: var(--home-top);
     height: var(--home-panel-h);
     min-height: 0;
   }
+}
+.home-panel--hero {
+  /* 顶栏 + 上下留白 + Hero 正好一屏；所有断点及减少动态模式共用。 */
+  height: var(--home-panel-h);
+  min-height: 0;
+}
+.home-panel--hero + .home-dwell {
+  margin-bottom: calc(var(--home-inset) - var(--home-gap));
 }
 .home-anchor {
   height: 0;

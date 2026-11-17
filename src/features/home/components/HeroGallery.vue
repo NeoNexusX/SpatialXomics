@@ -27,6 +27,14 @@ let moveX: ReturnType<typeof gsap.quickTo> | undefined
 let moveY: ReturnType<typeof gsap.quickTo> | undefined
 let sweep: gsap.core.Timeline | undefined
 let introPlayed = false
+let pointerFrame = 0
+let pointerPosition: { x: number; y: number } | undefined
+
+function cancelPointer() {
+  cancelAnimationFrame(pointerFrame)
+  pointerFrame = 0
+  pointerPosition = undefined
+}
 
 function stopSweep() {
   sweep?.kill()
@@ -66,6 +74,7 @@ function playIntro() {
 }
 
 function move(x: number, y: number) {
+  cancelPointer()
   if (!frame.value) return
   const wasSweeping = !!sweep
   stopSweep()
@@ -83,12 +92,19 @@ function inspect(event: PointerEvent) {
   if (!frame.value || event.pointerType === 'touch') return
   // Direct interaction takes priority, including before the images finish loading.
   introPlayed = true
+  pointerPosition = { x: event.clientX, y: event.clientY }
+  if (!pointerFrame) pointerFrame = requestAnimationFrame(inspectFrame)
+}
+function inspectFrame() {
+  pointerFrame = 0
+  const position = pointerPosition
+  if (!frame.value || !position) return
   // The interaction frame stays flat. Only the two image planes are projected,
   // so pointer coordinates remain accurate throughout the perspective effect.
   const bounds = frame.value.getBoundingClientRect()
   move(
-    Math.max(12, Math.min(88, ((event.clientX - bounds.left) / bounds.width) * 100)),
-    Math.max(18, Math.min(82, ((event.clientY - bounds.top) / bounds.height) * 100)),
+    Math.max(12, Math.min(88, ((position.x - bounds.left) / bounds.width) * 100)),
+    Math.max(18, Math.min(82, ((position.y - bounds.top) / bounds.height) * 100)),
   )
 }
 function imageLoaded(event: Event, src: string) {
@@ -113,8 +129,15 @@ watch(
 watch(
   [showLens, visible, reducedMotion],
   ([ready, inView, preference]) => {
-    if (!ready || !inView || preference === 'reduce') {
-      if (sweep) move(62, 52)
+    if (preference === 'reduce') {
+      move(62, 52)
+      return
+    }
+    if (!ready || !inView) {
+      cancelPointer()
+      stopSweep()
+      moveX?.tween.pause()
+      moveY?.tween.pause()
       return
     }
     playIntro()
@@ -130,6 +153,7 @@ onMounted(() => {
   playIntro()
 })
 onBeforeUnmount(() => {
+  cancelPointer()
   stopSweep()
   context?.revert()
 })

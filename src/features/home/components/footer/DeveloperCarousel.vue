@@ -4,7 +4,7 @@
  * 一屏只放整数张卡（列数按轨道宽度用容器查询决定），不露出半张。
  */
 import { useTemplateRef } from 'vue'
-import { useScroll } from '@vueuse/core'
+import { usePreferredReducedMotion, useScroll } from '@vueuse/core'
 import DeveloperCard from './DeveloperCard.vue'
 import { localized } from '@/shared/config/localizedText'
 import { getContent } from '@/features/home/config/contentConfig'
@@ -13,19 +13,25 @@ import { vStagger } from '../../motion/directives'
 const { team } = getContent()
 
 const track = useTemplateRef<HTMLElement>('track')
+const reducedMotion = usePreferredReducedMotion()
 // 滚到两端时对应的箭头置灰；容差吸收吸附和子像素取整带来的几像素偏差
 const { arrivedState } = useScroll(track, { offset: { left: 8, right: 8 } })
 
 /** 整页翻：一页正好是轨道可见宽度，吸附会对齐到下一页的第一张 */
 function page(direction: 1 | -1) {
   const el = track.value
-  if (el) el.scrollBy({ left: direction * el.clientWidth, behavior: 'smooth' })
+  if (el) {
+    el.scrollBy({
+      left: direction * el.clientWidth,
+      behavior: reducedMotion.value === 'reduce' ? 'instant' : 'smooth',
+    })
+  }
 }
 </script>
 
 <template>
   <div>
-    <div class="mb-6 flex justify-end gap-2">
+    <div class="dev-controls flex justify-end gap-2">
       <button
         type="button"
         class="dev-arrow"
@@ -62,6 +68,14 @@ function page(direction: 1 | -1) {
 </template>
 
 <style scoped>
+.dev-controls {
+  margin-bottom: 1.5rem;
+}
+@media (min-width: 1024px) and (max-height: 900px) {
+  .dev-controls {
+    margin-bottom: 0.75rem;
+  }
+}
 .dev-track {
   --gap: clamp(0.75rem, 1.5vw, 1.25rem);
   display: flex;

@@ -23,7 +23,7 @@
   "nav": {
     "mode": "navbar",
     "modeByPath": {
-      "/": "drawer",
+      "/": "navbar",
       "/login": "drawer",
       "/register": "drawer",
       "/vizworkbench": "drawer"

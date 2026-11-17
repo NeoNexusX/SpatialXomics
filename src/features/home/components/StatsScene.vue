@@ -18,15 +18,19 @@ const introElements = computed(() =>
 </script>
 
 <template>
-  <HomeSection id="stats" stack surface="stats" :intro-elements="introElements">
+  <HomeSection id="stats" surface="stats" :intro-elements="introElements">
     <h2 :key="$t('home.stats.title')" v-split-reveal="{ by: 'chars' }" class="stats-title">
       {{ $t('home.stats.title') }}
     </h2>
     <div class="stats-layout">
       <div class="stats-overview">
         <div ref="kpis" class="stats-reveal"><StatsKpis /></div>
-        <div ref="visits" class="stats-reveal"><VisitsHistoryCard /></div>
-        <div v-if="heatmap?.owner && heatmap.repo" ref="activity" class="stats-reveal">
+        <div ref="visits" class="stats-reveal stats-reveal--chart"><VisitsHistoryCard /></div>
+        <div
+          v-if="heatmap?.owner && heatmap.repo"
+          ref="activity"
+          class="stats-reveal stats-reveal--chart stats-reveal--activity"
+        >
           <ActivityCard :config="heatmap" />
         </div>
       </div>
@@ -67,7 +71,7 @@ const introElements = computed(() =>
   min-width: 0;
   min-height: 0;
 }
-@media (min-width: 1024px) and (max-height: 780px) {
+@media (min-width: 1024px) and (max-height: 900px) {
   .stats-overview {
     gap: 0.5rem;
   }
@@ -79,11 +83,24 @@ const introElements = computed(() =>
 @media (min-width: 1024px) and (min-height: 680px) and (prefers-reduced-motion: no-preference) {
   .stats-layout {
     grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+    grid-template-rows: minmax(0, 1fr);
     gap: clamp(1.5rem, 3vw, 3rem);
     align-items: start;
   }
   .stats-distribution {
     width: 100%;
+  }
+  .stats-overview {
+    height: 100%;
+  }
+  .stats-reveal--chart {
+    /* Share the actual space below the KPIs, including the navbar deduction. */
+    flex: 1;
+    min-height: 0;
+  }
+  .stats-reveal--activity {
+    /* The heatmap also needs room for its month labels, legend and summary. */
+    flex-basis: 4rem;
   }
 }
 </style>

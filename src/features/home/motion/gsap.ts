@@ -7,7 +7,7 @@
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { SplitText } from 'gsap/SplitText'
-import { prefersReducedMotion } from '@/shared/utils/motion'
+import type { InjectionKey } from 'vue'
 
 gsap.registerPlugin(ScrollTrigger, SplitText)
 
@@ -24,9 +24,10 @@ export const MOTION = {
   stagger: { chars: 0.035, lines: 0.09, items: 0.1 },
   /** 元素顶部到达视口 88% 处开始入场 */
   start: 'top 88%',
+  media: '(prefers-reduced-motion: no-preference)',
 } as const
 
-/** 开启「减少动态」时不做入场，元素直接以最终状态显示 */
-export const motionAllowed = () => !prefersReducedMotion()
+/** HomeView owns refresh scheduling and cancellation for all descendant animations. */
+export const homeMotionRefreshKey: InjectionKey<() => void> = Symbol('home-motion-refresh')
 
 export { gsap, ScrollTrigger, SplitText }

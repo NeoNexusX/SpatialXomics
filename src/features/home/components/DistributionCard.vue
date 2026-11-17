@@ -4,31 +4,45 @@ import { useI18n } from 'vue-i18n'
 import { useChartVisibility } from '../composables/useChartVisibility'
 import { useTheme } from '@/shared/composables/useTheme'
 import { formatNumber } from '@/shared/utils/format'
-import type { DatasetCategoryItem } from '../types/stats'
-import { categoryColors, type CategoryPalette } from '../utils/categoryPalette'
+import { categoryColors } from '../utils/categoryPalette'
 import { foldTail } from '../utils/foldTail'
 import StatCard from './StatCard.vue'
+import {
+  useAnalyzerStats,
+  useDatasetCategoryStats,
+  useDatasetIonSourceStats,
+  useOrganismStats,
+} from '../composables/useHomeStats'
 
 const CategoryDonutChart = defineAsyncComponent(() => import('./CategoryDonutChart.vue'))
 const props = defineProps<{
-  title: string
-  total: number
-  items: DatasetCategoryItem[]
-  loading: boolean
-  error: string | null
-  isEmpty: boolean
-  palette: CategoryPalette
-  /** Names read "Common (Genus species)"; the binomial is set in italics. */
-  scientificNames?: boolean
+  category: 'organism' | 'tissue' | 'ion-source' | 'analyzer'
 }>()
-defineEmits<{ reload: [] }>()
 const { t, locale } = useI18n()
 const { isDark } = useTheme()
+// Category identity is stable for this keyed card's lifetime.
+const categories = {
+  organism: { title: () => t('common.meta.organism'), load: useOrganismStats, palette: 'green' },
+  tissue: {
+    title: () => t('home.stats.organismParts'),
+    load: useDatasetCategoryStats,
+    palette: 'berry',
+  },
+  'ion-source': {
+    title: () => t('home.stats.ionSourceTypes'),
+    load: useDatasetIonSourceStats,
+    palette: 'amber',
+  },
+  analyzer: { title: () => t('common.meta.analyzer'), load: useAnalyzerStats, palette: 'blue' },
+} as const
+const definition = categories[props.category]
+const { items, total, loading, error, isEmpty, reload } = definition.load()
+const title = computed(definition.title)
 
 /** "Mouse (Mus musculus)" → "Mouse" plus a quieter qualifier. */
 const QUALIFIED = /^(.+?)\s*\(([^()]+)\)$/
-const rows = computed(() => foldTail(props.items, 6, t('home.stats.other')))
-const colors = computed(() => categoryColors(rows.value, props.palette, isDark.value))
+const rows = computed(() => foldTail(items.value, 6, t('home.stats.other')))
+const colors = computed(() => categoryColors(rows.value, definition.palette, isDark.value))
 const legend = computed(() => {
   const percent = new Intl.NumberFormat(locale.value, {
     style: 'percent',
@@ -43,7 +57,7 @@ const legend = computed(() => {
       name,
       qualifier,
       count: formatNumber(row.count),
-      share: percent.format(row.count / props.total),
+      share: percent.format(total.value > 0 ? row.count / total.value : 0),
       color: colors.value[index],
     }
   })
@@ -64,7 +78,7 @@ const visible = useChartVisibility(content)
       </div>
       <div v-else-if="error" class="dist-card__state kawaru-text-81" role="alert">
         <span>{{ error }}</span>
-        <button type="button" class="btn btn-ghost btn-sm" @click="$emit('reload')">
+        <button type="button" class="btn btn-ghost btn-sm" @click="reload">
           {{ $t('common.action.retry') }}
         </button>
       </div>
@@ -104,7 +118,7 @@ const visible = useChartVisibility(content)
               <span
                 v-if="row.qualifier"
                 class="dist-card__qualifier kawaru-text-68"
-                :class="{ italic: scientificNames }"
+                :class="{ italic: props.category === 'organism' }"
                 >{{ row.qualifier }}</span
               >
             </span>

@@ -134,13 +134,23 @@ const visible = useChartVisibility(plot)
   font-size: 0.65rem;
   color: color-mix(in oklab, var(--color-base-content) 60%, transparent);
 }
-@media (min-width: 1024px) and (max-height: 780px) {
+@media (min-width: 1024px) and (max-height: 900px) {
   .visits-card {
     padding: 0.75rem;
   }
   .visits-card__plot {
     height: 6.5rem;
     min-height: 6.5rem;
+  }
+}
+@media (min-width: 1024px) and (min-height: 680px) and (prefers-reduced-motion: no-preference) {
+  .visits-card {
+    height: 100%;
+  }
+  .visits-card__plot {
+    flex: 1;
+    height: auto;
+    min-height: 0;
   }
 }
 </style>

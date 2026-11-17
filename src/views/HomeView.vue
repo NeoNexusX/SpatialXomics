@@ -13,9 +13,7 @@ useSmoothScroll(useTemplateRef<HTMLElement>('root'))
   <div ref="root" class="home text-base-content">
     <HeroScene />
     <StatsScene />
-    <div class="home-ending">
-      <TeamScene />
-    </div>
+    <TeamScene />
   </div>
 </template>
 
@@ -25,10 +23,9 @@ useSmoothScroll(useTemplateRef<HTMLElement>('root'))
   /* 面板到视口边缘的距离、面板之间的间距 */
   --home-inset: clamp(0.5rem, 2vw, 1.875rem);
   --home-gap: clamp(0.5rem, 1vw, 0.75rem);
-  /* 面板底下露出下一张面板上缘的高度，提示继续往下滚 */
-  --home-peek: clamp(2.5rem, 7vh, 4.5rem);
-  /* 宽屏下每张面板一样高：一屏减去顶部留白和露出的那一截，下一张盖上来时正好盖住 */
-  --home-panel-h: calc(100svh - var(--home-inset) - var(--home-peek));
+  --home-top: calc(var(--app-navbar-height, 0px) + var(--home-inset));
+  /* 三张面板共用顶栏下的可用高度与停靠位置。 */
+  --home-panel-h: calc(100dvh - var(--home-top) - var(--home-inset));
   /* 面板圆角与内边距；上下内边距按视口高度收，矮屏也放得下 */
   --home-radius: clamp(1.25rem, 2.6vw, 2.5rem);
   --home-pad-x: clamp(1.25rem, 3vw, 3rem);
@@ -53,16 +50,6 @@ useSmoothScroll(useTemplateRef<HTMLElement>('root'))
   flex-direction: column;
   gap: var(--home-gap);
   padding: var(--home-inset);
-  background: var(--home-page);
-}
-
-/* 团队与页脚组成连续的不透明终场，滚到底时不会露出停靠在下面的统计区。 */
-.home-ending {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  min-height: calc(100svh - var(--home-inset));
   background: var(--home-page);
 }
 
