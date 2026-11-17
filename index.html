@@ -2,33 +2,16 @@
 <html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
-    <!-- config.json 提前发车。
-         启动链上 main.ts 必须 await 到 config.json 才能 import App 与 router（见 main.ts 注释），
-         若等入口 JS 下载 + 解析完再发这个请求，它就是一次纯串行往返、期间什么都没在并行做。
-         这里在 HTML 解析阶段就把请求发出去，与 index.js / vendor / CSS 的下载并行；
-         config.json（gzip 后不到 1KB）远小于关键路径 JS，main.ts 接手时通常已 resolve。
-         注：首页展示内容已拆到 content.json，由 / 路由自己加载，不在这条启动链上。
-         注意这不是缓存：存的是本次页面加载的 Promise，整页刷新会重新发起。
-
-         两处必须与 runtimeConfig.ts 的 loadConfig() 保持一致，否则复用不到、退化成两次请求：
-           1. 路径 —— %BASE_URL% 由 vite 在 transformIndexHtml 阶段替换为 base（末尾带 /），
-              与 loadConfig() 的 `${import.meta.env.BASE_URL}config.json` 同源，改 base 无需再改这里。
-           2. cache 模式 —— 必须同为 'no-cache'。 -->
+    <!-- config.json 提前发车。-->
     <script>
       window.__configPromise = fetch('%BASE_URL%config.json', { cache: 'no-cache' })
-      // 空 catch 只为消除「内联脚本发车」到「main.ts 接手」之间空窗期的
-      // Uncaught (in promise) 告警；它返回的是新 Promise，不影响 __configPromise 本身
-      // 继续以 rejected 状态传给 loadConfig()。真正的错误处理仍在 main.ts 的 bootstrap().catch()。
       window.__configPromise.catch(function () {})
     </script>
 
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <link rel="preconnect" href="https://fonts.font.im" crossorigin />
     <link rel="preconnect" href="https://fonts.gstatic.font.im" crossorigin />
-    <!-- 字体异步加载：media="print" 让浏览器以「非当前媒体」下载这张表，不阻塞渲染；
-         下载完 onload 再切回 media="all" 应用样式。字体本身带 display=swap，
-         套用前先用 :root 的 system-ui 兜底，因此不会白屏、只会有一次字体替换。
-         noscript 分支保证禁用 JS 时仍以传统（阻塞）方式加载。 -->
+    <!-- 字体异步加载：media="print"  -->
     <link
       href="https://fonts.font.im/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Outfit:wght@400;500;600;700&display=swap"
       rel="stylesheet"

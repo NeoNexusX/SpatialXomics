@@ -168,28 +168,31 @@ onBeforeUnmount(() => {
       :value="props.value"
       @change="handleChange"
     >
-    <span
-      aria-hidden="true"
-      data-slot="questionnaire-choice-indicator"
-      class="border-input dark:bg-input/30 group-data-checked/questionnaire-choice:bg-primary dark:group-data-checked/questionnaire-choice:bg-primary group-data-checked/questionnaire-choice:text-primary-foreground group-data-checked/questionnaire-choice:border-primary size-4 translate-y-[--spacing(0.45)] group-has-data-[slot=questionnaire-choice-description]/questionnaire-choice:translate-y-0.5 rounded-[4px] pointer-events-none relative flex shrink-0 items-center justify-center border group-data-[type=radio]/questionnaire-choice:rounded-full"
-    >
+    <slot name="indicator" :checked="checked" :disabled="disabled" :shortcut="shortcut" :type="type">
       <span
-        data-slot="questionnaire-choice-indicator-dot"
-        class="bg-primary-foreground size-2 hidden rounded-full group-data-[type=checkbox]/questionnaire-choice:hidden group-data-checked/questionnaire-choice:block"
-      />
-      <CheckIcon
-        data-slot="questionnaire-choice-indicator-check"
-        class="size-3.5 hidden group-data-[type=radio]/questionnaire-choice:hidden group-data-checked/questionnaire-choice:block"
-      />
-    </span>
+        aria-hidden="true"
+        data-slot="questionnaire-choice-indicator"
+        class="border-input dark:bg-input/30 group-data-checked/questionnaire-choice:bg-primary dark:group-data-checked/questionnaire-choice:bg-primary group-data-checked/questionnaire-choice:text-primary-foreground group-data-checked/questionnaire-choice:border-primary size-4 translate-y-[--spacing(0.45)] group-has-data-[slot=questionnaire-choice-description]/questionnaire-choice:translate-y-0.5 rounded-[4px] pointer-events-none relative flex shrink-0 items-center justify-center border group-data-[type=radio]/questionnaire-choice:rounded-full"
+      >
+        <span
+          data-slot="questionnaire-choice-indicator-dot"
+          class="bg-primary-foreground size-2 hidden rounded-full group-data-[type=checkbox]/questionnaire-choice:hidden group-data-checked/questionnaire-choice:block"
+        />
+        <CheckIcon
+          data-slot="questionnaire-choice-indicator-check"
+          class="size-3.5 hidden group-data-[type=radio]/questionnaire-choice:hidden group-data-checked/questionnaire-choice:block"
+        />
+      </span>
+    </slot>
     <span
       data-slot="questionnaire-choice-label"
       class="gap-1 flex min-w-0 flex-1 flex-col leading-snug"
     >
       <slot :checked="checked" :disabled="disabled" :shortcut="shortcut" :type="type" />
     </span>
+    <!-- A custom indicator receives the shortcut and is expected to show it. -->
     <span
-      v-if="shortcut"
+      v-if="shortcut && !$slots.indicator"
       aria-hidden="true"
       data-slot="questionnaire-choice-shortcut"
       class="border-input bg-background text-muted-foreground size-5 translate-y-[--spacing(0.45)] group-has-data-[slot=questionnaire-choice-description]/questionnaire-choice:translate-y-0.5 items-center justify-center rounded-md border font-mono text-[0.625rem] font-medium leading-none shadow-xs pointer-events-none ms-auto hidden shrink-0 group-data-[shortcut]/questionnaire-choice:inline-flex"

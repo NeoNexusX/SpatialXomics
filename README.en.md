@@ -89,7 +89,7 @@ npm ci
 | File | Contents |
 |---|---|
 | `env/.env` | Values shared by all environments: `VITE_API_BASE`, `VITE_OSS_ENDPOINT` |
-| `env/.env.development` | Dev proxy target `VITE_BACKEND_URL`, plus assistant defaults `VITE_LLM_PROXY_URL` / `VITE_LLM_MODEL` |
+| `env/.env.development` | Dev proxy target `VITE_BACKEND_URL` |
 | `env/.env.production` | Production build/preview values; add `VITE_LLM_PROXY_URL`, `VITE_LLM_API_KEY`, `VITE_LLM_MODEL` for a deployment-wide default connection |
 | `env/config.prod.overrides.json` | Overrides merged into `config.json` for production (see [Deployment](#deployment)) |
 

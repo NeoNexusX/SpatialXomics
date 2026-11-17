@@ -121,6 +121,34 @@ describe('AgentTurn', () => {
       expect(wrapper.text()).not.toContain('ask_user_question')
     })
 
+    it('joins the chosen options on one line and puts free text on its own line', () => {
+      const wrapper = mountTurn(
+        { parts },
+        {
+          '3:1': record({
+            questions: [
+              {
+                id: 'regions',
+                question: 'Which regions?',
+                multiSelect: true,
+                options: [{ label: 'Cortex (Recommended)' }, { label: 'Hippocampus' }],
+              },
+            ],
+            answers: [
+              {
+                id: 'regions',
+                selected: ['Cortex (Recommended)', 'Hippocampus'],
+                custom: 'Thalamus',
+              },
+            ],
+          }),
+        },
+      )
+      const answer = wrapper.get('dd')
+      expect(answer.get('span').text()).toBe('Cortexcommon.agent.question.separatorHippocampus')
+      expect(answer.get('span.block').text()).toBe('Thalamus')
+    })
+
     it('keeps waiting and unanswered questions in the steps', () => {
       const waiting = mountTurn({ parts }, { '3:1': record({ state: 'waiting', answers: undefined }) })
       expect(waiting.findAll('[data-slot="trace"]')).toHaveLength(1)

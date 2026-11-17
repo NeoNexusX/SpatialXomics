@@ -89,7 +89,7 @@ npm ci
 | 文件 | 内容 |
 |---|---|
 | `env/.env` | 所有环境共享的公共值：`VITE_API_BASE`、`VITE_OSS_ENDPOINT` |
-| `env/.env.development` | 开发服务器代理目标 `VITE_BACKEND_URL`，以及助手默认连接 `VITE_LLM_PROXY_URL` / `VITE_LLM_MODEL` |
+| `env/.env.development` | 开发服务器代理目标 `VITE_BACKEND_URL` |
 | `env/.env.production` | 生产构建/预览使用的值；需要部署级默认连接时补 `VITE_LLM_PROXY_URL`、`VITE_LLM_API_KEY`、`VITE_LLM_MODEL` |
 | `env/config.prod.overrides.json` | 正式环境 `config.json` 的覆盖项（见[部署](#部署)） |
 

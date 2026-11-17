@@ -61,7 +61,9 @@ async function mountCard(pending = pendingOf()) {
   return wrapper
 }
 
-const activeQuestion = (card: VueWrapper) => card.get('fieldset[data-active]').get('legend').text()
+/** 题干；多选题的 legend 里还跟着「可多选」 */
+const activeQuestion = (card: VueWrapper) =>
+  card.get('fieldset[data-active]').get('legend span').text()
 const choice = (card: VueWrapper, label: string) =>
   card
     .get('fieldset[data-active]')
@@ -88,6 +90,22 @@ describe('QuestionCard', () => {
     expect(recommended.text()).toContain('Positive mode.')
     expect(card.text()).toContain('Adduct')
     expect(card.text()).toContain('10:00')
+  })
+
+  it('shows the number key in each mark until the option is chosen and hints only at multi-select', async () => {
+    const card = await mountCard()
+    const marks = card
+      .get('fieldset[data-active]')
+      .findAll('[data-slot="questionnaire-choice"] > [aria-hidden="true"]')
+    expect(marks.map((mark) => mark.text())).toEqual(['', '2'])
+    expect(marks[0]!.find('svg').exists()).toBe(true)
+    expect(card.find('[data-slot="questionnaire-choice-shortcut"]').exists()).toBe(false)
+    expect(card.get('fieldset[data-active] legend').text()).toBe('Which adduct?')
+
+    await button(card, 'common.agent.question.next').trigger('click')
+    expect(card.get('fieldset[data-active] legend').text()).toContain(
+      'common.agent.question.multipleHint',
+    )
   })
 
   it('moves on after a click on a single-select option but not after a keyboard choice', async () => {

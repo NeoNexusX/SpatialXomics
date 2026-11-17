@@ -168,7 +168,7 @@
               <IconInput
                 :label="$t('users.field.homepage')"
                 v-model="formData.homepage"
-                placeholder="https://example.com"
+                :placeholder="HOMEPAGE_PLACEHOLDER"
               />
             </div>
 
@@ -216,6 +216,9 @@ import ChangePasswordModal from '@/features/users/components/ChangePasswordModal
 import { useUserProfileForm } from '@/features/users/composables/useUserProfileForm'
 import { identityLabel } from '@/features/users/utils/identityLabel'
 import { profileOptionMap } from '@/shared/constants/profileOptions'
+
+// 不写进模板：vue-tsc 3.3.13 起会把组件属性里的 `//` 当成注释改写，这个模板的类型检查会出错
+const HOMEPAGE_PLACEHOLDER = 'https://example.com'
 
 const {
   loading,
