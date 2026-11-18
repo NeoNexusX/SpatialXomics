@@ -34,11 +34,9 @@ import {
   mzAxisRef,
   setZarrStore,
   resetZarrSharedState,
-  polarityRef,
 } from '@/services/zarr/zarrSharedState'
 import type { ZarrOssStore } from '@/services/zarr/zarrOssStore'
 import {
-  resolveMassPolarity,
   buildIonImageStats,
   registerContextProviders,
   unregisterContextProviders,
@@ -291,10 +289,6 @@ it('reads the same tolerance window as the workbench and rejects out-of-window t
   expect(sum).toHaveBeenCalledWith([0, 1])
   expect(ion.label).toContain('window 99.99–100.01')
   await expect(readIon(150, 0.01, new AbortController().signal)).rejects.toThrow('No m/z')
-  polarityRef.value = 'negative'
-  expect(resolveMassPolarity()).toBe('negative')
-  polarityRef.value = ''
-  expect(() => resolveMassPolarity()).toThrow('Specify polarity')
 })
 
 it('lets explicit mz queries through when the selection changed mid-turn', async () => {

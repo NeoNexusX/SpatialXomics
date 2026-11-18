@@ -63,7 +63,7 @@
        "model": "m"
       },
       "system": "<prompt 7bf7b8e2>",
-      "tools": "<tools d0c14a20>",
+      "tools": "<tools 85b0d392>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -132,7 +132,7 @@
  "calls": [
   {
    "system": "<prompt 7bf7b8e2>",
-   "tools": "<tools d0c14a20>",
+   "tools": "<tools 85b0d392>",
    "messages": [
     "<message 1>",
     "<message 2>"
@@ -180,11 +180,11 @@
   ],
   "error": "The selected pixel changed. Submit the question again.",
   "pressure": {
-   "inputTokens": 12004,
+   "inputTokens": 11750,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.06423373287671233,
+   "ratio": 0.06287457191780822,
    "estimated": true
   }
  }

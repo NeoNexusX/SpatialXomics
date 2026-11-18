@@ -170,7 +170,9 @@ npm run dev:app   # 只启动 SPA
 | `/kegg-rest/` | `https://rest.kegg.jp/` | 全站共享 3 次/秒，`burst=10`，仅 GET |
 | `/hmdb-archive/` | `https://web.archive.org` 的 HMDB 代谢物 XML | 2 次/秒，仅允许 `HMDB` 开头的条目路径 |
 
-KEGG 客户端在单次调用内缓存响应、批量去重，并按上游每次 10 条的限制自动分块；归档站不返回浏览器所需的 CORS 头，因此 XML 必须经 `/hmdb-archive/` 取回，中继失败时工具降级为只给链接，不编造数据。
+每次 KEGG 工具调用最多发一个上游请求。`kegg_find` 的一个 `query` 可以包含多个按 AND 匹配的关键词。化合物和通路详情每次接受 1–10 个 ID，更多 ID 由 Agent 分次提交。`kegg_pathway(membersOf=[...])` 一次取得多个通路的成员编号，`kegg_mass_search` 每次查询一个 m/z 和一个指定加合物。
+
+HMDB 归档站不返回浏览器所需的 CORS 头，因此 XML 必须经 `/hmdb-archive/` 取回，中继失败时工具降级为只给链接，不编造数据。
 
 ### 内置技能
 

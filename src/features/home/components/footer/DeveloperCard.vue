@@ -150,20 +150,6 @@ const initials = computed(() =>
 }
 
 /* 无障碍：减少动态时关闭旋转/放大 */
-@media (min-width: 1024px) and (max-height: 900px) {
-  .card-face {
-    aspect-ratio: auto;
-  }
-  .card-body {
-    --fs: 0.75rem;
-    padding: 1rem;
-    gap: 0.5rem;
-  }
-  .avatar-box {
-    width: 4rem;
-    height: 4rem;
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   .hover-3d > :first-child,
   .hover-3d:hover > :first-child {

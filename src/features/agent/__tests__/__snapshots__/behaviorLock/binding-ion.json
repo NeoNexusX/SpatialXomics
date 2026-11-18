@@ -62,7 +62,7 @@
        "model": "m"
       },
       "system": "<prompt 7bf7b8e2>",
-      "tools": "<tools d0c14a20>",
+      "tools": "<tools 85b0d392>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -131,7 +131,7 @@
  "calls": [
   {
    "system": "<prompt 7bf7b8e2>",
-   "tools": "<tools d0c14a20>",
+   "tools": "<tools 85b0d392>",
    "messages": [
     "<message 1>",
     "<message 2>"
@@ -179,11 +179,11 @@
   ],
   "error": "The selected ion changed after this question was submitted. Submit the question again for the new selection.",
   "pressure": {
-   "inputTokens": 12006,
+   "inputTokens": 11752,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.06424443493150685,
+   "ratio": 0.06288527397260274,
    "estimated": true
   }
  }

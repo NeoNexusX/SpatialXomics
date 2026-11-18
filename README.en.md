@@ -170,7 +170,9 @@ External queries use same-origin relays; custom hosting must provide them too:
 | `/kegg-rest/` | `https://rest.kegg.jp/` | 3 requests/s shared across the site, `burst=10`, GET only |
 | `/hmdb-archive/` | HMDB metabolite XML on `https://web.archive.org` | 2 requests/s, only path-safe `HMDB` accessions |
 
-The KEGG client caches responses within a call, deduplicates batch queries, and chunks requests to the upstream 10-entry limit. The archive sends no browser CORS headers, so XML must come through `/hmdb-archive/`; when the relay fails the tool degrades to link-only output instead of inventing data.
+Each KEGG tool call makes at most one upstream request. `kegg_find` accepts multiple ANDed keywords in one `query`. Compound and pathway details accept 1–10 IDs per call. The agent submits additional IDs in separate calls. `kegg_pathway(membersOf=[...])` retrieves compound IDs for multiple pathways in one request. `kegg_mass_search` searches one observed m/z and one specified adduct per call.
+
+The HMDB archive sends no browser CORS headers, so XML must come through `/hmdb-archive/`; when the relay fails the tool degrades to link-only output instead of inventing data.
 
 ### Bundled Skills
 

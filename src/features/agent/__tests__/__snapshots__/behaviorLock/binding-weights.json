@@ -64,7 +64,7 @@
        "model": "m"
       },
       "system": "<prompt 7bf7b8e2>",
-      "tools": "<tools d0c14a20>",
+      "tools": "<tools 85b0d392>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -133,7 +133,7 @@
  "calls": [
   {
    "system": "<prompt 7bf7b8e2>",
-   "tools": "<tools d0c14a20>",
+   "tools": "<tools 85b0d392>",
    "messages": [
     "<message 1>",
     "<message 2>"
@@ -181,11 +181,11 @@
   ],
   "error": "Annotation scoring settings changed. Submit the question again.",
   "pressure": {
-   "inputTokens": 12012,
+   "inputTokens": 11758,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.06427654109589041,
+   "ratio": 0.0629173801369863,
    "estimated": true
   }
  }
