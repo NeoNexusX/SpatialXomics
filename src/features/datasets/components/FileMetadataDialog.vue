@@ -32,8 +32,8 @@
             />
           </label>
 
-          <!-- 溶剂：与上传页同款复合控件（"N% 名称" 逗号分隔，可增删条目）。
-               整行占满：百分比输入 + 溶剂下拉 + 条目列表在窄栏里会挤成一团。 -->
+          <!-- 溶剂：与上传页同款复合控件（"数值+单位+组分" 逗号分隔，可增删条目）。
+               整行占满：用量输入 + 单位下拉 + 溶剂下拉 + 条目列表在窄栏里会挤成一团。 -->
           <div class="flex flex-col gap-1 min-w-0 col-span-full">
             <span class="kawaru-text-81 font-medium text-base-content/70">{{ $t('common.meta.solvent') }}</span>
             <SolventPicker v-model="draft!.solvent" :solvent-options="SOLVENTS" />

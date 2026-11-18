@@ -26,20 +26,16 @@ test.describe('Workspace', () => {
     await expect(page.getByText('Recent Results')).toBeVisible()
   })
 
-  test('New Task — navigates to create analysis page', async ({ page }) => {
+  test('entry links navigate to create-analysis and my-datasets', async ({ page }) => {
     await page.goto('/workspace')
 
-    await page.getByRole('link', { name: 'New Task' }).click()
-
+    // New Task 现在是按钮：点击时先做分析配额校验，通过后才跳创建页
+    await page.getByRole('button', { name: 'New Task' }).click()
     await expect(page).toHaveURL(/\/workspace\/new/)
     await expect(page.locator('h1:has-text("Create New Analysis")')).toBeVisible()
-  })
 
-  test('Go to MyDatasets — navigates to my datasets page', async ({ page }) => {
     await page.goto('/workspace')
-
     await page.getByRole('link', { name: 'Go to MyDatasets' }).click()
-
     await expect(page).toHaveURL(/\/mydatasets/)
     await expect(page.locator('h1:has-text("My Datasets")')).toBeVisible()
   })

@@ -196,9 +196,9 @@ test.describe('New Analysis', () => {
 // Peak Alignment 链路（serial：submit → 查看两用例）
 // ============================================================
 
-test.describe.serial('Peak Alignment journey', () => {
+test.describe.serial('Peak Alignment journey', { tag: '@chromium-only' }, () => {
   // 重后端 Peak Alignment 任务只在 chromium 创建（firefox/webkit 后端完成时间不可控，还拖长 CI）。
-  test.skip(({ browserName }) => browserName !== 'chromium', 'Peak Alignment 任务只在 chromium 创建一次')
+  // 浏览器维度由 firefox/webkit 项目的 grepInvert 排除，不再运行时 skip。
 
   test('submit — creates Peak Alignment task and waits for completion', async ({ page }) => {
     test.setTimeout(ALIGN_TEST_TIMEOUT_MS)
@@ -373,9 +373,8 @@ test.describe.serial('Peak Alignment journey', () => {
 // 删除 submit 创建的任务（按 createdProcessId 定位，不会碰到历史任务）。
 
 test.describe('Cleanup', () => {
-  test('delete completed result', async ({ page, browserName }) => {
+  test('delete completed result', { tag: '@chromium-only' }, async ({ page }) => {
     // 与 submit 对应：任务只在 chromium 建，这里也只在 chromium 删
-    test.skip(browserName !== 'chromium', 'Peak Alignment 任务只在 chromium 创建，清理也只在 chromium')
     test.setTimeout(ALIGN_TEST_TIMEOUT_MS)
     // submit 没有创建任务（skip / 创建前失败）时不删任何行——
     // 宁可留下未清理的任务，也不误删历史数据

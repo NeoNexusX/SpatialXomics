@@ -9,6 +9,7 @@ import {
   getVisitsStats,
 } from '../api/statsApi'
 import type { DatasetCategoryItem, DatasetCategoryStats } from '@/features/home/types/stats'
+import { collapseTopCategories } from '../utils/collapseCategories'
 
 /**
  * 首页统计的响应式状态封装。
@@ -36,9 +37,11 @@ function useCategoryDistribution(
     error.value = null
     try {
       const r = await fetcher()
-      items.value = r.items ?? []
+      const rawItems = r.items ?? []
+      // 环形图只展示前 10 项，其余合并为 Other；total 仍按完整数据计算
+      items.value = collapseTopCategories(rawItems, 'Other')
       // 后端未返回 total 时，用各分段计数自行累加兜底
-      total.value = r.total ?? items.value.reduce((s, i) => s + i.count, 0)
+      total.value = r.total ?? rawItems.reduce((s, i) => s + i.count, 0)
     } catch (e) {
       error.value = e instanceof Error ? e.message : errorMessage()
       items.value = []

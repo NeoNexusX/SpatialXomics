@@ -55,6 +55,23 @@
   "timeline": [
     {
       "date": {
+        "en": "November 18",
+        "zh-CN": "11月18日"
+      },
+      "version": "0.7.7",
+      "features": [
+        {
+          "en": "New analyses now check your analysis quota first and explain how to free capacity when the limit is reached",
+          "zh-CN": "新建分析前先校验分析配额，超限时就地提示如何释放额度"
+        },
+        {
+          "en": "Solvent entries now accept concentrations and custom units in addition to percentages",
+          "zh-CN": "溶剂录入除百分比外，还支持浓度与自定义单位"
+        }
+      ]
+    },
+    {
+      "date": {
         "en": "November 3",
         "zh-CN": "11月3日"
       },
@@ -100,35 +117,6 @@
         {
           "en": "New database guide and annotation guide updates",
           "zh-CN": "新增数据库指南，注释指南更新"
-        }
-      ]
-    },
-    {
-      "date": {
-        "en": "October 9",
-        "zh-CN": "10月9日"
-      },
-      "version": "0.7.4",
-      "features": [
-        {
-          "en": "AI Agent platform with multi-evidence annotation scoring",
-          "zh-CN": "AI Agent 平台与注释多证据打分"
-        },
-        {
-          "en": "ROI highlighting and mask export",
-          "zh-CN": "ROI 联动高亮与掩膜导出"
-        },
-        {
-          "en": "GBK/GB18030 support for annotation CSV",
-          "zh-CN": "注释 CSV 支持 GBK 编码"
-        },
-        {
-          "en": "Gray out Gamma and display range during multi-ion overlay",
-          "zh-CN": "多离子叠加时置灰不适用控件"
-        },
-        {
-          "en": "Documentation overhaul: unified guides and account pages",
-          "zh-CN": "文档大更新：指南统一与账号管理重写"
         }
       ]
     }

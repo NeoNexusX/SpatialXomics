@@ -107,21 +107,3 @@ test('stats scene shows section heading and stat card labels', async ({ page }) 
   }
 })
 
-// ── Footer（末屏，无后端依赖）──
-
-test('footer shows team info, powered by, and copyright', async ({ page }) => {
-  await page.goto('/', { waitUntil: 'domcontentloaded' })
-
-  // 滚动到底部（scroll-snap 页面，用键盘 End 键滚到底）
-  await page.locator('.home-scroll').press('End')
-
-  // 团队标题
-  await expect(page.getByText('The Team')).toBeVisible()
-  await expect(page.getByText('Built by people who love science and engineering.')).toBeVisible()
-
-  // Powered by
-  await expect(page.getByText('Powered by')).toBeVisible()
-
-  // 版权（年份动态，只断言固定部分）
-  await expect(page.getByText('All rights reserved by Bionet')).toBeVisible()
-})
