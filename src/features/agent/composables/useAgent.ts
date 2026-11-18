@@ -123,6 +123,7 @@ export function useAgent() {
     phase: computed(() => snapshot.value.phase),
     pressure: computed(() => snapshot.value.pressure),
     tokenUsage: computed(() => snapshot.value.tokenUsage),
+    questions: computed(() => snapshot.value.questions),
     earlierAvailable: computed(() => snapshot.value.messages.length > visibleCount.value),
     send,
     stop,

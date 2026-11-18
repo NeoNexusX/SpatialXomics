@@ -128,10 +128,11 @@ describe('system prompt and tool catalog', () => {
   it('sends the sorted production tool schemas', async () => {
     const h = await setup([text('done')], { fullTools: true, noScriptTools: true })
     await turn(h)
-    await expect(JSON.stringify(h.calls[0]!.tools, null, 2) + '\n').toMatchFileSnapshot(
-      './__snapshots__/behaviorLock/tool-schemas.json',
-    )
-    expect(h.calls[0]!.tools).toHaveLength(28)
+    // 每个工具压成一行紧凑 JSON：内容仍然逐字节锁定，diff 粒度是单个工具
+    await expect(
+      h.calls[0]!.tools!.map((tool) => JSON.stringify(tool)).join('\n') + '\n',
+    ).toMatchFileSnapshot('./__snapshots__/behaviorLock/tool-schemas.txt')
+    expect(h.calls[0]!.tools).toHaveLength(29)
   })
 })
 
@@ -337,6 +338,83 @@ describe('tools', () => {
       return exec.name === 'failing' ? { ...result, content: 'rewritten failure' } : result
     })
     await lock('tool-pipeline', h, { accepted: await turn(h) })
+  })
+})
+
+describe('asking the user', () => {
+  const questions = {
+    questions: [
+      {
+        id: 'adduct',
+        header: 'Adduct',
+        question: 'Which adduct should the annotation assume?',
+        options: [
+          { label: '[M+H]+ (Recommended)', description: 'Most common in positive mode.' },
+          { label: '[M+Na]+' },
+        ],
+      },
+      { id: 'note', question: 'Anything else to consider?' },
+    ],
+  }
+  const withAsk: LockedAgentOptions = { with: ['tool-ask-user'] }
+
+  /** 等到工具真正挂起，返回等待中的提问 */
+  const asked = (h: LockedAgent) =>
+    vi.waitFor(() => {
+      const pending = h.ctx.userQuestions.current()
+      if (!pending) throw new Error('the question is not waiting yet')
+      return pending
+    })
+
+  it('waits for the answer and continues with it', async () => {
+    const h = await setup([toolCall('ask_user_question', questions), text('answer')], withAsk)
+    const accepted = await h.agent.send('question')
+    const pending = await asked(h)
+    h.ctx.userQuestions.answer(pending.callId, {
+      answers: [
+        { id: 'adduct', selected: ['[M+Na]+'] },
+        { id: 'note', selected: [], custom: 'Only the cortex.' },
+      ],
+    })
+    await h.agent.whenIdle()
+    await lock('ask-answered', h, { accepted, drafts: pending.drafts })
+  })
+
+  it('submits the recommendation when nobody answers in time', async () => {
+    const h = await setup([toolCall('ask_user_question', questions), text('answer')], {
+      ...withAsk,
+      config: { 'user-questions': { timeoutMs: 20 } },
+    })
+    await lock('ask-timed-out', h, { accepted: await turn(h) })
+  })
+
+  it('ends the turn when stopped while waiting', async () => {
+    const h = await setup([toolCall('ask_user_question', questions)], withAsk)
+    const accepted = await h.agent.send('question')
+    await asked(h)
+    h.agent.stop()
+    await h.agent.whenIdle()
+    expect(h.ctx.userQuestions.current()).toBeNull()
+    await lock('ask-stopped', h, { accepted })
+  })
+
+  it('shows a question left open by a crash as unanswered', async () => {
+    const crashed = await setup([toolCall('ask_user_question', questions)], withAsk)
+    void crashed.agent.send('question')
+    await asked(crashed)
+    const storage = createMemoryStorage()
+    for (const batch of await crashed.storages[0]!.storage.read()) await storage.append(batch)
+    const h = await setup([text('continued')], { ...withAsk, openStorage: async () => storage })
+    await h.agent.ready()
+    const { messages, questions: records } = h.agent.snapshot()
+    await turn(h, 'Use [M+H]+')
+    await lock('ask-crash-recovery', h, { recovered: { messages, questions: records } })
+  })
+
+  it('reports questions the schema cannot reject to the model', async () => {
+    const duplicate = { questions: [{ id: 'k', question: 'a' }, { id: 'k', question: 'b' }] }
+    const h = await setup([toolCall('ask_user_question', duplicate), text('answer')], withAsk)
+    await lock('ask-invalid', h, { accepted: await turn(h) })
   })
 })
 

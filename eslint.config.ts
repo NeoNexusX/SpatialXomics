@@ -210,12 +210,7 @@ export default defineConfigWithVueTs(
     files: [
       'src/app/components/PageNavbar.vue',
       'src/app/components/NavDrawer.vue',
-      // 首页装饰场景：Hero 的基准含 9.5vh、Footer 斜率 12vw、
-      // FeatureGallery 悬停词要跟容器宽度(cqw)走，等比档位都复刻不了。
-      'src/features/home/components/HeroScene.vue',
-      'src/features/home/components/FooterScene.vue',
-      'src/features/home/components/FeatureGallery.vue',
-      // shadcn-vue 组件和基于它们的 AI Elements 模式：text-sm 等已在 agent-scope 内
+      // 助手面板的 ui / ai-elements 组件：text-sm 等已在 agent-scope 内
       // 接到全局档位（见 features/agent/assets/shadcn-bridge.css）。
       'src/features/agent/components/ui/**/*.vue',
       'src/features/agent/components/ai-elements/**/*.vue',

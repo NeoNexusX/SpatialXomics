@@ -11,7 +11,7 @@ const props = defineProps<{
   }
 }>()
 
-// 与 DatasetStatsPanel 同构：数据驱动 + daisyUI stats。
+// 数据驱动 + daisyUI stats。
 // 标题在此用静态 key 取译文（no-dynamic-keys 要求 key 为字面量）；
 // t() 读取 locale ref，切换语言时 computed 自动重算。
 const items = computed(() => [
@@ -23,7 +23,7 @@ const items = computed(() => [
 </script>
 
 <template>
-  <!-- stat-value 自带固定字号，显式挂 kawaru-text-240 覆盖它（与 StatusBadge/DatasetStatsPanel 同约定） -->
+  <!-- stat-value 自带固定字号，显式挂 kawaru-text-240 覆盖它（与 StatusBadge 同约定） -->
   <div class="stats stats-vertical w-full border border-base-200/60 shadow-sm sm:stats-horizontal">
     <div v-for="item in items" :key="item.title" class="stat place-items-center">
       <div class="stat-title kawaru-text-100">{{ item.title }}</div>

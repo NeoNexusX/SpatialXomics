@@ -1,0 +1,297 @@
+{
+ "accepted": true,
+ "logs": [
+  {
+   "datasetId": "dataset-a",
+   "mode": "temporary",
+   "events": [
+    {
+     "turnId": "uuid-1",
+     "type": "turn/start",
+     "user": {
+      "role": "user",
+      "content": "question"
+     },
+     "binding": {
+      "datasetId": "dataset-a",
+      "generation": 0,
+      "page": {
+       "meanSpectrumAvailable": false
+      },
+      "selection": {
+       "clusters": []
+      }
+     },
+     "baseSurface": [],
+     "seq": 0
+    },
+    {
+     "type": "message",
+     "message": "<message 1>",
+     "seq": 1
+    },
+    {
+     "type": "message",
+     "message": {
+      "role": "user",
+      "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+     },
+     "origin": "context",
+     "seq": 2
+    },
+    {
+     "type": "step/start",
+     "step": 1,
+     "seq": 3
+    },
+    {
+     "attemptId": "uuid-6",
+     "type": "request/context",
+     "request": {
+      "nodes": [
+       1,
+       2
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt ea7a6efd>",
+      "tools": "<tools 6d417756>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 4
+    },
+    {
+     "type": "attempt/start",
+     "step": 1,
+     "request": "<request 1>",
+     "seq": 5
+    },
+    {
+     "type": "attempt/end",
+     "status": "committed",
+     "seq": 6
+    },
+    {
+     "type": "message",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "tool-call",
+        "id": "c1",
+        "name": "ask_user_question",
+        "arguments": "{\"questions\":[{\"id\":\"k\",\"question\":\"a\"},{\"id\":\"k\",\"question\":\"b\"}]}"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 7
+    },
+    {
+     "type": "tool/start",
+     "callKey": "7:0",
+     "callId": "c1",
+     "name": "ask_user_question",
+     "input": {
+      "questions": [
+       {
+        "id": "k",
+        "question": "a"
+       },
+       {
+        "id": "k",
+        "question": "b"
+       }
+      ]
+     },
+     "seq": 8
+    },
+    {
+     "type": "message",
+     "message": {
+      "role": "tool",
+      "toolCallId": "c1",
+      "name": "ask_user_question",
+      "content": "Error: question id \"k\" must be unique within this call",
+      "isError": true
+     },
+     "callKey": "7:0",
+     "archiveId": "uuid-12",
+     "seq": 9
+    },
+    {
+     "type": "step/end",
+     "step": 1,
+     "seq": 10
+    },
+    {
+     "type": "step/start",
+     "step": 2,
+     "seq": 11
+    },
+    {
+     "attemptId": "uuid-16",
+     "type": "request/context",
+     "request": {
+      "nodes": [
+       1,
+       2,
+       7,
+       9
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt ea7a6efd>",
+      "tools": "<tools 6d417756>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 12
+    },
+    {
+     "type": "attempt/start",
+     "step": 2,
+     "request": "<request 2>",
+     "seq": 13
+    },
+    {
+     "type": "attempt/end",
+     "status": "committed",
+     "seq": 14
+    },
+    {
+     "type": "message",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "answer"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 15
+    },
+    {
+     "type": "step/end",
+     "step": 2,
+     "seq": 16
+    },
+    {
+     "type": "turn/end",
+     "reason": "completed",
+     "seq": 17
+    }
+   ]
+  }
+ ],
+ "calls": [
+  {
+   "system": "<prompt ea7a6efd>",
+   "tools": "<tools 6d417756>",
+   "messages": [
+    "<message 1>",
+    "<message 2>"
+   ],
+   "turnStart": 0,
+   "maxTokens": 64000
+  },
+  {
+   "system": "<prompt ea7a6efd>",
+   "tools": "<tools 6d417756>",
+   "messages": [
+    "<message 1>",
+    "<message 2>",
+    "<message 3>",
+    "<message 4>"
+   ],
+   "turnStart": 0,
+   "maxTokens": 64000
+  }
+ ],
+ "trace": [
+  "restoring",
+  "preparing",
+  "generating",
+  "generating [tool:running]",
+  "executing-tools [tool:running]",
+  "executing-tools [tool:error]",
+  "generating [tool:error]",
+  "generating [tool:error,text:6]",
+  "idle [tool:error,text:6]"
+ ],
+ "snapshot": {
+  "phase": "idle",
+  "mode": "temporary",
+  "messages": [
+   {
+    "id": "uuid-1-user",
+    "role": "user",
+    "content": "question"
+   },
+   {
+    "id": "uuid-1",
+    "role": "assistant",
+    "content": "answer",
+    "parts": [
+     {
+      "type": "tool",
+      "id": "7:0",
+      "name": "ask_user_question",
+      "input": {
+       "questions": [
+        {
+         "id": "k",
+         "question": "a"
+        },
+        {
+         "id": "k",
+         "question": "b"
+        }
+       ]
+      },
+      "state": "error",
+      "preview": "Error: question id \"k\" must be unique within this call"
+     },
+     {
+      "type": "text",
+      "text": "answer"
+     }
+    ],
+    "pending": false,
+    "interrupted": false
+   }
+  ],
+  "error": null,
+  "pressure": {
+   "inputTokens": 3182,
+   "contextWindow": 256000,
+   "outputReserve": 64000,
+   "inputBudget": 186880,
+   "ratio": 0.01702696917808219,
+   "estimated": true
+  }
+ }
+}

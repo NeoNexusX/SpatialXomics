@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLUT, getColormapStops } from '../colormapLut'
+import { buildLUT, colormapGradient, getColormapStops } from '../colormapLut'
 
 describe('buildLUT', () => {
   it('produces a 256-entry LUT hitting the colormap endpoints exactly', () => {
@@ -41,5 +41,14 @@ describe('getColormapStops', () => {
     expect(buildLUT('magma')[0]).toEqual(stops[0])
     expect(buildLUT('magma')[255]).toEqual(stops[stops.length - 1])
     expect(getColormapStops('does-not-exist')).toEqual(getColormapStops('viridis'))
+  })
+})
+
+describe('colormapGradient', () => {
+  it('draws a CSS gradient through the same stops the ion image uses', () => {
+    expect(colormapGradient('gray')).toBe('linear-gradient(to right, rgb(0 0 0), rgb(255 255 255))')
+    expect(colormapGradient('gray', 'to top')).toBe(
+      'linear-gradient(to top, rgb(0 0 0), rgb(255 255 255))',
+    )
   })
 })

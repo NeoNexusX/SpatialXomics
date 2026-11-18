@@ -2,6 +2,22 @@
 import { abortable } from '../llm'
 
 type Pair = [string, string]
+
+/** KEGG get and list accept up to ten explicit entry identifiers per request. */
+export const KEGG_ENTRY_LIMIT = 10
+
+function entryIdList(ids: string[]): string {
+  if (ids.length === 0 || ids.length > KEGG_ENTRY_LIMIT) {
+    throw new Error(
+      `KEGG get/list accepts 1–${KEGG_ENTRY_LIMIT} ids per request (received ${ids.length})`,
+    )
+  }
+  if (ids.some((id) => !/^(?:C\d{5}|[a-z]{2,4}\d{5})$/.test(id))) {
+    throw new Error('Invalid KEGG entry identifier')
+  }
+  return [...new Set(ids)].join('+')
+}
+
 export interface KeggCompound {
   id: string
   names: string[]
@@ -56,7 +72,7 @@ export function parseAtext(text: string): KeggEntry[] {
 
   const entries = records.flatMap(({ fields }) => {
     const id = (fields.get('ENTRY')?.[0] ?? '').split(/\s+/)[0]!.replace(/^(?:cpd|path):/i, '')
-    // Skip single malformed entries rather than failing the whole 10-id chunk.
+    // Other records in a multi-entry response can still be valid.
     if (!/^(?:C\d{5}|[a-z]{2,4}\d{5})$/.test(id)) return []
     const numberField = (key: string): number | undefined => {
       const raw = fields.get(key)?.[0]
@@ -104,10 +120,6 @@ export function parseAtext(text: string): KeggEntry[] {
   return entries
 }
 
-export function normalizeKeggName(value: string): string {
-  return value.toLowerCase().replace(/[\s_/(),-]/g, '')
-}
-
 // KEGG permits at most three requests/second. Share start times across tool calls.
 let queue: Promise<void> = Promise.resolve()
 let lastStart = 0
@@ -134,9 +146,7 @@ function pairs(text: string): Pair[] {
     .map((line) => {
       const tab = line.indexOf('\t')
       if (tab <= 0 || !line.slice(tab + 1).trim()) {
-        throw new Error(
-          'Invalid KEGG REST response: expected tab-separated identifiers and names/links',
-        )
+        throw new Error('Invalid KEGG REST response: expected a tab-separated identifier and value')
       }
       return [
         line
@@ -148,54 +158,8 @@ function pairs(text: string): Pair[] {
     })
 }
 
-/** Responses are deduplicated only within this invocation, never persisted. */
 export class KeggClient {
-  private responses = new Map<string, Promise<Pair[]>>()
-  private textResponses = new Map<string, Promise<string>>()
-  private signal: AbortSignal | undefined
-
-  constructor(signal?: AbortSignal) {
-    this.signal = signal
-  }
-
-  private request(path: string): Promise<Pair[]> {
-    this.signal?.throwIfAborted()
-    let result = this.responses.get(path)
-    if (!result) {
-      // No error-cascade abort on purpose: with requests funneled through the
-      // shared 350ms limiter, killing the client on the first 429/5xx would
-      // poison every queued sibling request (e.g. the other 49 pathway
-      // queries). Cancellation is carried by the caller's signal alone.
-      result = this.fetchPairs(path)
-      this.responses.set(path, result)
-    }
-    return result
-  }
-
-  requestText(path: string): Promise<string> {
-    this.signal?.throwIfAborted()
-    let result = this.textResponses.get(path)
-    if (!result) {
-      result = this.fetchText(path)
-      this.textResponses.set(path, result)
-    }
-    return result
-  }
-
-  /**
-   * Like requestText, but a 404 resolves to '' instead of rejecting: an
-   * all-unknown 10-id get chunk answers 404 (live-verified), and that must
-   * read as "these entries are absent", never as a failure that poisons the
-   * sibling chunks of the same invocation.
-   */
-  private requestTextAllowMissing(path: string): Promise<string> {
-    this.signal?.throwIfAborted()
-    const cached = this.textResponses.get(path)
-    if (cached) return cached
-    const result = this.fetchText(path, { allow404: true })
-    this.textResponses.set(path, result)
-    return result
-  }
+  constructor(private readonly signal?: AbortSignal) {}
 
   private async fetchText(path: string, opts: { allow404?: boolean } = {}): Promise<string> {
     await schedule(this.signal)
@@ -229,7 +193,7 @@ export class KeggClient {
     return body
   }
 
-  private async fetchPairs(path: string): Promise<Pair[]> {
+  private async request(path: string): Promise<Pair[]> {
     const rows = pairs(await this.fetchText(path))
     if (rows.some(([id]) => !/^(?:C\d{5}|[a-z]{2,4}\d{5})$/.test(id))) {
       throw new Error('Invalid KEGG REST response: unexpected entry identifiers')
@@ -256,11 +220,20 @@ export class KeggClient {
       }))
   }
 
-  async findExactMass(lo: number, hi: number): Promise<Pair[]> {
+  async findExactMass(lo: number, hi: number): Promise<{ id: string; exactMass: number }[]> {
     if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo <= 0 || hi < lo) {
       throw new Error('Invalid KEGG exact-mass range')
     }
-    return this.request(`find/compound/${lo.toFixed(6)}-${hi.toFixed(6)}/exact_mass`)
+    const rows = await this.request(`find/compound/${lo.toFixed(6)}-${hi.toFixed(6)}/exact_mass`)
+    return rows.map(([id, value]) => {
+      const exactMass = Number(value)
+      if (!/^C\d{5}$/.test(id) || !Number.isFinite(exactMass) || exactMass <= 0) {
+        throw new Error(
+          'Invalid KEGG exact_mass response: expected a compound id and a positive mass',
+        )
+      }
+      return { id, exactMass }
+    })
   }
 
   async findPathways(query: string): Promise<Pair[]> {
@@ -276,48 +249,32 @@ export class KeggClient {
   }
 
   async list(ids: string[]): Promise<Pair[]> {
-    const unique = [...new Set(ids)]
-    const result: Pair[] = []
-    // KEGG list accepts at most ten identifiers per request.
-    for (let i = 0; i < unique.length; i += 10) {
-      result.push(...(await this.request(`list/${unique.slice(i, i + 10).join('+')}`)))
-    }
-    return result
+    return this.request(`list/${entryIdList(ids)}`)
   }
 
   async getEntries(ids: string[]): Promise<KeggEntry[]> {
-    const unique = [...new Set(ids)]
-    const result: KeggEntry[] = []
-    // KEGG get accepts at most ten identifiers per request. A chunk whose ids
-    // are ALL unknown answers 404 → treat as absent entries (allow404), so one
-    // unknown id in a batch degrades to the per-id "not returned" message
-    // instead of failing the whole call (mixed chunks return 200-partial).
-    for (let i = 0; i < unique.length; i += 10) {
-      const body = await this.requestTextAllowMissing(`get/${unique.slice(i, i + 10).join('+')}`)
-      result.push(...parseAtext(body))
-    }
-    return result
+    // An all-unknown get returns 404. A mixed request returns only the records KEGG found.
+    const body = await this.fetchText(`get/${entryIdList(ids)}`, { allow404: true })
+    return parseAtext(body)
   }
 
-  async compoundPathways(ids: string[]): Promise<Map<string, string[]>> {
-    const unique = [...new Set(ids)]
-    const links = new Map<string, string[]>()
-    for (let i = 0; i < unique.length; i += 10) {
-      for (const [cid, target] of await this.request(
-        `link/pathway/${unique.slice(i, i + 10).join('+')}`,
-      )) {
-        const map = target.replace(/^path:/, '')
-        if (!/^C\d{5}$/.test(cid) || !/^map\d{5}$/.test(map)) continue
-        links.set(cid, [...new Set([...(links.get(cid) ?? []), map])])
+  async pathwayCompounds(ids: string[]): Promise<Map<string, Set<string>>> {
+    if (!ids.length || ids.some((id) => !/^map\d{5}$/.test(id))) {
+      throw new Error('Provide KEGG map ids for the compound link query')
+    }
+    const members = new Map(ids.map((id) => [id, new Set<string>()]))
+    const rows = await this.request(`link/compound/${[...members.keys()].join('+')}`)
+    for (const [map, target] of rows) {
+      const compound = target.replace(/^cpd:/, '')
+      const group = members.get(map)
+      if (!group || !/^C\d{5}$/.test(compound)) {
+        throw new Error(
+          'Invalid KEGG link response: expected a requested pathway and a compound id',
+        )
       }
+      group.add(compound)
     }
-    return links
-  }
-
-  async pathwayCompounds(id: string): Promise<string[]> {
-    return (await this.request(`link/compound/${id}`))
-      .map(([, target]) => target.replace(/^cpd:/, ''))
-      .filter((cid) => /^C\d{5}$/.test(cid))
+    return members
   }
 }
 

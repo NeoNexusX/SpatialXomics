@@ -1,0 +1,359 @@
+{
+ "accepted": true,
+ "logs": [
+  {
+   "datasetId": "dataset-a",
+   "mode": "temporary",
+   "events": [
+    {
+     "turnId": "uuid-1",
+     "type": "turn/start",
+     "user": {
+      "role": "user",
+      "content": "question"
+     },
+     "binding": {
+      "datasetId": "dataset-a",
+      "generation": 0,
+      "page": {
+       "meanSpectrumAvailable": false
+      },
+      "selection": {
+       "clusters": []
+      }
+     },
+     "baseSurface": [],
+     "seq": 0
+    },
+    {
+     "type": "message",
+     "message": "<message 1>",
+     "seq": 1
+    },
+    {
+     "type": "message",
+     "message": {
+      "role": "user",
+      "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
+     },
+     "origin": "context",
+     "seq": 2
+    },
+    {
+     "type": "step/start",
+     "step": 1,
+     "seq": 3
+    },
+    {
+     "attemptId": "uuid-6",
+     "type": "request/context",
+     "request": {
+      "nodes": [
+       1,
+       2
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt ea7a6efd>",
+      "tools": "<tools 5e406e21>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 4
+    },
+    {
+     "type": "attempt/start",
+     "step": 1,
+     "request": "<request 1>",
+     "seq": 5
+    },
+    {
+     "type": "attempt/end",
+     "status": "committed",
+     "seq": 6
+    },
+    {
+     "type": "message",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "tool-call",
+        "id": "c1",
+        "name": "ask_user_question",
+        "arguments": "<text 270 89ae8a89 {\"questions\":[{\"id\":\"adduct\",\"header\":\"A…\"},{\"label\":\"[M+Na]+\"}]},{\"id\":\"note\",\"question\":\"Anything else to consider?\"}]}>"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 7
+    },
+    {
+     "type": "tool/start",
+     "callKey": "7:0",
+     "callId": "c1",
+     "name": "ask_user_question",
+     "input": {
+      "questions": [
+       {
+        "id": "adduct",
+        "header": "Adduct",
+        "question": "Which adduct should the annotation assume?",
+        "options": [
+         {
+          "label": "[M+H]+ (Recommended)",
+          "description": "Most common in positive mode."
+         },
+         {
+          "label": "[M+Na]+"
+         }
+        ]
+       },
+       {
+        "id": "note",
+        "question": "Anything else to consider?"
+       }
+      ]
+     },
+     "seq": 8
+    },
+    {
+     "type": "message",
+     "message": {
+      "role": "tool",
+      "toolCallId": "c1",
+      "name": "ask_user_question",
+      "content": "{\"timedOut\":true,\"answers\":[{\"id\":\"adduct\",\"selected\":[\"[M+H]+ (Recommended)\"],\"auto\":true},{\"id\":\"note\",\"selected\":[],\"auto\":true}]}",
+      "isError": false
+     },
+     "callKey": "7:0",
+     "archiveId": "uuid-12",
+     "seq": 9
+    },
+    {
+     "type": "step/end",
+     "step": 1,
+     "seq": 10
+    },
+    {
+     "type": "step/start",
+     "step": 2,
+     "seq": 11
+    },
+    {
+     "attemptId": "uuid-16",
+     "type": "request/context",
+     "request": {
+      "nodes": [
+       1,
+       2,
+       7,
+       9
+      ],
+      "route": {
+       "endpoint": "anthropic",
+       "baseUrl": "https://llm.test/v1",
+       "model": "m"
+      },
+      "system": "<prompt ea7a6efd>",
+      "tools": "<tools 5e406e21>",
+      "maxTokens": 64000,
+      "contextWindow": 256000,
+      "imageMode": "image",
+      "purpose": "conversation",
+      "turnStart": 0
+     },
+     "seq": 12
+    },
+    {
+     "type": "attempt/start",
+     "step": 2,
+     "request": "<request 2>",
+     "seq": 13
+    },
+    {
+     "type": "attempt/end",
+     "status": "committed",
+     "seq": 14
+    },
+    {
+     "type": "message",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "answer"
+       }
+      ],
+      "source": {
+       "endpoint": "anthropic",
+       "model": "m",
+       "baseUrl": "https://llm.test/v1"
+      }
+     },
+     "seq": 15
+    },
+    {
+     "type": "step/end",
+     "step": 2,
+     "seq": 16
+    },
+    {
+     "type": "turn/end",
+     "reason": "completed",
+     "seq": 17
+    }
+   ]
+  }
+ ],
+ "calls": [
+  {
+   "system": "<prompt ea7a6efd>",
+   "tools": "<tools 5e406e21>",
+   "messages": [
+    "<message 1>",
+    "<message 2>"
+   ],
+   "turnStart": 0,
+   "maxTokens": 64000
+  },
+  {
+   "system": "<prompt ea7a6efd>",
+   "tools": "<tools 5e406e21>",
+   "messages": [
+    "<message 1>",
+    "<message 2>",
+    "<message 3>",
+    "<message 4>"
+   ],
+   "turnStart": 0,
+   "maxTokens": 64000
+  }
+ ],
+ "trace": [
+  "restoring",
+  "preparing",
+  "generating",
+  "generating [tool:running]",
+  "executing-tools [tool:running]",
+  "executing-tools [tool:done]",
+  "generating [tool:done]",
+  "generating [tool:done,text:6]",
+  "idle [tool:done,text:6]"
+ ],
+ "snapshot": {
+  "phase": "idle",
+  "mode": "temporary",
+  "messages": [
+   {
+    "id": "uuid-1-user",
+    "role": "user",
+    "content": "question"
+   },
+   {
+    "id": "uuid-1",
+    "role": "assistant",
+    "content": "answer",
+    "parts": [
+     {
+      "type": "tool",
+      "id": "7:0",
+      "name": "ask_user_question",
+      "input": {
+       "questions": [
+        {
+         "id": "adduct",
+         "header": "Adduct",
+         "question": "Which adduct should the annotation assume?",
+         "options": [
+          {
+           "label": "[M+H]+ (Recommended)",
+           "description": "Most common in positive mode."
+          },
+          {
+           "label": "[M+Na]+"
+          }
+         ]
+        },
+        {
+         "id": "note",
+         "question": "Anything else to consider?"
+        }
+       ]
+      },
+      "state": "done",
+      "preview": "{\"timedOut\":true,\"answers\":[{\"id\":\"adduct\",\"selected\":[\"[M+H]+ (Recommended)\"],\"auto\":true},{\"id\":\"note\",\"selected\":[],\"auto\":true}]}"
+     },
+     {
+      "type": "text",
+      "text": "answer"
+     }
+    ],
+    "pending": false,
+    "interrupted": false
+   }
+  ],
+  "error": null,
+  "pressure": {
+   "inputTokens": 3275,
+   "contextWindow": 256000,
+   "outputReserve": 64000,
+   "inputBudget": 186880,
+   "ratio": 0.0175246147260274,
+   "estimated": true
+  },
+  "questions": {
+   "7:0": {
+    "callKey": "7:0",
+    "turnId": "uuid-1",
+    "questions": [
+     {
+      "id": "adduct",
+      "question": "Which adduct should the annotation assume?",
+      "header": "Adduct",
+      "options": [
+       {
+        "label": "[M+H]+ (Recommended)",
+        "description": "Most common in positive mode."
+       },
+       {
+        "label": "[M+Na]+"
+       }
+      ]
+     },
+     {
+      "id": "note",
+      "question": "Anything else to consider?"
+     }
+    ],
+    "state": "answered",
+    "answers": [
+     {
+      "id": "adduct",
+      "selected": [
+       "[M+H]+ (Recommended)"
+      ],
+      "auto": true
+     },
+     {
+      "id": "note",
+      "selected": [],
+      "auto": true
+     }
+    ],
+    "timedOut": true
+   }
+  }
+ }
+}

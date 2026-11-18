@@ -1,5 +1,4 @@
 import { fileURLToPath, URL } from 'node:url'
-import { HttpsProxyAgent } from 'https-proxy-agent'
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
@@ -190,17 +189,6 @@ export default defineConfig(({ mode }) => {
   const envDir = fileURLToPath(new URL('./env', import.meta.url))
   const env = loadEnv(mode, envDir, 'VITE_')
   const backendUrl = env.VITE_BACKEND_URL || 'http://localhost:8000'
-  // Mainland dev networks often cannot reach Wayback directly. Allow a server-only
-  // proxy override; default to the local Clash HTTP proxy, and use "direct" to disable.
-  const hmdbArchiveProxyUrl =
-    process.env.HMDB_ARCHIVE_PROXY ??
-    process.env.HTTPS_PROXY ??
-    process.env.https_proxy ??
-    'http://127.0.0.1:7897'
-  const hmdbArchiveProxyAgent =
-    hmdbArchiveProxyUrl.toLowerCase() === 'direct'
-      ? undefined
-      : new HttpsProxyAgent(hmdbArchiveProxyUrl)
 
   return {
     envDir: envDir,
@@ -235,7 +223,6 @@ export default defineConfig(({ mode }) => {
         '/hmdb-archive': {
           target: 'https://web.archive.org',
           changeOrigin: true,
-          ...(hmdbArchiveProxyAgent ? { agent: hmdbArchiveProxyAgent } : {}),
           rewrite: (path) => {
             const request = new URL(path, 'http://localhost')
             const match = /^\/hmdb-archive\/(HMDB\d{5,})\.xml$/.exec(request.pathname)

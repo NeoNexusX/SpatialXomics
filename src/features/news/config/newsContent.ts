@@ -1,7 +1,7 @@
 import type { MarkdownDocument } from 'comark'
 import type { Locale } from '@/i18n'
 import { formatDate } from '@/shared/utils/format'
-import { buildLUT, getColormapStops } from '@/shared/viz/colormapLut'
+import { buildLUT, colormapGradient } from '@/shared/viz/colormapLut'
 
 type ByLocale = Partial<Record<Locale, string>>
 
@@ -62,6 +62,4 @@ export function newsColor(index: number): string {
 }
 
 /** 横向的 viridis 色标，详情页标题下用 */
-export const VIRIDIS_BAR = `linear-gradient(to right, ${getColormapStops('viridis')
-  .map((c) => `rgb(${c.join(' ')})`)
-  .join(', ')})`
+export const VIRIDIS_BAR = colormapGradient('viridis')

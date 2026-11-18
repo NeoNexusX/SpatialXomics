@@ -92,6 +92,7 @@ describe('the loop only depends on its extension points', () => {
         'token-meter',
         'tool-archive',
         'tool-skill',
+        'user-questions',
       ],
     })
     expect(await turn(h)).toBe(true)
@@ -162,7 +163,7 @@ describe('the loop only depends on its extension points', () => {
         ctx.tools.register({
           name: 'temporary_tool',
           description: 'gone after unload',
-          parameters: {},
+          parameters: { type: 'object', properties: {} },
           execute: async () => 'ok',
         })
         ctx.systemPrompt.section({ key: 'temporary', order: 99, render: () => 'temporary section' })

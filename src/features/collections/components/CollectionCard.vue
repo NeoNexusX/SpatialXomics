@@ -40,9 +40,9 @@
         <!-- 封面成员仍在拉取（列表接口不带 members）：骨架占位，
              避免先闪随机占位图再换真图 -->
         <div v-if="coverLoading" class="skeleton w-full h-full rounded-none" aria-hidden="true" />
-        <!-- daisyUI carousel，官方示例同款外观（snap-mandatory + smooth scroll +
-             滚动条隐藏）。官方用 <a href="#slideN"> 翻页，直接搬会污染 history 且
-             要求全页唯一 id，这里换 button + scrollIntoView。帧常驻 DOM，img 各自 lazy。 -->
+        <!-- daisyUI carousel：snap-mandatory + 平滑滚动 + 隐藏滚动条。翻页用 button +
+             scrollIntoView，不用 <a href="#slideN"> 锚点：锚点会写进 history，还要求全页
+             id 唯一。帧常驻 DOM，img 各自 lazy。 -->
         <div
           v-else-if="slideCount"
           ref="carouselEl"
@@ -438,7 +438,7 @@ function scrollToSlide(target: number) {
   const el = carouselEl.value
   if (!el) return
   const i = ((target % slideCount.value) + slideCount.value) % slideCount.value
-  scrollIndex.value = i // 计数即时反馈；回绕动画会掠过中间帧（官方 demo 同款行为）
+  scrollIndex.value = i // 计数即时反馈；回绕时平滑滚动会掠过中间帧
   el.children[i]?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' })
 }
 

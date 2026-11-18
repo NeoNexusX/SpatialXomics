@@ -748,11 +748,11 @@ it('exposes only the rewritten HMDB parameters and validates empty input', async
   const ctx = await makeKnowledgeContext()
   try {
     const tool = ctx.tools.list().find((item) => item.name === 'hmdb_lookup')!
-    expect(Object.keys(tool.parameters)).toEqual(
+    expect(Object.keys(tool.parameters.properties)).toEqual(
       expect.arrayContaining(['id', 'ids', 'query', 'queries', 'offset', 'limit']),
     )
     for (const removed of ['mz', 'mzs', 'polarity', 'ppm', 'maxResults']) {
-      expect(tool.parameters).not.toHaveProperty(removed)
+      expect(tool.parameters.properties).not.toHaveProperty(removed)
     }
     const result = await ctx.tools.execute({
       callId: 'hmdb-empty',

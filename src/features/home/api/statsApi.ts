@@ -1,5 +1,5 @@
 /**
- * 首页统计数据层（StatsScene 左侧面板用）。
+ * 首页统计数据层。
  * 这些是**首页公开数据**，统一走公开的 `api`（不带 token），不要用 auth_api。
  */
 
@@ -9,6 +9,7 @@ import type {
   DatasetCategoryStats,
   PlatformOverviewStats,
   VisitsStats,
+  VisitsHistoryStats,
 } from '@/features/home/types/stats'
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -16,11 +17,17 @@ import type {
 // ──────────────────────────────────────────────────────────────────────────
 
 /** GET /stats/files/classification?field= - 按指定字段统计文件分类数量 */
-async function getFilesClassification(field: string): Promise<Record<string, number>> {
-  return unwrap(api.get('/stats/files/classification', { params: { field } }))
+async function getFilesClassification(
+  field: string,
+  signal?: AbortSignal,
+): Promise<DatasetCategoryStats> {
+  const data = await unwrap<Record<string, number>>(
+    api.get('/stats/files/classification', { params: { field }, signal }),
+  )
+  return classificationToCategoryStats(data)
 }
 
-/** 将 { key: count } 映射为 DonutStatSection 所需的 { items, total } 格式 */
+/** 将 { key: count } 映射为分布图所需的 { items, total } 格式（按数量从多到少） */
 function classificationToCategoryStats(data: Record<string, number>): DatasetCategoryStats {
   const items = Object.entries(data)
     .filter(([, count]) => count > 0)
@@ -31,27 +38,23 @@ function classificationToCategoryStats(data: Record<string, number>): DatasetCat
 }
 
 /** GET /stats/files/classification?field=organism -- 数据集物种分布 */
-export async function getOrganismStats(): Promise<DatasetCategoryStats> {
-  const data = await getFilesClassification('organism')
-  return classificationToCategoryStats(data)
+export function getOrganismStats(signal?: AbortSignal): Promise<DatasetCategoryStats> {
+  return getFilesClassification('organism', signal)
 }
 
 /** GET /stats/files/classification?field=organism_part -- 数据集组织部位分布 */
-export async function getDatasetCategoryStats(): Promise<DatasetCategoryStats> {
-  const data = await getFilesClassification('organism_part')
-  return classificationToCategoryStats(data)
+export function getDatasetCategoryStats(signal?: AbortSignal): Promise<DatasetCategoryStats> {
+  return getFilesClassification('organism_part', signal)
 }
 
 /** GET /stats/files/classification?field=ionisation_source -- 数据集离子源类型分布 */
-export async function getDatasetIonSourceStats(): Promise<DatasetCategoryStats> {
-  const data = await getFilesClassification('ionisation_source')
-  return classificationToCategoryStats(data)
+export function getDatasetIonSourceStats(signal?: AbortSignal): Promise<DatasetCategoryStats> {
+  return getFilesClassification('ionisation_source', signal)
 }
 
 /** GET /stats/files/classification?field=analyzer -- 分析器类型分布 */
-export async function getAnalyzerStats(): Promise<DatasetCategoryStats> {
-  const data = await getFilesClassification('analyzer')
-  return classificationToCategoryStats(data)
+export function getAnalyzerStats(signal?: AbortSignal): Promise<DatasetCategoryStats> {
+  return getFilesClassification('analyzer', signal)
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -61,8 +64,8 @@ export async function getAnalyzerStats(): Promise<DatasetCategoryStats> {
 const PLATFORM_OVERVIEW_PATH = '/stats/overview'
 
 /** GET /stats/overview -- 获取平台总览（总用户 / 总数据集 / 总下载） */
-export async function getPlatformOverview(): Promise<PlatformOverviewStats> {
-  return unwrap(api.get(PLATFORM_OVERVIEW_PATH))
+export async function getPlatformOverview(signal?: AbortSignal): Promise<PlatformOverviewStats> {
+  return unwrap(api.get(PLATFORM_OVERVIEW_PATH, { signal }))
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -70,6 +73,11 @@ export async function getPlatformOverview(): Promise<PlatformOverviewStats> {
 // ──────────────────────────────────────────────────────────────────────────
 
 /** GET /stats/visits -- 获取全站访问统计（当日 / 当月 / 总计） */
-export async function getVisitsStats(): Promise<VisitsStats> {
-  return unwrap(api.get('/stats/visits'))
+export async function getVisitsStats(signal?: AbortSignal): Promise<VisitsStats> {
+  return unwrap(api.get('/stats/visits', { signal }))
+}
+
+/** Let the server choose today's UTC end date so a browser timezone cannot exceed the window. */
+export async function getVisitsHistory(signal?: AbortSignal): Promise<VisitsHistoryStats> {
+  return unwrap(api.get('/stats/visits/history', { params: { days: 90 }, signal }))
 }

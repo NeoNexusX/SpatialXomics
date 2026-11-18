@@ -237,7 +237,29 @@
       "retrySave": "重试保存",
       "compactNow": "压缩上下文",
       "compactionFailed": "上下文压缩未完成 · {reason}",
-      "compactionNoProgress": "此次压缩未缩减上下文"
+      "compactionNoProgress": "此次压缩未缩减上下文",
+      "question": {
+        "previous": "上一题",
+        "next": "下一题",
+        "skip": "跳过",
+        "submit": "提交",
+        "recommended": "推荐",
+        "custom": "输入你的答案",
+        "other": "其他答案",
+        "multipleHint": "可多选",
+        "separator": "、",
+        "incomplete": "请回答或跳过这道题",
+        "progress": "第 {current} / {total} 题",
+        "autoSubmit": "{time} 后按推荐提交",
+        "collapse": "收起",
+        "expand": "展开",
+        "waiting": "待回答",
+        "unanswered": "未回答",
+        "skipped": "已跳过",
+        "auto": "默认",
+        "timedOut": "超时，已按推荐提交",
+        "submitFailed": "提交失败：{reason}"
+      }
     },
     "page": {
       "myDatasets": "我的数据集",

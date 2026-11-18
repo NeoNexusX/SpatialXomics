@@ -52,6 +52,8 @@
           :label-of="vocabLabel"
           :placeholder="$t('common.input.selectShort')"
           :other-placeholder="$t('common.input.specifyOther')"
+          :custom-input-mode="customInputMode"
+          :max-length="maxLength"
           hide-label
         />
       </div>
@@ -80,7 +82,7 @@
         <button
           class="btn btn-ghost btn-xs text-error kawaru-text-68"
           @click="removeSolvent(index)"
-:title="$t('common.action.remove')"
+          :title="$t('common.action.remove')"
         >
           <SvgIcon type="close" class="h-4 w-4" />
         </button>
@@ -111,6 +113,8 @@ import { t } from '@/i18n'
 const props = defineProps<{
   modelValue: string
   solventOptions: readonly string[]
+  customInputMode?: 'normalized' | 'verbatim'
+  maxLength?: number
 }>()
 
 const emit = defineEmits<{
@@ -170,7 +174,10 @@ const amountError = computed(() => {
 // Parse existing solvent string into entries
 const solventEntries = computed(() => {
   if (!props.modelValue) return []
-  return props.modelValue.split(',').map(s => s.trim()).filter(Boolean)
+  return props.modelValue
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
 })
 
 /** 条目形如 "50% Water" / "1 mM Acetic acid"：提交的仍是英文串，只把组分名换成显示文字 */

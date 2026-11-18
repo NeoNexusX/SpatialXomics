@@ -13,8 +13,14 @@
     <label
       class="select w-full flex items-center gap-2 kawaru-text-87"
       :class="[
-        { validator: validator },
-        size === 'xs' ? 'select-xs' : size === 'sm' ? 'select-sm' : size === 'lg' ? 'select-lg' : '',
+        { validator: validator, 'select-error': !!error },
+        size === 'xs'
+          ? 'select-xs'
+          : size === 'sm'
+            ? 'select-sm'
+            : size === 'lg'
+              ? 'select-lg'
+              : '',
       ]"
     >
       <SvgIcon
@@ -36,6 +42,8 @@
         class="icon-select-native kawaru-text-87"
         :value="modelValue"
         :required="required"
+        :aria-label="label || undefined"
+        :aria-invalid="!!error"
         @change="onChange"
         @focus="emit('focus')"
         @blur="emit('blur')"
@@ -48,11 +56,7 @@
         >
           {{ placeholderText }}
         </option>
-        <option
-          v-for="(value, label) in normalizedOptions"
-          :key="label"
-          :value="value"
-        >
+        <option v-for="(value, label) in normalizedOptions" :key="label" :value="value">
           {{ label }}
         </option>
       </select>

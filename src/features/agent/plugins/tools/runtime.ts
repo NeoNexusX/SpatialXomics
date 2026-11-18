@@ -1,14 +1,17 @@
 /**
- * ctx.tools 服务：工具注册表 + 执行管线。
+ * ctx.tools 服务：工具注册表和执行管线。
  *
- * 工具通过 `register(def)` 注册，重名抛错；随 fiber 卸载自动注销。
- * 执行管线：validateArgs → pre-execute(bail) → execute(超时) → post-execute(waterfall) → result(emit)。
+ * 工具通过 `register(def)` 注册，重名抛错，随注册方的 fiber 卸载自动注销。
+ * 一次调用：冻结参数 → tools/pre-execute 闸门 → 带超时执行（定义自己先校验参数）→
+ * 渲染并截断 → tools/post-execute 改写 → tools/result 通知。
+ * 任何失败都变成一条 `Error: <message>` 结果回给模型，不会中断这一轮。
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { ToolSchema, ToolImage } from '../llm'
 import type { Session } from '../session'
-import { validateArgs, toToolSchema, type ToolDefinition, type ToolRunContext } from './defineTool'
+import { toToolSchema, type ToolDefinition, type ToolRunContext } from './defineTool'
+import { deepFreeze } from './json'
 import { abortable } from '../llm'
 import { validateToolImages } from '../attachments'
 import { TOOL_RESULT_CHARS_DEFAULT } from './limits'
@@ -22,8 +25,8 @@ export interface ToolExecutionResult {
   isError: boolean
   /** 原始返回值（非错误时） */
   value?: unknown
-  /** 错误信息（isError 时） */
-  error?: { message: string }
+  /** 失败原因；code 区分未知工具、参数错误、拒绝、取消、超时等 */
+  error?: { message: string; code?: string }
   /** 模型可见的文本摘要（截断到 配置上限） */
   content: string
   /** 截断发生时的完整渲染文本（仅超出 配置上限时存在）。
@@ -44,7 +47,7 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     tools: ToolRuntime
   }
-  /** 工具执行管线的扩展点事件（此前未声明，宽索引签名掩盖了拼写检查） */
+  /** 工具执行管线的扩展点事件 */
   interface Events {
     /** 执行前闸门：返回 { kind: 'deny' } 短路（serial） */
     'tools/pre-execute'(
@@ -55,6 +58,33 @@ declare module '@deepseek-ai/cordis' {
     /** 结果通知（仅观察，不可变更） */
     'tools/result'(exec: ToolRunContext, result: ToolExecutionResult): void
   }
+}
+
+/** 一条失败结果：模型看到 `Error: <message>` */
+export function toolError(message: string, code?: string): ToolExecutionResult {
+  return {
+    isError: true,
+    error: { message, ...(code ? { code } : {}) },
+    content: `Error: ${message}`,
+  }
+}
+
+/** 闸门放行前调用方就取消了：工具没有运行 */
+function abortedBeforeDispatch(): ToolExecutionResult {
+  return toolError('tool call aborted before dispatch', 'ABORTED_BEFORE_DISPATCH')
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    if (typeof error.message === 'string') return error.message
+  }
+  return String(error)
+}
+
+function errorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined
+  return typeof error.code === 'string' ? error.code : undefined
 }
 
 export class ToolRuntime extends Service {
@@ -80,7 +110,7 @@ export class ToolRuntime extends Service {
   /** 注册一个工具定义；重名抛错。返回注销函数，也随注册方的 fiber 自动注销。 */
   register(def: ToolDefinition): () => void {
     if (this.registry.has(def.name)) {
-      throw new Error(`Tool "${def.name}" is already registered`)
+      throw new Error(`tool "${def.name}" is already registered`)
     }
     const { registry } = this
     return this.ctx.effect(() => {
@@ -104,10 +134,9 @@ export class ToolRuntime extends Service {
   /**
    * 执行一个工具调用。
    *
-   * 管线（全部经 ctx 事件，插件可扩展）：
-   * 1. validateArgs → 失败返回 INVALID_ARGS 错误结果
+   * 1. 参数复制一份并冻结，闸门和工具看到同一份；已取消的调用不再派发
    * 2. ctx.serial('tools/pre-execute', exec) → { kind: 'deny', reason } 短路
-   * 3. 超时包裹 + def.execute(args, exec)
+   * 3. 超时包裹 + def.execute(args, exec)，定义先校验参数，不合法抛 INVALID_ARGS
    * 4. ctx.waterfall('tools/post-execute', exec, result) → 可替换 content
    * 5. ctx.emit('tools/result', exec, result)（仅观察）
    */
@@ -119,118 +148,76 @@ export class ToolRuntime extends Service {
     allowedTools?: string[]
     session?: Session
   }): Promise<ToolExecutionResult> {
-    call.signal.throwIfAborted()
-    const def = this.registry.get(call.name)
-    if (!def || (call.allowedTools && !call.allowedTools.includes(call.name))) {
-      return {
-        isError: true,
-        error: { message: `Unknown tool: "${call.name}"` },
-        content: `Error: Unknown tool "${call.name}"`,
-      }
-    }
-
     const exec: ToolRunContext = {
       signal: call.signal,
       callId: call.callId,
       name: call.name,
       session: call.session,
+      arguments: deepFreeze(structuredClone(call.arguments)),
     }
+    const def = this.registry.get(call.name)
+    const result = exec.signal.aborted
+      ? abortedBeforeDispatch()
+      : !def || (call.allowedTools && !call.allowedTools.includes(call.name))
+        ? toolError(`unknown tool "${call.name}"`, 'UNKNOWN_TOOL')
+        : await this.dispatch(def, exec)
 
-    // 1. 参数校验
-    const validated = validateArgs(def, call.arguments)
-    if (!validated.valid) {
-      const msg = validated.errors!.map((e) => `${e.field}: ${e.message}`).join('; ')
-      return {
-        isError: true,
-        error: { message: msg },
-        content: `Invalid arguments for "${call.name}": ${msg}`,
-      }
-    }
+    // cordis waterfall 语义：末参是内置 next 回调；无监听器时 next() 即返回默认值。
+    const output = this.ctx.waterfall('tools/post-execute', exec, () => result)
+    this.ctx.emit('tools/result', exec, output)
+    return output
+  }
 
-    // 2. pre-execute 闸门
-    // serial 返回 Promise；如果插件返回 { kind: 'deny' }，则短路
-    const decision = await abortable(() => this.ctx.serial('tools/pre-execute', exec), call.signal)
-    call.signal.throwIfAborted()
-    if (decision && decision.kind === 'deny') {
-      return {
-        isError: true,
-        error: { message: decision.reason || 'Denied' },
-        content: `Tool "${call.name}" was denied: ${decision.reason || 'user denied'}`,
-      }
-    }
-
-    // 3. 执行 + 超时
-    const timeoutMs = def.timeoutMs ?? TOOL_TIMEOUT_MS
-    let result: ToolExecutionResult
-
+  private async dispatch(def: ToolDefinition, exec: ToolRunContext): Promise<ToolExecutionResult> {
+    let decision: ToolGateDecision | void
     try {
-      const controller = new AbortController()
-      const timeout = setTimeout(
-        () => controller.abort(new Error(`Tool execution timed out after ${timeoutMs}ms`)),
-        timeoutMs,
-      )
-      const workSignal = AbortSignal.any([call.signal, controller.signal])
+      decision = await abortable(() => this.ctx.serial('tools/pre-execute', exec), exec.signal)
+    } catch (error) {
+      if (exec.signal.aborted) return abortedBeforeDispatch()
+      return toolError(errorMessage(error), errorCode(error))
+    }
+    if (exec.signal.aborted) return abortedBeforeDispatch()
+    if (decision?.kind === 'deny') return toolError(decision.reason || 'tool call denied', 'DENIED')
+
+    const timeoutMs = def.timeoutMs ?? TOOL_TIMEOUT_MS
+    const deadline = new AbortController()
+    const timer = setTimeout(() => deadline.abort(), timeoutMs)
+    const signal = AbortSignal.any([exec.signal, deadline.signal])
+    try {
       const work = async () => {
-        const workExec = { ...exec, signal: workSignal }
-        const value = await def.execute(validated.args, workExec)
-        workSignal.throwIfAborted()
-        const images = await def.output?.images?.(validated.args, value, workExec)
-        workSignal.throwIfAborted()
+        const workExec = { ...exec, signal }
+        const value = await def.execute(exec.arguments, workExec)
+        signal.throwIfAborted()
+        const images = await def.output?.images?.(exec.arguments, value, workExec)
+        signal.throwIfAborted()
         if (images) validateToolImages(images)
         return { value, images }
       }
-      let completed: Awaited<ReturnType<typeof work>>
-      try {
-        completed = await abortable(work, workSignal)
-      } finally {
-        clearTimeout(timeout)
-      }
-      const { value, images } = completed
-      const rendered = def.output?.render
-        ? def.output.render(validated.args, value)
+      const { value, images } = await abortable(work, signal)
+      const rendered = def.output
+        ? def.output.render(exec.arguments, value)
         : typeof value === 'string'
           ? value
           : (JSON.stringify(value) ?? 'null')
-      const warnings = validated.warnings.length ? `\n[${validated.warnings.join('; ')}]` : ''
       const limit = def.maxResultChars ?? TOOL_RESULT_CHARS_DEFAULT
-      const needsTruncation = rendered.length + warnings.length > limit
-      const capped =
-        truncate(rendered, Math.max(0, limit - warnings.length - (needsTruncation ? 160 : 0))) +
-        warnings
-      result = {
+      const truncated = rendered.length > limit
+      return {
         isError: false,
         value,
-        content: capped,
+        content: truncated ? truncate(rendered, Math.max(0, limit - 160)) : rendered,
         maxResultChars: limit,
         ...(images?.length ? { images } : {}),
-        fullContent: needsTruncation ? rendered : undefined,
+        ...(truncated ? { fullContent: rendered } : {}),
       }
-    } catch (err: any) {
-      if (err?.name === 'AbortError' || call.signal.aborted) {
-        result = {
-          isError: true,
-          error: { message: 'Aborted' },
-          content: `Tool "${call.name}" was aborted`,
-        }
-      } else {
-        const msg = err?.message || 'Unknown error'
-        result = {
-          isError: true,
-          error: { message: msg },
-          content: `Error executing "${call.name}": ${msg}`,
-        }
+    } catch (error) {
+      if (exec.signal.aborted) return toolError('tool call aborted', 'ABORTED')
+      if (deadline.signal.aborted) {
+        return toolError(`tool call timed out after ${timeoutMs}ms`, 'TOOL_TIMEOUT')
       }
+      return toolError(errorMessage(error), errorCode(error))
+    } finally {
+      clearTimeout(timer)
     }
-
-    // 4. post-execute waterfall（可替换 content）
-    // cordis waterfall 语义：末参是内置 next 回调；无监听器时 next() 即返回默认值。
-    // 监听器签名为 (exec, next)，可调用 next() 拿默认结果再改写后返回。
-    const output = this.ctx.waterfall('tools/post-execute', exec, () => result)
-
-    // 5. result 通知（仅观察）
-    this.ctx.emit('tools/result', exec, output)
-
-    return output
   }
 }
 

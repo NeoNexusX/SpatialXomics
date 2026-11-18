@@ -27,3 +27,23 @@ export interface VisitsStats {
   monthly: number
   total: number
 }
+
+export interface VisitsHistoryDay {
+  /** UTC calendar date; never regroup these counts in the browser's timezone. */
+  date: string
+  count: number
+  /** A missing observation is not a confirmed zero. */
+  missing: boolean
+  is_partial: boolean
+}
+
+export interface VisitsHistoryStats {
+  timezone: 'UTC'
+  start_date: string
+  end_date: string
+  days: number
+  /** Recorded requests within this interval, not the lifetime total. */
+  range_total: number
+  missing_days: number
+  items: VisitsHistoryDay[]
+}

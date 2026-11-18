@@ -642,12 +642,3 @@ function normalizePolarityValue(v: string | undefined | null): 'positive' | 'neg
   if (s === 'negative' || s === '-' || s === 'neg') return 'negative'
   return undefined
 }
-
-export function resolveMassPolarity(explicit?: string): 'positive' | 'negative' {
-  const resolved =
-    normalizePolarityValue(explicit ?? polarityRef.value) ??
-    // 显式给了值（含未识别）就不回退 metadata，保持报错引导
-    (!explicit ? normalizePolarityValue(metadataAttrsRef.value?.polarity) : undefined)
-  if (resolved) return resolved
-  throw new Error('Unknown ion polarity. Specify polarity as positive or negative for m/z search.')
-}

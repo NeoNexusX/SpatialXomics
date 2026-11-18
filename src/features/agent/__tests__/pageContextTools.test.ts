@@ -46,6 +46,7 @@ const exec: ToolRunContext = {
   signal: new AbortController().signal,
   callId: 't',
   name: 'get_page',
+  arguments: {},
 }
 
 function loadTool(name: string): ToolDefinition {
@@ -55,7 +56,7 @@ function loadTool(name: string): ToolDefinition {
 }
 
 function runTool(name: string, args: Record<string, unknown> = {}) {
-  return loadTool(name).execute(args as never, { ...exec, name }) as Promise<unknown>
+  return loadTool(name).execute(args, { ...exec, name, arguments: args }) as Promise<unknown>
 }
 
 /** 测试用注释行（rank 连续，i+1） */

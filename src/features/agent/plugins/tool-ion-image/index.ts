@@ -75,12 +75,12 @@ const parameters = {
   },
   mzs: {
     type: 'array',
-    items: 'number',
+    items: { type: 'number' },
     description: '1–9 m/z values to view; mutually exclusive with mz/rowIds.',
   },
   rowIds: {
     type: 'array',
-    items: 'integer',
+    items: { type: 'integer' },
     description:
       'Annotation row ids; mutually exclusive with mz/mzs; rows sharing an obsMz are grouped into one labeled target.',
   },

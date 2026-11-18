@@ -1,7 +1,7 @@
 <template>
   <!-- 统一导航：按当前路由选择形态（config.json 的 nav.mode + nav.modeByPath）。
        navbar 形态渲染顶栏；drawer 形态渲染左侧抽屉 + 右下角 FAB；none 什么都不渲染。 -->
-  <PageNavbar v-if="mode === 'navbar'" />
+  <PageNavbar v-if="mode === 'navbar'" @resize="emit('resize', $event)" />
   <template v-else-if="mode === 'drawer'">
     <NavDrawer v-model:open="sidebarOpen" :user="user" :is-admin="authStore.isAdmin" />
     <NavFab
@@ -32,6 +32,7 @@ import { toggleLocale } from '@/shared/composables/useLocale'
 import { resolveNavMode } from '@/shared/config/runtimeConfig'
 
 const router = useRouter()
+const emit = defineEmits<{ resize: [height: number] }>()
 const authStore = useAuthStore()
 const { user } = storeToRefs(authStore)
 

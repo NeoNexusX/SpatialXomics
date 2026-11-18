@@ -16,6 +16,16 @@ describe('SelectWithOther blur', () => {
     expect(wrapper.emitted('blur')).toHaveLength(1)
   })
 
+  // 元数据编辑弹窗需要与后端 128 字符上限对齐；默认仍是上传/注册表单的 50
+  it('honors a custom maxLength for the free-text input', () => {
+    const wrapper = mount(SelectWithOther, {
+      props: { modelValue: 'Custom value', options: ['a', 'b'], maxLength: 128 },
+      global: { stubs: { SvgIcon: true } },
+    })
+
+    expect(wrapper.find('input').attributes('maxlength')).toBe('128')
+  })
+
   // 回归：表单监听了 @blur 做校验，但事件一直没有发出，离开未选的研究领域不会提示
   it('validates the research field when the register form select loses focus', async () => {
     const validateField = vi.fn()

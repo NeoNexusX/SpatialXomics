@@ -1,106 +1,22 @@
-<template>
-  <!-- 数据集元信息编辑弹窗（My Datasets 卡片右侧 Edit 触发）：
-       PATCH /files/{public_id}，可改样本属性 9 个（8 个 SelectWithOther 词表下拉
-       + solvent 复合选择器）+ spectrum_mode / storage_mode（枚举下拉）。
-       差量提交只发变化的键；枚举字段空值（后端不接受的 ''）不发送。
-       保存成功后把返回的 FilePublic 交回父级。 -->
-  <dialog class="modal" :class="{ 'modal-open': open }">
-    <div class="modal-box w-11/12 max-w-2xl kawaru-text-100">
-      <h3 class="kawaru-text-112 font-bold text-base-content mb-1">{{ $t('datasets.metadata.title') }}</h3>
-      <p class="kawaru-text-81 text-base-content/50 mb-4 truncate" :title="dataset?.filename">
-        {{ dataset?.filename }}
-      </p>
-
-      <!-- v-if 守卫：dialog 常驻 DOM（modal-open 只切显隐），draft 在打开时才
-           初始化；无守卫会在关闭状态下渲染 null 的字段绑定，整个页面崩掉 -->
-      <div v-if="draft" class="max-h-[60vh] overflow-y-auto px-3">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-          <!-- 8 个样本属性：与上传表单同款 SelectWithOther（词表 + Other 自定义输入）。
-               当前值不在词表内时组件自动落到 Other 输入框回显。 -->
-          <label
-            v-for="field in TEXT_FIELDS"
-            :key="field.key"
-            class="flex flex-col gap-1 min-w-0"
-          >
-            <span class="kawaru-text-81 font-medium text-base-content/70">{{ field.label }}</span>
-            <SelectWithOther
-              v-model="draft![field.key]"
-              :options="field.suggestions"
-              :label-of="vocabLabel"
-              :placeholder="$t('common.input.selectShort')"
-              :other-placeholder="$t('common.input.specifyOther')"
-            />
-          </label>
-
-          <!-- 溶剂：与上传页同款复合控件（"数值+单位+组分" 逗号分隔，可增删条目）。
-               整行占满：用量输入 + 单位下拉 + 溶剂下拉 + 条目列表在窄栏里会挤成一团。 -->
-          <div class="flex flex-col gap-1 min-w-0 col-span-full">
-            <span class="kawaru-text-81 font-medium text-base-content/70">{{ $t('common.meta.solvent') }}</span>
-            <SolventPicker v-model="draft!.solvent" :solvent-options="SOLVENTS" />
-          </div>
-
-          <!-- 枚举：IconSelect 下拉。placeholder="" 让 IconSelect 不渲染占位项，
-               下拉里只有真实取值；未设置的字段显示为空（选中态 = 不修改该字段） -->
-          <label class="flex flex-col gap-1 min-w-0">
-            <span class="kawaru-text-81 font-medium text-base-content/70">{{ $t('common.meta.spectrumMode') }}</span>
-            <IconSelect
-              v-model="draft!.spectrum_mode"
-              :options="SPECTRUM_MODES"
-              placeholder=""
-              hide-label
-            />
-          </label>
-          <label class="flex flex-col gap-1 min-w-0">
-            <span class="kawaru-text-81 font-medium text-base-content/70">{{ $t('common.meta.storageMode') }}</span>
-            <IconSelect
-              v-model="draft!.storage_mode"
-              :options="STORAGE_MODES"
-              placeholder=""
-              hide-label
-            />
-          </label>
-        </div>
-      </div>
-
-      <div class="modal-action">
-        <button class="btn kawaru-text-100" :disabled="saving" @click="close">{{ $t('common.action.cancel') }}</button>
-        <button class="btn btn-primary kawaru-text-100" :disabled="saving || !dirty" @click="save">
-          <span v-if="saving" class="loading loading-spinner loading-sm"></span>
-          {{ $t('common.action.saveChanges') }}
-        </button>
-      </div>
-    </div>
-    <form method="dialog" class="modal-backdrop" @click="close">
-      <button @click.prevent="close">{{ $t('common.action.close') }}</button>
-    </form>
-  </dialog>
-</template>
-
 <script setup lang="ts">
-import { computed, reactive, ref, watch, type PropType } from 'vue'
-import IconSelect from '@/shared/components/IconSelect.vue'
+import { computed, nextTick, shallowRef, useId, useTemplateRef, watch } from 'vue'
 import SelectWithOther from '@/shared/components/SelectWithOther.vue'
 import SolventPicker from '@/features/upload/components/SolventPicker.vue'
+import { SOLVENTS } from '@/features/datasets/constants/datasetMetadata'
 import {
-  CONDITIONS,
-  MALDI_MATRICES,
-  MALDI_MATRIX_APPLICATIONS,
-  ORGANISMS,
-  ORGANISM_PARTS,
-  SAMPLE_GROWTH_CONDITIONS,
-  SAMPLE_STABILIZATIONS,
-  SOLVENTS,
-  SPECTRUM_MODES,
-  STORAGE_MODES,
-  TISSUE_MODIFICATIONS,
-} from '@/features/datasets/constants/datasetMetadata'
+  getMetadataTextFields,
+  getMetadataInstrumentFields,
+  getMetadataNumberFields,
+} from '../constants/fileMetadataFields'
+import { useFileMetadataDraft } from '../composables/useFileMetadataDraft'
 import { vocabLabel } from '@/features/datasets/constants/vocabLabels'
 import { t } from '@/i18n'
 import { mapItemToDataset } from '@/features/datasets/mappers/datasetMapper'
 import { patchFileMetadata } from '@/features/datasets/api/datasetApi'
 import {
-  buildFileMetadataPatch,
-  toFileMetadataDraft,
+  FILE_METADATA_MAX_STRING_LENGTH,
+  findFileMetadataNumberAdjustments,
+  parseFileMetadataValidationIssues,
   type FileMetadataDraft,
   type FileMetadataKey,
 } from '@/features/datasets/utils/fileMetadataPatch'
@@ -108,10 +24,10 @@ import type { File } from '@/features/datasets/types/dataset'
 import { extractBackendError, isPermissionDenied } from '@/shared/api/httpClient'
 import { useToast } from '@/shared/composables/useToast'
 
-const props = defineProps({
-  open: { type: Boolean, required: true },
-  dataset: { type: Object as PropType<File | null>, default: null },
-})
+const props = defineProps<{
+  open: boolean
+  dataset: File | null
+}>()
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -120,57 +36,116 @@ const emit = defineEmits<{
 
 const { showToast } = useToast()
 
-const TEXT_FIELDS = computed<{ key: FileMetadataKey; label: string; suggestions: readonly string[] }[]>(() => [
-  { key: 'organism', label: t('common.meta.organism'), suggestions: ORGANISMS },
-  { key: 'organism_part', label: t('common.meta.organismPart'), suggestions: ORGANISM_PARTS },
-  { key: 'condition', label: t('common.meta.condition'), suggestions: CONDITIONS },
-  { key: 'sample_growth_conditions', label: t('common.meta.growthConditions'), suggestions: SAMPLE_GROWTH_CONDITIONS },
-  { key: 'sample_stabilization', label: t('datasets.field.stabilization'), suggestions: SAMPLE_STABILIZATIONS },
-  { key: 'tissue_modification', label: t('common.meta.tissueModification'), suggestions: TISSUE_MODIFICATIONS },
-  { key: 'maldi_matrix', label: t('common.meta.maldiMatrix'), suggestions: MALDI_MATRICES },
-  { key: 'maldi_matrix_application', label: t('datasets.field.matrixApplication'), suggestions: MALDI_MATRIX_APPLICATIONS },
-])
+const textFields = computed(getMetadataTextFields)
+const instrumentFields = computed(getMetadataInstrumentFields)
+const numberFields = computed(getMetadataNumberFields)
 
-const draft = ref<FileMetadataDraft | null>(null)
-const saving = ref(false)
+const titleId = useId()
+const fieldsElement = useTemplateRef<HTMLFieldSetElement>('fields')
+const baseline = shallowRef<File | null>(null)
+const saving = shallowRef(false)
+const saveNotice = shallowRef('')
+const editSession = shallowRef(0)
+const {
+  draft,
+  inputRevision,
+  fieldErrors,
+  hasFieldErrors,
+  patchPayload,
+  changeCount,
+  dirty,
+  canReset,
+  reset: resetDraft,
+  applyValidationIssues,
+} = useFileMetadataDraft(baseline)
 
-// 每次打开时从 File 当前值初始化草稿
+// 支持初次挂载即打开、延迟收到数据和切换文件；同一文件的背景刷新不覆盖草稿。
 watch(
-  () => props.open,
-  (open) => {
-    if (open && props.dataset) {
-      draft.value = reactive(toFileMetadataDraft(props.dataset))
-    }
+  [() => props.open, () => props.dataset?.publicId],
+  ([open]) => {
+    editSession.value++
+    baseline.value = open && props.dataset ? { ...props.dataset } : null
+    saveNotice.value = ''
   },
+  { immediate: true },
 )
 
-const dirty = computed(() => {
-  if (!props.dataset || !draft.value) return false
-  return Object.keys(buildFileMetadataPatch(props.dataset, draft.value)).length > 0
-})
+function reset() {
+  if (saving.value) return
+  resetDraft()
+  saveNotice.value = ''
+}
 
-async function save() {
-  if (!props.dataset || !draft.value || saving.value) return
-  const patch = buildFileMetadataPatch(props.dataset, draft.value)
-  if (!Object.keys(patch).length) {
-    close()
+function fieldError(key: FileMetadataKey): string {
+  return fieldErrors.value[key] ?? ''
+}
+
+async function handleSaveError(err: unknown, submitted: FileMetadataDraft) {
+  // 非持有者改别人的数据 → 后端 403 / "permission denied"。
+  // 原文对用户无信息量，换成能看懂的说法。
+  if (isPermissionDenied(err)) {
+    showToast(t('datasets.metadata.notOwner'), 'error')
     return
   }
 
+  // 422：detail 是 FastAPI 标准数组，loc 形如 ["body", "mz"]，按字段就地显示
+  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  const issues = parseFileMetadataValidationIssues(detail)
+  if (issues.length) {
+    const { firstKey, messages } = applyValidationIssues(issues, submitted)
+    if (firstKey) {
+      await nextTick()
+      fieldsElement.value
+        ?.querySelector<HTMLElement>(
+          `[data-field="${firstKey}"] input:not(:disabled), [data-field="${firstKey}"] select`,
+        )
+        ?.focus()
+      showToast(t('datasets.metadata.invalidFields'), 'error')
+      if (messages.length) showToast(messages.join('; '), 'error')
+      return
+    }
+    showToast(messages.join('; '), 'error')
+    return
+  }
+
+  showToast(extractBackendError(err, t('common.feedback.updateFailed')), 'error')
+}
+
+async function save() {
+  if (!baseline.value || !draft.value || saving.value || hasFieldErrors.value || !dirty.value)
+    return
+
+  const publicId = baseline.value.publicId
+  const session = editSession.value
+  const submitted = { ...draft.value }
+  const patch = { ...patchPayload.value }
+  saveNotice.value = ''
   saving.value = true
   try {
-    const raw = await patchFileMetadata(props.dataset.publicId, patch)
-    // 响应为更新后的 FilePublic（与列表行同构），复用 mapper 转成前端 File
-    showToast(t('common.feedback.updated'), 'success')
-    emit('saved', mapItemToDataset(raw))
-    emit('close')
-  } catch (err: any) {
-    // 非持有者改别人的数据 → 后端 403 / "permission denied"。
-    // 原文对用户无信息量，换成能看懂的说法。
-    const message = isPermissionDenied(err)
-      ? t('datasets.metadata.notOwner')
-      : extractBackendError(err, t('common.feedback.updateFailed'))
-    showToast(message, 'error')
+    const raw = await patchFileMetadata(publicId, patch)
+    const saved = mapItemToDataset(raw)
+    const adjustments = findFileMetadataNumberAdjustments(patch, saved)
+    emit('saved', saved)
+    if (adjustments.length) {
+      const changes = adjustments
+        .map(({ key, submitted, stored }) => {
+          const label = numberFields.value.find((field) => field.key === key)!.label
+          return `${label}: ${submitted} → ${stored}`
+        })
+        .join('; ')
+      const message = t('datasets.metadata.savedWithAdjustments', { changes })
+      showToast(message, 'warning')
+      if (session === editSession.value) {
+        baseline.value = saved
+        saveNotice.value = message
+      }
+    } else {
+      showToast(t('common.feedback.updated'), 'success')
+      if (session === editSession.value) emit('close')
+    }
+  } catch (err) {
+    saving.value = false
+    if (session === editSession.value) await handleSaveError(err, submitted)
   } finally {
     saving.value = false
   }
@@ -181,3 +156,164 @@ function close() {
   emit('close')
 }
 </script>
+
+<template>
+  <dialog
+    class="modal"
+    :class="{ 'modal-open': open }"
+    :aria-labelledby="titleId"
+    :aria-busy="saving"
+    aria-modal="true"
+    @cancel.prevent="close"
+    @keydown.esc.prevent="close"
+  >
+    <div class="modal-box w-11/12 max-w-2xl kawaru-text-100">
+      <h3 :id="titleId" class="kawaru-text-112 font-bold text-base-content mb-1">
+        {{ $t('datasets.metadata.title') }}
+      </h3>
+      <p class="kawaru-text-81 text-base-content/50 mb-4 truncate" :title="dataset?.filename">
+        {{ dataset?.filename || dataset?.name }}
+      </p>
+
+      <p v-if="hasFieldErrors" role="alert" class="text-error kawaru-text-81 mb-3">
+        {{ $t('datasets.metadata.invalidFields') }}
+      </p>
+      <p v-if="saveNotice" role="alert" class="alert alert-warning kawaru-text-81 mb-3">
+        {{ saveNotice }}
+      </p>
+      <fieldset
+        v-if="draft"
+        :key="inputRevision"
+        ref="fields"
+        :disabled="saving"
+        class="max-h-[60vh] overflow-y-auto px-3 min-w-0"
+      >
+        <h4
+          class="mt-3 mb-4 border-b border-base-content/10 pb-2 kawaru-text-100 text-base-content/60 font-medium"
+        >
+          {{ $t('upload.form.acquisitionInfo') }}
+        </h4>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+          <div
+            v-for="field in instrumentFields"
+            :key="field.key"
+            :data-field="field.key"
+            class="min-w-0"
+          >
+            <SelectWithOther
+              v-model="draft[field.key]"
+              :label="field.label"
+              :options="field.suggestions"
+              :label-of="vocabLabel"
+              :placeholder="$t('datasets.metadata.notSpecified')"
+              placeholder-selectable
+              :other-placeholder="$t('common.input.specifyOther')"
+              :max-length="FILE_METADATA_MAX_STRING_LENGTH"
+              custom-input-mode="verbatim"
+              :error="fieldError(field.key)"
+            />
+          </div>
+        </div>
+        <p class="kawaru-text-75 text-base-content/60 mt-4 mb-2">
+          {{ $t('datasets.metadata.numberHint') }}
+        </p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+          <label
+            v-for="field in numberFields"
+            :key="field.key"
+            :data-field="field.key"
+            class="flex flex-col gap-1 min-w-0"
+          >
+            <span class="kawaru-text-81 font-medium text-base-content/70">{{ field.label }}</span>
+            <input
+              v-model="draft[field.key]"
+              type="text"
+              inputmode="decimal"
+              class="input input-bordered w-full kawaru-text-100"
+              :class="{ 'input-error': fieldError(field.key) }"
+              :aria-invalid="!!fieldError(field.key)"
+              :aria-describedby="
+                fieldError(field.key) ? `${titleId}-${field.key}-error` : undefined
+              "
+              :placeholder="$t('common.input.example', { value: field.example })"
+            />
+            <span
+              v-if="fieldError(field.key)"
+              :id="`${titleId}-${field.key}-error`"
+              class="kawaru-text-75 text-error mt-0.5"
+            >
+              {{ fieldError(field.key) }}
+            </span>
+          </label>
+        </div>
+
+        <h4
+          class="mt-6 mb-4 border-b border-base-content/10 pb-2 kawaru-text-100 text-base-content/60 font-medium"
+        >
+          {{ $t('upload.form.sampleMetadata') }}
+        </h4>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+          <div v-for="field in textFields" :key="field.key" :data-field="field.key" class="min-w-0">
+            <SelectWithOther
+              v-model="draft[field.key]"
+              :label="field.label"
+              :options="field.suggestions"
+              :label-of="vocabLabel"
+              :placeholder="$t('datasets.metadata.notSpecified')"
+              placeholder-selectable
+              :other-placeholder="$t('common.input.specifyOther')"
+              :max-length="FILE_METADATA_MAX_STRING_LENGTH"
+              custom-input-mode="verbatim"
+              :error="fieldError(field.key)"
+            />
+          </div>
+          <div class="flex flex-col gap-1 min-w-0 col-span-full" data-field="solvent">
+            <span class="kawaru-text-81 font-medium text-base-content/70">{{
+              $t('common.meta.solvent')
+            }}</span>
+            <SolventPicker
+              v-model="draft.solvent"
+              :solvent-options="SOLVENTS"
+              :max-length="FILE_METADATA_MAX_STRING_LENGTH"
+              custom-input-mode="verbatim"
+            />
+            <span v-if="fieldError('solvent')" class="kawaru-text-75 text-error mt-0.5">
+              {{ fieldError('solvent') }}
+            </span>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="flex flex-col gap-2 mt-6 sm:flex-row sm:items-center">
+        <div class="flex items-center justify-between gap-2 sm:mr-auto">
+          <span role="status" class="kawaru-text-75 text-base-content/60">
+            {{ $t('datasets.metadata.changedCount', { count: changeCount }) }}
+          </span>
+          <button class="btn btn-ghost btn-sm" :disabled="saving || !canReset" @click="reset">
+            {{ $t('common.action.reset') }}
+          </button>
+        </div>
+        <div class="grid grid-cols-[1fr_1.5fr] gap-2 sm:flex">
+          <button
+            class="btn min-w-0 whitespace-normal px-3 kawaru-text-87"
+            :disabled="saving"
+            @click="close"
+          >
+            {{ saveNotice && !canReset ? $t('common.action.close') : $t('common.action.cancel') }}
+          </button>
+          <button
+            class="btn btn-primary min-w-0 whitespace-normal px-3 kawaru-text-87"
+            :disabled="saving || !dirty || hasFieldErrors"
+            @click="save"
+          >
+            <span v-if="saving" class="loading loading-spinner loading-sm"></span>
+            {{ $t('common.action.saveChanges') }}
+          </button>
+        </div>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop" @click.prevent="close">
+      <button>{{ $t('common.action.close') }}</button>
+    </form>
+  </dialog>
+</template>

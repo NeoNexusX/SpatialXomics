@@ -1,0 +1,11 @@
+/*
+ * v-split-reveal 的行遮罩（SplitText 在运行时生成，类名为 linesClass + "-mask"，所以写在全局样式里）。
+ *
+ * 展示字的行高收得很紧，字母的上伸、下伸部会超出行框；SplitText 内联写死的 overflow: clip
+ * 会把它们切掉（"p"、"g" 的尾巴被削平）。改用向外放宽的 clip-path：裁切区上下左右都留出余量，
+ * 排版不受影响，入场时文字仍从行框下方升起。
+ */
+.split-line-mask {
+  overflow: visible !important;
+  clip-path: inset(-0.2em -0.15em -0.3em -0.15em);
+}

@@ -5,6 +5,7 @@ import { getConfig } from '@/shared/config/runtimeConfig'
 import type {
   DownloadRawResponse,
   FilePublicId,
+  FilePublicResponse,
   ProcessItem,
   ProcessingStats,
 } from '@/features/datasets/types/dataset'
@@ -63,8 +64,9 @@ export async function setFilePublic(publicId: FilePublicId): Promise<{ public_id
 }
 
 // PATCH /files/{public_id} — 文件元数据部分更新（键为后端 snake_case）。
-// 可改：样本属性 9 个（含 solvent）+ spectrum_mode + storage_mode；is_public/
-// experiment_type/filename 等系统字段禁改。权限：任一文件持有者。响应为更新后的 FilePublic。
+// 可改：样本属性 9 个（含 solvent）+ 仪器参数 7 个；is_public/experiment_type/
+// filename 等系统字段禁改。spectrum_mode / storage_mode 已不可改（请求里带着会
+// 被后端静默忽略），不再声明。权限：任一文件持有者。响应为更新后的 FilePublic。
 export interface FileMetadataPatch {
   organism?: string
   organism_part?: string
@@ -74,13 +76,21 @@ export interface FileMetadataPatch {
   tissue_modification?: string
   maldi_matrix?: string
   maldi_matrix_application?: string
-  solvent?: string // "50% ACN, 1 mM Acetic acid, ..." 复合串，与上传表单同构
-  spectrum_mode?: string // 'profile' | 'centroid'
-  storage_mode?: string // 'continuous' | 'processed'
+  solvent?: string // "N% Name, ..." 复合串，与上传表单同构
+  polarity?: string // e.g. Positive / Negative
+  ionisation_source?: string // e.g. MALDI / ESI / DESI
+  analyzer?: string // e.g. TOF / Orbitrap / FTICR
+  pixel_size_horizontal?: number // μm，>= 0
+  pixel_size_vertical?: number // μm，>= 0
+  resolving_power?: number // >= 0，无单位
+  mz?: number // 质荷比，>= 0
 }
 
-export async function patchFileMetadata(publicId: FilePublicId, patch: FileMetadataPatch) {
-  return unwrap(auth_api.patch(`/files/${publicId}`, patch))
+export async function patchFileMetadata(
+  publicId: FilePublicId,
+  patch: FileMetadataPatch,
+): Promise<FilePublicResponse> {
+  return unwrap(auth_api.patch<FilePublicResponse>(`/files/${publicId}`, patch))
 }
 
 /** 文件列表服务端排序（sort_by/order 白名单与后端一致，非法值 422） */

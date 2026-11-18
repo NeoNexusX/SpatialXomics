@@ -5,6 +5,7 @@ import type { ToolExecutionResult } from '../tools'
 import type { LiveAttempt, UiChatItem } from '../session-transcript'
 import type { ContextPressure } from '../token-meter'
 import type { SessionArchive, SessionStorage, StoredSessionInfo } from '../session-persistence'
+import type { QuestionRecords } from '../user-questions'
 
 declare module '@deepseek-ai/cordis' {
   /** 循环的扩展点。监听方抛错就结束这一轮，不会影响下一轮 */
@@ -93,6 +94,8 @@ export interface AgentSnapshot {
   pressure?: ContextPressure
   tokenUsage?: TokenUsage
   instructions?: { name: string; text: string }
+  /** 这段对话里的提问记录，按工具步骤的 id 索引；没有提问时省略 */
+  questions?: QuestionRecords
 }
 
 /** Consumers depend on this contract, never on a loop implementation. */

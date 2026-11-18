@@ -3,7 +3,6 @@
     "allow": [
       "Read(//tmp/**)",
       "Bash(npx vitest *)",
-      "Bash(node scripts/figMaskToRois.mjs)",
       "Bash(npx eslint *)",
       "Bash(npx vue-tsc *)",
       "Bash(python -c ' *)",

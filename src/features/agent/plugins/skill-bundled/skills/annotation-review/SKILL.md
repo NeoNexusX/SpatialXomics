@@ -18,11 +18,11 @@ Read `get_annotation(rowIds=[...])` for the rows under scrutiny in one batch. Us
 
 ## Target knowledge checks
 
-Batch distinct names per relevant source, up to 25 inputs; default pages contain 5 queries, maximum 8. Do not repeat the same lookup per adduct.
+For PubChem, ChEBI and HMDB, batch distinct names (up to 25 inputs, default 5 queries per page, maximum 8). Submit independent KEGG keyword searches separately. Use up to 10 IDs per KEGG compound or pathway detail call.
 
-Use `pubchem_compound_lookup(names=[...])` for named candidate identities; compare formula and exact mass with the annotation detail. Keep lipid shorthand and class evidence from the annotation result, and do not treat a sum composition as a unique structure. Use `hmdb_lookup(queries=[...])` for tissue/disease context and `chebi_lookup` when an ontology definition helps. Substring search results can be related compounds: verify the returned identity. A missing record means limited coverage, not absence from tissue. For pathway questions, verify candidate compounds with `kegg_compound(ids=[...])`, then inspect membership with `kegg_pathway(ids=[...])`; this checks selected identities and does not compute an annotation-set rollup or statistical enrichment.
+Use `pubchem_compound_lookup(names=[...])` for named candidate identities; compare formula and exact mass with the annotation detail. Keep lipid shorthand and class evidence from the annotation result, and do not treat a sum composition as a unique structure. Use `hmdb_lookup(queries=[...])` for tissue/disease context and `chebi_lookup` when an ontology definition helps. Substring search results can be related compounds: verify the returned identity. A missing record means limited coverage, not absence from tissue. For pathway questions, verify candidate compounds with `kegg_compound(ids=[...])`, then inspect membership with `kegg_pathway(membersOf=[...])`; this checks selected identities and does not compute an annotation-set rollup or statistical enrichment.
 
-For a question about pathway memberships, verify candidate identities with `kegg_compound(ids=[...])` and inspect pathway membership with `kegg_pathway(ids=[...])`. This checks selected compounds; it does not aggregate the annotation set or perform a statistical enrichment test. Report ambiguities and pathway membership as descriptive evidence only, not pathway activity.
+For a question about pathway memberships, verify candidate identities with `kegg_compound(ids=[...])` and inspect pathway membership with `kegg_pathway(membersOf=[...])`. This checks selected compounds; it does not aggregate the annotation set or perform a statistical enrichment test. Report ambiguities and pathway membership as descriptive evidence only, not pathway activity.
 
 Report ambiguous KEGG matches. An API/proxy failure means unavailable evidence, not an unmapped molecule; never request a local KEGG index build.
 
