@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
-import { ALGO_DATASET_NAMES } from './utils.js'
+import { ALGO_DATASET_NAMES, processRow } from './utils.js'
 
 /**
  * New Analysis + Peak Alignment 全链路 E2E — 真实后端
@@ -37,14 +37,6 @@ async function clickSpectrum(page: Page, xRatio = 0.6) {
 
   // grid.left=64，点中心偏右
   await page.mouse.click(box.x + box.width * xRatio, box.y + box.height * 0.4)
-}
-
-/**
- * Workspace 表格里的这条任务。负向前瞻防止 Process #12 命中 Process #123；
- * 不能用 \b：相邻单元格的文本之间没有空格（"Process #12Brain_1"）。
- */
-function processRow(page: Page, id: number) {
-  return page.locator('table tbody tr').filter({ hasText: new RegExp(`Process #${id}(?!\\d)`) }).first()
 }
 
 /**

@@ -3,8 +3,9 @@ import { test, expect } from '@playwright/test'
 /**
  * Workspace E2E 测试 — 真实后端
  * ==============================
- * /workspace 任务列表页的纯 UI：summary 卡与 Recent Results、入口导航，
+ * /workspace 任务列表页的纯 UI：summary 卡与 Recent Results，
  * 以及不带任务状态直接进入 /vizworkbench 的空态。
+ * 入口导航与分析配额见 workspace.offline.spec.ts，使用固定任务数量覆盖放行和拦截。
  *
  * 涉及真实后端任务的链路不在本文件：
  *   - Peak Alignment 链路（submit → 查看 → 清理）见 new-analysis.spec.ts
@@ -26,19 +27,6 @@ test.describe('Workspace', () => {
     await expect(page.getByText('Recent Results')).toBeVisible()
   })
 
-  test('entry links navigate to create-analysis and my-datasets', async ({ page }) => {
-    await page.goto('/workspace')
-
-    // New Task 现在是按钮：点击时先做分析配额校验，通过后才跳创建页
-    await page.getByRole('button', { name: 'New Task' }).click()
-    await expect(page).toHaveURL(/\/workspace\/new/)
-    await expect(page.locator('h1:has-text("Create New Analysis")')).toBeVisible()
-
-    await page.goto('/workspace')
-    await page.getByRole('link', { name: 'Go to MyDatasets' }).click()
-    await expect(page).toHaveURL(/\/mydatasets/)
-    await expect(page.locator('h1:has-text("My Datasets")')).toBeVisible()
-  })
 })
 
 // ============================================================

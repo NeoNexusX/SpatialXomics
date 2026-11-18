@@ -109,6 +109,8 @@ test.describe('Agent browser journeys', () => {
     const panel = await openAgent(page)
     const input = panel.getByPlaceholder('Message SXO Harness Agent')
     await input.fill('Annotate the selected ion')
+    // 面板出现时会话可能仍在恢复；Enter 不会像点击 Send 那样自动等到可发送。
+    await expect(panel.getByRole('button', { name: 'Send', exact: true })).toBeEnabled()
     await input.press('Enter')
 
     const adduct = panel.getByRole('group', { name: 'Which adduct should the annotation assume?' })

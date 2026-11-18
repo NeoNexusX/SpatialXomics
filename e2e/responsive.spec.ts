@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
 const mobileViewport = { width: 390, height: 844 }
 const emptyStorage = { cookies: [], origins: [] }
@@ -13,8 +13,11 @@ async function expectNoHorizontalPageOverflow(page: Page) {
     .toBe(true)
 }
 
-async function expectInsideViewport(page: Page, selector: string) {
-  const box = await page.locator(selector).boundingBox()
+async function expectInsideViewport(target: Locator) {
+  await target.scrollIntoViewIfNeeded()
+  await expect(target).toBeVisible()
+  await expect(target).toBeInViewport({ ratio: 1 })
+  const box = await target.boundingBox()
   expect(box).not.toBeNull()
   expect(box!.x).toBeGreaterThanOrEqual(0)
   expect(box!.x + box!.width).toBeLessThanOrEqual(mobileViewport.width)
@@ -23,15 +26,16 @@ async function expectInsideViewport(page: Page, selector: string) {
 test.describe('mobile responsive layout', () => {
   test.use({ storageState: emptyStorage, viewport: mobileViewport })
 
-  test('keeps both home actions fully visible', async ({ page }) => {
-    await page.goto('/')
+  test('keeps the home join and dataset actions within the mobile viewport', async ({ page }) => {
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
 
-    await expect(page.getByRole('link', { name: 'Join to start' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'View Datasets' })).toBeVisible()
-    // 限定在 Hero 内：首页现在是 drawer 导航，抽屉菜单里也有指向 /datasets 的链接（收起时隐藏但在 DOM 里），
-    // 不加范围会同时匹配两个元素，触发 Playwright 的 strict mode 报错
-    await expectInsideViewport(page, '#hero a[href="/register"]')
-    await expectInsideViewport(page, '#hero a[href="/datasets"]')
+    // 注册入口在 Hero，数据集入口已移到 Stats 的 KPI 卡；分别滚动到对应入口检查。
+    const join = page.locator('#hero').getByRole('link', { name: 'Join to start', exact: true })
+    const datasets = page.locator('#stats').getByRole('link', { name: 'View Datasets', exact: true })
+    await expect(join).toHaveAttribute('href', '/register')
+    await expectInsideViewport(join)
+    await expect(datasets).toHaveAttribute('href', '/datasets')
+    await expectInsideViewport(datasets)
     await expectNoHorizontalPageOverflow(page)
   })
 
