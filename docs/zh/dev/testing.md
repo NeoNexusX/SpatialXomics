@@ -41,7 +41,9 @@ Linux WebKit 没有 `navigator.storage`，应用在那里走内存存储。夹�
 | `datasets.offline.spec.ts` | 公开列表和我的数据集上的下载：签发一次并打开 imzML + ibd、冷却提示、服务端配额提示后可重试、资料不完整时拦截、未登录跳转登录页 |
 | `workspace.offline.spec.ts` | 提交后才搜索、清空筛选和分页复位；每页数量；取消删除、确认删除、删除末页回退和统计刷新；删除失败后的提示及再次尝试；失败详情和运行中任务操作限制；401 清除登录状态并保留回跳路径；从数据集创建 Peak Alignment 任务并跟踪到完成 |
 
-目前是 22 个场景，默认在 Chromium 和 Firefox 执行，共 44 次；启用 WebKit 后共 66 次（Linux WebKit 跳过其中 2 次）。离线组还断言没有未配置的 API 请求及未捕获的页面错误，避免后端变化或浏览器异常悄悄被忽略。网络拦截严格匹配 API 路径，不能把 Vite 开发模块如 `/src/shared/api/httpClient.ts` 当成接口。
+目前是 20 个场景，默认在 Chromium 和 Firefox 执行，共 40 次；启用 WebKit 后共 60 次（Linux WebKit 跳过其中 2 次）。离线组还断言没有未配置的 API 请求及未捕获的页面错误，避免后端变化或浏览器异常悄悄被忽略。网络拦截严格匹配 API 路径，不能把 Vite 开发模块如 `/src/shared/api/httpClient.ts` 当成接口。
+
+`tools.offline.spec.ts` 是一次性工具输出抓取脚本，依赖 dev server 的 `/src` 动态导入，默认被排除在回归之外；需要时设置 `CAPTURE_OUT` 再运行，具体命令见文件头。
 
 离线测试不验证真实后端契约、OSS 数据读取、算法结果质量或真实模型回答能力。它解决的是浏览器集成行为的可重复验证。
 
@@ -62,7 +64,7 @@ E2E_WEBKIT=1 npm run test:e2e
 
 `auth.setup.ts` 通过登录页获取真实登录态，保存到被 gitignore 的 `.auth/user.json`。`env/` 中的 Vite 环境文件不会自动注入 Playwright 的 Node 进程，测试账号需要 shell 或 CI 显式提供。缺少账号只影响需要 setup 的真实后端组。
 
-现有集成覆盖认证、数据集、上传、集合、公开分享总览、数据库、分析任务与可视化、工作台、响应式和中文路由文案。真实下载、上传往返的大文件用例和 Peak Alignment 链路只在 Chromium 运行，以控制耗时和账号配额；下载的跨浏览器行为由离线组覆盖。涉及算法的测试使用 `e2e/utils.ts` 中约定的真实 MSI 数据集；不要用没有光谱的合成 imzML 去断言任务成功。资源创建后应清理；环境缺少可选数据时的 skip 必须有明确原因，不能用它掩盖产品断言失败。
+现有集成覆盖认证、数据集、上传、集合、公开分享总览、数据库、分析任务与可视化、工作台、响应式和中文路由文案。真实下载、上传往返的大文件用例和 Peak Alignment 链路用 `@chromium-only` 标签只在 Chromium 运行，由 firefox/webkit 项目的 `grepInvert` 直接排除（不再产生 skip），以控制耗时和账号配额；下载的跨浏览器行为由离线组覆盖。涉及算法的测试使用 `e2e/utils.ts` 中约定的真实 MSI 数据集；不要用没有光谱的合成 imzML 去断言任务成功。资源创建后应清理；环境缺少可选数据时的 skip 必须有明确原因，不能用它掩盖产品断言失败。
 
 本地 Playwright 自动启动或复用 5173 的 SPA 开发服务器；`CI=true` 时启动 4173 的 preview，必须先 `npm run build`。真实后端集成需要可用的 `/api`：开发环境用 Vite proxy，生产预览的后端访问方式应由运行环境提供，固定响应组不依赖该代理。
 

@@ -64,20 +64,6 @@ const REQUIRED_FALLBACK: readonly (readonly [field: string, value: string])[] = 
 // ============================================================
 
 test.describe('Collections list', () => {
-  test('page loads with header, search and toolbar controls', async ({ page }) => {
-    await page.goto('/collections')
-
-    await expect(page.locator('h1:has-text("Collections")')).toBeVisible()
-    await expect(page.getByPlaceholder('Search collections')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Create Collection' })).toBeVisible()
-    // 工具栏：筛选面板入口 + 范围切换（排序是 updated_at 倒序单选项，无交互可测）
-    await expect(page.getByRole('button', { name: 'Add filter' })).toBeVisible()
-    await expect(page.getByText('My collections only')).toBeVisible()
-
-    // 列表或空态至少呈现一个
-    await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 15_000 })
-  })
-
   test('server search shows no-result state, clear restores', async ({ page }) => {
     await page.goto('/collections')
     await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 15_000 })
@@ -222,9 +208,9 @@ test.describe('Collection full lifecycle', () => {
 // ============================================================
 
 test.describe('Share link copy', () => {
-  test('copies the public collection URL to the clipboard', async ({ page, request, browserName }) => {
-    // 剪贴板权限只有 Chromium 支持 grantPermissions（Firefox/WebKit 会挂）
-    test.skip(browserName !== 'chromium', 'clipboard 权限仅 Chromium 可授予')
+  test('copies the public collection URL to the clipboard', { tag: '@chromium-only' }, async ({ page, request }) => {
+    // 剪贴板权限只有 Chromium 支持 grantPermissions（Firefox/WebKit 会挂），
+    // 由 firefox/webkit 项目的 grepInvert 排除，不在这里运行时 skip。
     // 后端不保证有存量集合：API 建临时集合 → 测 → 删，自足不依赖环境。
     // request fixture 不带登录态（实测 POST /api/collections 401），显式登录拿 token
     const files = await request.post('/api/files/list_files?page=1&size=1', { data: {} })

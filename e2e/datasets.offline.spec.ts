@@ -33,29 +33,40 @@ for (const path of ['/datasets', '/mydatasets'] as const) {
       expect(backend.rawDownloads).toEqual([PUBLIC_ID])
     })
 
-    test('reports the server download limit without starting a cooldown', async ({ page, backend }) => {
-      backend.rawDownloadStatus = 403
-      await page.goto(path)
-      const download = page.getByRole('button', { name: 'Download', exact: true })
-      await download.click()
-      await expect(page.getByText('Download limit reached', { exact: true })).toBeVisible()
-      await expect(page.locator('iframe')).toHaveCount(0)
-
-      backend.rawDownloadStatus = 200
-      await download.click()
-      await expect(page.getByText('Download started', { exact: true })).toBeVisible()
-      expect(backend.rawDownloads).toEqual([PUBLIC_ID, PUBLIC_ID])
-    })
-
-    test('asks for a complete profile before requesting signed URLs', async ({ page, backend }) => {
-      backend.profile = { region: '' }
-      await page.goto(path)
-      await page.getByRole('button', { name: 'Download', exact: true }).click()
-      await expect(page.getByText(/^Please complete your institution/)).toBeVisible()
-      expect(backend.rawDownloads).toEqual([])
-    })
   })
 }
+
+/**
+ * 403 限额与资料校验是状态分支：提示文案与拦截逻辑已由 useDownloadProgress 单测覆盖，
+ * 这里只在公开列表验一次浏览器接线，不再按两个路径 × 两个浏览器重复跑。
+ */
+test.describe('download guards', () => {
+  test.beforeEach(({ backend }) => {
+    backend.files = [fileRecord(PUBLIC_ID)]
+  })
+
+  test('reports the server download limit without starting a cooldown', async ({ page, backend }) => {
+    backend.rawDownloadStatus = 403
+    await page.goto('/datasets')
+    const download = page.getByRole('button', { name: 'Download', exact: true })
+    await download.click()
+    await expect(page.getByText('Download limit reached', { exact: true })).toBeVisible()
+    await expect(page.locator('iframe')).toHaveCount(0)
+
+    backend.rawDownloadStatus = 200
+    await download.click()
+    await expect(page.getByText('Download started', { exact: true })).toBeVisible()
+    expect(backend.rawDownloads).toEqual([PUBLIC_ID, PUBLIC_ID])
+  })
+
+  test('asks for a complete profile before requesting signed URLs', async ({ page, backend }) => {
+    backend.profile = { region: '' }
+    await page.goto('/datasets')
+    await page.getByRole('button', { name: 'Download', exact: true }).click()
+    await expect(page.getByText(/^Please complete your institution/)).toBeVisible()
+    expect(backend.rawDownloads).toEqual([])
+  })
+})
 
 test.describe('downloads when signed out', () => {
   test.use({ signedIn: false })

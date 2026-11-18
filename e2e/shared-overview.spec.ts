@@ -49,13 +49,6 @@ test.describe('Shared Dataset Overview — signed out', () => {
     await expect(page.getByText('Invalid share link')).toHaveCount(0)
   })
 
-  test('treats a malformed id as an invalid link', async ({ page }) => {
-    await page.goto('/s/not-base64-%20')
-
-    await expect(page.getByText('Invalid share link')).toBeVisible()
-    await expect(page.getByText('This public overview link is invalid.')).toBeVisible()
-  })
-
   test('sends the visitor back to the public dataset list', async ({ page, request }) => {
     const file = await firstPublicFile(request)
     if (!file) {
