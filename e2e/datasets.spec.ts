@@ -255,9 +255,9 @@ test.describe('My Datasets', () => {
     // 刚打开、未改任何字段：差量提交无内容可发 → Save 禁用
     await expect(dialog.getByRole('button', { name: 'Save Changes' })).toBeDisabled()
 
-    // spectrum_mode / storage_mode 只能看不能改；仪器参数控件已就位
-    await expect(dialog.locator('[data-field="spectrum_mode"] input')).toBeDisabled()
-    await expect(dialog.locator('[data-field="storage_mode"] input')).toBeDisabled()
+    // 只读的文件格式字段不再展示；可编辑的仪器参数仍正常显示
+    await expect(dialog.locator('[data-field="spectrum_mode"]')).toHaveCount(0)
+    await expect(dialog.locator('[data-field="storage_mode"]')).toHaveCount(0)
     await expect(dialog.locator('[data-field="polarity"] select')).toBeVisible()
     await expect(dialog.locator('[data-field="mz"] input')).toBeVisible()
 

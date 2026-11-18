@@ -17,6 +17,7 @@ vi.mock('@/features/datasets/api/datasetApi', () => ({
 
 import FileMetadataDialog from '../FileMetadataDialog.vue'
 import SolventPicker from '@/features/upload/components/SolventPicker.vue'
+import SelectWithOther from '@/shared/components/SelectWithOther.vue'
 import type { File } from '@/features/datasets/types/dataset'
 import { i18n, loadCoreMessages, loadFeatureMessages } from '@/i18n'
 
@@ -253,10 +254,11 @@ describe('FileMetadataDialog', () => {
 
   it('preserves custom solvent names when adding a mixture entry', async () => {
     const wrapper = await openDialog()
-    const picker = wrapper.get('[data-field="solvent"]')
-    await picker.get('input').setValue('50')
-    await picker.get('select').setValue('Other')
-    const customName = picker.findAll('input')[1]!
+    const picker = wrapper.getComponent(SolventPicker)
+    const solventName = picker.getComponent(SelectWithOther)
+    await picker.get('input[inputmode="decimal"]').setValue('50')
+    await solventName.get('select').setValue('Other')
+    const customName = solventName.get('input')
     await customName.setValue('α solvent / pH=7.4')
     await customName.trigger('blur')
     await picker.get('button[title="Add solvent"]').trigger('click')
