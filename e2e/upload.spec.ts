@@ -14,8 +14,8 @@ import { startRawDownload } from './utils.js'
  * 目标数据集不存在时自动 skip。
  *
  * 覆盖两个数据集：
- * - Arabidopsis_Spleen_MALDI_10_Negative_f9d339（小，Organism=Arabidopsis / Part=Spleen）
- * - Rat_Liver_MALDI_40_Positive_9ce4d1（大，压缩后约 360MB，Organism=Rat / Part=Liver）
+ * - f9d339_Arabidopsis_Spleen_MALDI_10_Negative（小，Organism=Arabidopsis / Part=Spleen）
+ * - 9ce4d1_Rat_Liver_MALDI_40_Positive（大，压缩后约 360MB，Organism=Rat / Part=Liver）
  *   破坏性测试跑大文件成本高（下载+重传 360MB），保留覆盖是值得的：
  *   大文件路径才会暴露分块上传/超时/进度的问题。这些问题与浏览器无关，只在 chromium 跑一次。
  *
@@ -154,9 +154,9 @@ async function runUploadRoundTrip(page: Page, params: RoundTripParams): Promise<
       await page.waitForTimeout(300)
     }
 
-    // Solvent（select + 文本输入）
+    // Solvent（用量输入 + 单位下拉 + 组分下拉；单位保持默认 %）
     const solventArea = modalBox.locator('label:has-text("Solvent")').locator('..')
-    await solventArea.locator('select').click()
+    await solventArea.locator('select').last().click()
     await page.keyboard.press('ArrowDown')
     await page.keyboard.press('Enter')
     await page.waitForTimeout(300)
@@ -235,18 +235,37 @@ const CASES: DatasetCase[] = [
   },
 ]
 
-test.describe('Upload Round-Trip', () => {
-  for (const ds of CASES) {
-    test(`download -> delete -> re-upload (${ds.name})`, async ({ page, browserName }) => {
-      test.skip(browserName === 'webkit', 'Linux WebKit 不支持 OPFS 且 headless 下载不稳定')
-      test.skip(!!ds.chromiumOnly && browserName !== 'chromium', '大文件只在 chromium 跑一次')
-      test.setTimeout(ds.testTimeout)
+/** 单个往返用例：小文件跑所有浏览器，大文件仅 Chromium（由 @chromium-only 标签过滤）。 */
+async function runUploadCase(
+  page: Page,
+  browserName: string,
+  params: RoundTripParams,
+  timeout: number,
+) {
+  test.skip(browserName === 'webkit', 'Linux WebKit 不支持 OPFS 且 headless 下载不稳定')
+  test.setTimeout(timeout)
 
-      const found = await runUploadRoundTrip(page, ds.params)
-      if (!found) {
-        test.skip(true, `Target dataset ${ds.params.filename} not found`)
-      }
+  const found = await runUploadRoundTrip(page, params)
+  if (!found) {
+    test.skip(true, `Target dataset ${params.filename} not found`)
+  }
+}
+
+test.describe('Upload Round-Trip', () => {
+  // 标签必须是字面量（eslint-plugin-playwright/valid-test-tags），所以按是否 chromiumOnly 分两轮声明。
+  for (const ds of CASES.filter((item) => !item.chromiumOnly)) {
+    test(`download -> delete -> re-upload (${ds.name})`, async ({ page, browserName }) => {
+      await runUploadCase(page, browserName, ds.params, ds.testTimeout)
     })
+  }
+  for (const ds of CASES.filter((item) => item.chromiumOnly)) {
+    test(
+      `download -> delete -> re-upload (${ds.name})`,
+      { tag: '@chromium-only' },
+      async ({ page, browserName }) => {
+        await runUploadCase(page, browserName, ds.params, ds.testTimeout)
+      },
+    )
   }
 })
 

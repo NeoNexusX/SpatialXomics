@@ -53,7 +53,7 @@
 | **Pixel Size Y (μm)**        | 必填       | 像素纵向尺寸             | 整数，**1–200** μm                                           |
 | **Spectrum Mode**            | 必填       | 谱图模式                 | `profile`（连续谱） / `centroid`（质心谱）                   |
 | **Storage Mode**             | 必填       | imzML 存储模式           | `continuous` / `processed`                                   |
-| **Solvent**                  | 根据离子源 | 溶剂组成                 | 预填 `100% Water`；可选 `Water`, `ACN`, `MeOH`, `Ethanol`, `IPA`, `Acetone`等 |
+| **Solvent**                  | 根据离子源 | 溶剂组成                 | 预填 `100% Water`；每条为「用量 + 单位 + 组分」，单位可选 `%`（组成比例，≤100）、`mM`、`μM`、`nM`、`M`、`mg/mL`、`μg/mL`（质量浓度须带体积），列表里没有时选 `Other` 自填；组分可选 `Water`, `ACN`, `Acetic acid`, `Ammonium fluoride` 等 |
 | **MALDI Matrix**             | 根据离子源 | MALDI 基质               | `CHCA`, `DHB`, `NEDC`, `Sinapinic acid`, `9-AA`, `Norharmane`, `DAN` 等 |
 | **MALDI Matrix Application** | 根据离子源 | 基质涂布方式             | `Spraying`, `Airbrush`, `Automated sprayer`, `Sublimation`, `Spotting`等 |
 | **m/z**                      | 选填       | 检测器分辨率对应的质荷比 | 数字                                                         |

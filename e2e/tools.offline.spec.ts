@@ -13,9 +13,9 @@
  * 实例 provider 注册表；外部库/文献/文件工具走真实网络与 /kegg-rest、/hmdb-archive、
  * /api 代理（离线夹具提供后端与 LLM，不发真实模型请求）。
  *
- * 运行（先起 dev server，端口用 E2E_PORT 指定）：
- *   npx playwright test tools.offline --project=offline-chromium
- * 输出目录用 CAPTURE_OUT 指定（默认仓库根 tools-output）。
+ * 运行（先起 dev server，端口用 E2E_PORT 指定；CAPTURE_OUT 同时是启用开关和输出目录）：
+ *   CAPTURE_OUT=tools-output npx playwright test tools.offline --project=offline-chromium
+ * 不设置 CAPTURE_OUT 时本文件被 playwright.config.ts 的 testIgnore 排除，不参与任何回归。
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

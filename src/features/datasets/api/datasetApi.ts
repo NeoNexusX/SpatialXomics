@@ -9,6 +9,7 @@ import type {
   ProcessItem,
   ProcessingStats,
 } from '@/features/datasets/types/dataset'
+import { isDirectRun } from '@/shared/utils/processRun'
 
 // GET /files/{public_id}/download — ZIP 打包下载；只消费 oss_download_url 与 filename，
 // 不再声明或读取 file_id/path 等字段
@@ -184,6 +185,39 @@ export async function listMyProcesses(
 // GET /stats/processing - Processing statistics for current user
 export async function getProcessingStats(): Promise<ProcessingStats> {
   return unwrap(auth_api.get('/stats/processing'))
+}
+
+/** 新建分析入口的配额上限：非直转任务达到此数量后禁止再创建 */
+export const ANALYSIS_LIMIT = 5
+
+const QUOTA_PAGE_SIZE = 100
+
+/**
+ * 统计当前用户的非直转处理任务数量（所有状态都计入，直转任务排除）。
+ *
+ * /processes/mine 返回全部状态的任务记录，processing 也在其中；逐条判断 params_json
+ * 是否为直转标记即可。后端没有「排除直转」的服务端过滤条件，只能按页取回再本地过滤。
+ * 调用方只需要判断是否达到上限，所以累计到 limit 即提前返回（返回值封顶为 limit），
+ * 避免为精确总数翻完所有页。单页大小只是请求值，翻页以响应 meta.total_pages 为准。
+ */
+export async function countNonDirectProcesses(limit = ANALYSIS_LIMIT): Promise<number> {
+  let count = 0
+  let page = 1
+  let totalPages = 1
+
+  do {
+    const result = await listMyProcesses(page, QUOTA_PAGE_SIZE, {})
+    totalPages = result.meta.total_pages
+
+    for (const process of result.data) {
+      if (!isDirectRun(process.params_json)) count += 1
+    }
+
+    if (count >= limit) return limit
+    page += 1
+  } while (page <= totalPages)
+
+  return count
 }
 
 // DELETE /processes/{run_id} - Delete a process/result

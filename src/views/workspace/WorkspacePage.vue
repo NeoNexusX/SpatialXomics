@@ -5,18 +5,28 @@
     <!-- Header: Title + actions -->
     <div class="flex flex-col sm:flex-row items-start justify-between mb-6 gap-4">
       <div>
-        <h1 class="kawaru-text-page-title leading-[1.15] font-semibold">{{ $t('workspace.dashboard.title') }}</h1>
+        <h1 class="kawaru-text-page-title leading-[1.15] font-semibold">
+          {{ $t('workspace.dashboard.title') }}
+        </h1>
         <p class="kawaru-text-100 text-base-content/60 mt-1">
           {{ $t('workspace.dashboard.subtitle') }}
         </p>
       </div>
       <div class="flex flex-col sm:flex-row items-center gap-3 flex-shrink-0 w-full sm:w-auto">
-        <router-link to="/mydatasets" class="btn btn-ghost btn-md sm:btn-lg w-full sm:w-auto kawaru-text-87"
+        <router-link
+          to="/mydatasets"
+          class="btn btn-ghost btn-md sm:btn-lg w-full sm:w-auto kawaru-text-87"
           >{{ $t('workspace.dashboard.goToMyDatasets') }}</router-link
         >
-        <router-link to="/workspace/new" class="btn btn-primary btn-md sm:btn-lg w-full sm:w-auto kawaru-text-87"
-          >{{ $t('workspace.dashboard.newTask') }}</router-link
+        <button
+          type="button"
+          class="btn btn-primary btn-md sm:btn-lg w-full sm:w-auto kawaru-text-87"
+          :disabled="checking"
+          @click="onNewTask"
         >
+          <span v-if="checking" class="loading loading-spinner loading-sm"></span>
+          {{ $t('workspace.dashboard.newTask') }}
+        </button>
       </div>
     </div>
 
@@ -47,7 +57,9 @@
       <div
         class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4"
       >
-        <h2 class="kawaru-text-125 sm:kawaru-text-150 font-medium">{{ $t('workspace.dashboard.recentResults') }}</h2>
+        <h2 class="kawaru-text-125 sm:kawaru-text-150 font-medium">
+          {{ $t('workspace.dashboard.recentResults') }}
+        </h2>
         <!-- 搜索：只按源文件名模糊匹配（服务端 RunFilter.filename），与数据集页一致。
              回车或点 Search 提交；清空输入框立即取消筛选。 -->
         <div class="flex items-center gap-2 w-full sm:w-auto">
@@ -58,7 +70,9 @@
             @update:model-value="onQueryInput"
             @search="onSearch"
           />
-          <button class="btn btn-primary shrink-0 kawaru-text-100" @click="onSearch">{{ $t('common.action.search') }}</button>
+          <button class="btn btn-primary shrink-0 kawaru-text-100" @click="onSearch">
+            {{ $t('common.action.search') }}
+          </button>
         </div>
       </div>
       <ResultTable
@@ -107,18 +121,33 @@
         </p>
       </div>
     </ConfirmDialog>
+
+    <!-- Analysis quota limit -->
+    <ConfirmDialog
+      :open="isLimitDialogOpen"
+      :title="$t('workspace.dashboard.analysisLimitTitle')"
+      :message="$t('workspace.dashboard.analysisLimitMessage', { limit })"
+      :confirm-label="$t('common.action.close')"
+      hide-cancel
+      @confirm="isLimitDialogOpen = false"
+      @cancel="isLimitDialogOpen = false"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import ResultTable from '@/features/workspace/dashboard/components/ResultTable.vue'
 import SummaryCard from '@/features/workspace/dashboard/components/SummaryCard.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import PaginationFooter from '@/shared/components/PaginationFooter.vue'
 import SearchInput from '@/shared/components/SearchInput.vue'
 import { useWorkspaceDashboard } from '@/features/workspace/dashboard/composables/useWorkspaceDashboard'
+import { useAnalysisQuota } from '@/features/workspace/dashboard/composables/useAnalysisQuota'
 import { useConfirmDelete } from '@/shared/composables/useConfirmDelete'
+
+const router = useRouter()
 
 const {
   recentResults,
@@ -165,5 +194,19 @@ function showErrorModal(message: string) {
 
 function onDeleteClick(id: string) {
   deleteConfirm.open(id)
+}
+
+// ---- 新建分析前的配额检查 ----
+// 非直转任务达到上限时留在工作台并提示清理，放行才进入创建页。
+// 数量在点击时实时查询，删除任务后再次点击立即生效。
+const { checking, limit, check } = useAnalysisQuota()
+const isLimitDialogOpen = ref(false)
+
+async function onNewTask() {
+  if (await check()) {
+    router.push({ name: 'NewAnalysis' })
+  } else {
+    isLimitDialogOpen.value = true
+  }
 }
 </script>

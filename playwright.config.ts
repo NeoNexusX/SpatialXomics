@@ -14,6 +14,13 @@ import { defineConfig, devices } from '@playwright/test'
 const ZH_SMOKE = /i18n-zh\.spec\.ts/
 const OFFLINE = /\.offline\.spec\.ts/
 const LIVE_IGNORE = [ZH_SMOKE, OFFLINE]
+/**
+ * 一次性工具输出抓取脚本：依赖 dev server 的 /src 动态导入，输出仅供人工审阅。
+ * 默认不参与任何回归；设置 CAPTURE_OUT 后才纳入 offline 项目。
+ */
+const TOOLS_CAPTURE = /tools\.offline\.spec\.ts/
+/** 真实下载 / 上传往返 / 重后端任务只在 Chromium 跑，用标签替代运行时 browserName skip。 */
+const CHROMIUM_ONLY = /@chromium-only/
 /** WebKit 默认不跑；设 E2E_WEBKIT=1 才加入 webkit 和 offline-webkit 两个项目 */
 const WEBKIT_ENABLED = process.env.E2E_WEBKIT === '1'
 const serverPort = Number(process.env.E2E_PORT || (process.env.CI ? 4173 : 5173))
@@ -77,6 +84,9 @@ export default defineConfig({
     ...(['chromium', 'firefox', ...(WEBKIT_ENABLED ? (['webkit'] as const) : [])] as const).map((browserName) => ({
       name: `offline-${browserName}`,
       testMatch: OFFLINE,
+      // tools.offline 是一次性抓取脚本（需 dev server 的 /src 动态导入），默认不参与回归。
+      // 手动抓取：CAPTURE_OUT=tools-output npx playwright test tools.offline --project=offline-chromium
+      testIgnore: process.env.CAPTURE_OUT ? [] : TOOLS_CAPTURE,
       // 响应是固定的，失败基本都是真问题；留一次重试只为挡住 runner 偶发的卡顿
       retries: process.env.CI ? 1 : 0,
       use: {
@@ -103,6 +113,8 @@ export default defineConfig({
     {
       name: 'firefox',
       testIgnore: LIVE_IGNORE,
+      // 真实下载 / 上传往返 / 重后端任务标记为 @chromium-only，只在 Chromium 执行
+      grepInvert: CHROMIUM_ONLY,
       use: {
         ...devices['Desktop Firefox'],
         storageState: '.auth/user.json',
@@ -114,6 +126,7 @@ export default defineConfig({
           {
             name: 'webkit',
             testIgnore: LIVE_IGNORE,
+            grepInvert: CHROMIUM_ONLY,
             use: {
               ...devices['Desktop Safari'],
               storageState: '.auth/user.json',
