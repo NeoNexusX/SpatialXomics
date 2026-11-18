@@ -89,7 +89,7 @@ npm ci
 | 文件 | 内容 |
 |---|---|
 | `env/.env` | 所有环境共享的公共值：`VITE_API_BASE`、`VITE_OSS_ENDPOINT` |
-| `env/.env.development` | 开发服务器代理目标 `VITE_BACKEND_URL`，以及助手默认连接 `VITE_LLM_PROXY_URL` / `VITE_LLM_MODEL` |
+| `env/.env.development` | 开发服务器代理目标 `VITE_BACKEND_URL` |
 | `env/.env.production` | 生产构建/预览使用的值；需要部署级默认连接时补 `VITE_LLM_PROXY_URL`、`VITE_LLM_API_KEY`、`VITE_LLM_MODEL` |
 | `env/config.prod.overrides.json` | 正式环境 `config.json` 的覆盖项（见[部署](#部署)） |
 
@@ -98,6 +98,8 @@ npm ci
 ```bash
 VITE_BACKEND_URL=http://localhost:8000
 ```
+
+指向测试服 nginx 时地址要带上 `/api`（例如 `https://sxo.neonexus.top/api`）：Vite 代理会先去掉浏览器的 `/api` 前缀，再把 target 路径拼上去；直连后端端口时则填后端 origin（如 `http://localhost:8000`）。
 
 `VITE_BACKEND_URL` 只影响开发环境的 Vite 代理；生产容器由 nginx 把 `/api/` 转发到运行时传入的 `BACKEND_HOST:BACKEND_PORT`。开发环境的助手请求也经 Vite 转发：部署默认端点走 `/llm-proxy`，用户自填端点走 `/llm-relay`（目标 origin 放在 `x-llm-target` 头里），避免本机代理干扰 SSE 流。
 
@@ -170,7 +172,9 @@ npm run dev:app   # 只启动 SPA
 | `/kegg-rest/` | `https://rest.kegg.jp/` | 全站共享 3 次/秒，`burst=10`，仅 GET |
 | `/hmdb-archive/` | `https://web.archive.org` 的 HMDB 代谢物 XML | 2 次/秒，仅允许 `HMDB` 开头的条目路径 |
 
-KEGG 客户端在单次调用内缓存响应、批量去重，并按上游每次 10 条的限制自动分块；归档站不返回浏览器所需的 CORS 头，因此 XML 必须经 `/hmdb-archive/` 取回，中继失败时工具降级为只给链接，不编造数据。
+每次 KEGG 工具调用最多发一个上游请求。`kegg_find` 的一个 `query` 可以包含多个按 AND 匹配的关键词。化合物和通路详情每次接受 1–10 个 ID，更多 ID 由 Agent 分次提交。`kegg_pathway(membersOf=[...])` 一次取得多个通路的成员编号，`kegg_mass_search` 每次查询一个 m/z 和一个指定加合物。
+
+HMDB 归档站不返回浏览器所需的 CORS 头，因此 XML 必须经 `/hmdb-archive/` 取回，中继失败时工具降级为只给链接，不编造数据。
 
 ### 内置技能
 

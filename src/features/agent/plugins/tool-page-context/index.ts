@@ -690,7 +690,7 @@ export function apply(ctx: Context) {
         },
         mzs: {
           type: 'array',
-          items: 'number',
+          items: { type: 'number' },
           maxItems: MAX_BATCH_QUERIES,
           description:
             'Batch observed m/z values (exact mode); each value independently resolves its nearest best-ranked row.',
@@ -698,7 +698,7 @@ export function apply(ctx: Context) {
         rowId: { type: 'integer', description: 'Known annotation row id (exact mode).' },
         rowIds: {
           type: 'array',
-          items: 'integer',
+          items: { type: 'integer' },
           maxItems: MAX_BATCH_QUERIES,
           description: 'Batch annotation row ids (exact mode); one full row each.',
         },
@@ -1017,7 +1017,7 @@ export function apply(ctx: Context) {
         },
         pixelIndices: {
           type: 'array',
-          items: 'integer',
+          items: { type: 'integer' },
           description: '1–4 zero-based spectrum row indices; more or negative values error.',
         },
         x: {

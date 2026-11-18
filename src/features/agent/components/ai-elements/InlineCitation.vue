@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** shadcn-vue Inline Citation pattern: a compact source trigger and hover preview. */
+/** Compact citation trigger; hovering it previews the source. */
 import { computed } from 'vue'
 import { HoverCardRoot, HoverCardTrigger, HoverCardPortal, HoverCardContent } from 'reka-ui'
 import { Button } from '../ui/button'

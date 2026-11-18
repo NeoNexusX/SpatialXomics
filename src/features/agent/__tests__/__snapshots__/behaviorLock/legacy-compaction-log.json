@@ -6,8 +6,8 @@
    "mode": "temporary",
    "events": [
     {
-     "type": "turn/start",
      "turnId": "t1",
+     "type": "turn/start",
      "user": {
       "role": "user",
       "content": "old question"
@@ -18,24 +18,15 @@
       "page": {}
      },
      "baseSurface": [],
-     "seq": 0,
-     "id": "e0",
-     "time": 0
+     "seq": 0
     },
     {
      "type": "message",
-     "turnId": "t1",
-     "message": {
-      "role": "user",
-      "content": "old question"
-     },
-     "seq": 1,
-     "id": "e1",
-     "time": 0
+     "message": "<message 1>",
+     "seq": 1
     },
     {
      "type": "message",
-     "turnId": "t1",
      "message": {
       "role": "assistant",
       "parts": [
@@ -45,28 +36,21 @@
        }
       ]
      },
-     "seq": 2,
-     "id": "e2",
-     "time": 0
+     "seq": 2
     },
     {
      "type": "turn/end",
-     "turnId": "t1",
      "reason": "completed",
-     "seq": 3,
-     "id": "e3",
-     "time": 0
+     "seq": 3
     },
     {
-     "type": "compaction/start",
      "compactionId": "c1",
+     "type": "compaction/start",
      "nodes": [
       1,
       2
      ],
-     "seq": 4,
-     "id": "e4",
-     "time": 0
+     "seq": 4
     },
     {
      "type": "message",
@@ -81,13 +65,10 @@
       "role": "user",
       "content": "old question\n[1 earlier images omitted]"
      },
-     "seq": 5,
-     "id": "e5",
-     "time": 0
+     "seq": 5
     },
     {
      "type": "compaction/request",
-     "compactionId": "c1",
      "inputId": "old-input",
      "request": {
       "system": "<prompt ade4a9d8>",
@@ -105,9 +86,7 @@
       "imageMode": "placeholder",
       "purpose": "compaction"
      },
-     "seq": 6,
-     "id": "e6",
-     "time": 0
+     "seq": 6
     },
     {
      "type": "message",
@@ -123,22 +102,17 @@
       "role": "user",
       "content": "[Earlier conversation summary]\nold summary\n[End of summary]"
      },
-     "seq": 7,
-     "id": "e7",
-     "time": 0
+     "seq": 7
     },
     {
      "type": "compaction/end",
-     "compactionId": "c1",
      "beforeTokens": 900,
      "afterTokens": 100,
-     "seq": 8,
-     "id": "e8",
-     "time": 0
+     "seq": 8
     },
     {
-     "type": "turn/start",
      "turnId": "uuid-1",
+     "type": "turn/start",
      "user": {
       "role": "user",
       "content": "next"
@@ -156,45 +130,30 @@
      "baseSurface": [
       7
      ],
-     "seq": 9,
-     "id": "uuid-2",
-     "time": 0
+     "seq": 9
     },
     {
      "type": "message",
-     "turnId": "uuid-1",
-     "message": {
-      "role": "user",
-      "content": "next"
-     },
-     "seq": 10,
-     "id": "uuid-3",
-     "time": 0
+     "message": "<message 5>",
+     "seq": 10
     },
     {
      "type": "message",
-     "turnId": "uuid-1",
      "message": {
       "role": "user",
       "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
      },
      "origin": "context",
-     "seq": 11,
-     "id": "uuid-4",
-     "time": 0
+     "seq": 11
     },
     {
      "type": "step/start",
-     "turnId": "uuid-1",
      "step": 1,
-     "seq": 12,
-     "id": "uuid-5",
-     "time": 0
+     "seq": 12
     },
     {
-     "type": "request/context",
-     "turnId": "uuid-1",
      "attemptId": "uuid-6",
+     "type": "request/context",
      "request": {
       "nodes": [
        7,
@@ -214,50 +173,21 @@
       "purpose": "conversation",
       "turnStart": 1
      },
-     "seq": 13,
-     "id": "uuid-7",
-     "time": 0
+     "seq": 13
     },
     {
      "type": "attempt/start",
-     "turnId": "uuid-1",
-     "attemptId": "uuid-6",
      "step": 1,
-     "request": {
-      "nodes": [
-       7,
-       10,
-       11
-      ],
-      "route": {
-       "endpoint": "anthropic",
-       "baseUrl": "https://llm.test/v1",
-       "model": "m"
-      },
-      "system": "<prompt e22127e1>",
-      "tools": "<tools 479c7b97>",
-      "maxTokens": 64000,
-      "contextWindow": 256000,
-      "imageMode": "image",
-      "purpose": "conversation",
-      "turnStart": 1
-     },
-     "seq": 14,
-     "id": "uuid-8",
-     "time": 0
+     "request": "<request 2>",
+     "seq": 14
     },
     {
      "type": "attempt/end",
-     "turnId": "uuid-1",
-     "attemptId": "uuid-6",
      "status": "committed",
-     "seq": 15,
-     "id": "uuid-9",
-     "time": 0
+     "seq": 15
     },
     {
      "type": "message",
-     "turnId": "uuid-1",
      "message": {
       "role": "assistant",
       "parts": [
@@ -272,25 +202,17 @@
        "baseUrl": "https://llm.test/v1"
       }
      },
-     "seq": 16,
-     "id": "uuid-10",
-     "time": 0
+     "seq": 16
     },
     {
      "type": "step/end",
-     "turnId": "uuid-1",
      "step": 1,
-     "seq": 17,
-     "id": "uuid-11",
-     "time": 0
+     "seq": 17
     },
     {
      "type": "turn/end",
-     "turnId": "uuid-1",
      "reason": "completed",
-     "seq": 18,
-     "id": "uuid-12",
-     "time": 0
+     "seq": 18
     }
    ]
   }
@@ -300,18 +222,9 @@
    "system": "<prompt e22127e1>",
    "tools": "<tools 479c7b97>",
    "messages": [
-    {
-     "role": "user",
-     "content": "[Earlier conversation summary]\nold summary\n[End of summary]"
-    },
-    {
-     "role": "user",
-     "content": "next"
-    },
-    {
-     "role": "user",
-     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[]}}\nUse these identities for analysis. Live page state may have changed."
-    }
+    "<message 4>",
+    "<message 5>",
+    "<message 6>"
    ],
    "turnStart": 1,
    "maxTokens": 64000

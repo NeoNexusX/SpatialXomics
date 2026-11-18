@@ -89,7 +89,7 @@ npm ci
 | File | Contents |
 |---|---|
 | `env/.env` | Values shared by all environments: `VITE_API_BASE`, `VITE_OSS_ENDPOINT` |
-| `env/.env.development` | Dev proxy target `VITE_BACKEND_URL`, plus assistant defaults `VITE_LLM_PROXY_URL` / `VITE_LLM_MODEL` |
+| `env/.env.development` | Dev proxy target `VITE_BACKEND_URL` |
 | `env/.env.production` | Production build/preview values; add `VITE_LLM_PROXY_URL`, `VITE_LLM_API_KEY`, `VITE_LLM_MODEL` for a deployment-wide default connection |
 | `env/config.prod.overrides.json` | Overrides merged into `config.json` for production (see [Deployment](#deployment)) |
 
@@ -98,6 +98,8 @@ Put machine-specific overrides in the ignored `env/.env.development.local`:
 ```bash
 VITE_BACKEND_URL=http://localhost:8000
 ```
+
+When pointing at the test server's nginx, include `/api` (e.g. `https://sxo.neonexus.top/api`): the Vite proxy strips the browser's `/api` prefix and then prepends the target path. For a direct backend port, use the backend origin (e.g. `http://localhost:8000`).
 
 `VITE_BACKEND_URL` only affects the development proxy; in the production container nginx forwards `/api/` to the runtime `BACKEND_HOST:BACKEND_PORT`. Assistant traffic is also relayed in development: the deployment default endpoint goes through `/llm-proxy`, while user-supplied endpoints go through `/llm-relay` with the target origin in the `x-llm-target` header, which keeps local proxy interference away from SSE streams.
 
@@ -170,7 +172,9 @@ External queries use same-origin relays; custom hosting must provide them too:
 | `/kegg-rest/` | `https://rest.kegg.jp/` | 3 requests/s shared across the site, `burst=10`, GET only |
 | `/hmdb-archive/` | HMDB metabolite XML on `https://web.archive.org` | 2 requests/s, only path-safe `HMDB` accessions |
 
-The KEGG client caches responses within a call, deduplicates batch queries, and chunks requests to the upstream 10-entry limit. The archive sends no browser CORS headers, so XML must come through `/hmdb-archive/`; when the relay fails the tool degrades to link-only output instead of inventing data.
+Each KEGG tool call makes at most one upstream request. `kegg_find` accepts multiple ANDed keywords in one `query`. Compound and pathway details accept 1–10 IDs per call. The agent submits additional IDs in separate calls. `kegg_pathway(membersOf=[...])` retrieves compound IDs for multiple pathways in one request. `kegg_mass_search` searches one observed m/z and one specified adduct per call.
+
+The HMDB archive sends no browser CORS headers, so XML must come through `/hmdb-archive/`; when the relay fails the tool degrades to link-only output instead of inventing data.
 
 ### Bundled Skills
 

@@ -73,10 +73,13 @@
       "storageModeLower": "storage mode"
     },
     "solvent": {
-      "percentage": "Percentage (%)",
+      "amount": "Amount",
+      "unit": "Unit",
       "add": "Add solvent",
-      "percentageError": "Percentage must be a number between 1 and 100",
-      "invalidPercentage": "Please enter a valid percentage (1-100)",
+      "percentageError": "Percentage must be greater than 0 and at most 100",
+      "concentrationError": "Concentration must be a number greater than 0",
+      "customUnitPlaceholder": "e.g. mg/kg",
+      "customUnitRequired": "Please enter a unit",
       "selectSolvent": "Please select a solvent"
     },
     "validation": {

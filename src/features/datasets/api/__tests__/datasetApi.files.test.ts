@@ -82,6 +82,16 @@ describe('datasetApi file paths (public_id)', () => {
     expect(authGet).toHaveBeenCalledTimes(1)
   })
 
+  it('patches numeric and text metadata and returns the updated file body', async () => {
+    const patch = { mz: 300.5, pixel_size_horizontal: 0, organism: '', analyzer: 'timsTOF fleX' }
+    const updated = { public_id: PID, filename: 'brain.imzML', ...patch }
+    authPatch.mockResolvedValue({ data: updated })
+
+    expect(await patchFileMetadata(PID, patch)).toEqual(updated)
+    expect(authPatch).toHaveBeenCalledWith(`/files/${PID}`, patch)
+    expect(api.patch).not.toHaveBeenCalled()
+  })
+
   it('switches to the anonymous client for public raw downloads', async () => {
     anonGet.mockResolvedValue({ data: {} })
 

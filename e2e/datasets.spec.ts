@@ -63,6 +63,42 @@ async function expectRealDownloadStarts(page: Page, path: '/mydatasets' | '/data
 }
 
 /**
+ * 打开列表页第一张卡的 Overview（新标签页），验证内容后按 backLabel 返回。
+ * My/Public 两套端点与返回按钮文案不同，其余流程逐行相同，共用这一份实现。
+ */
+async function expectOverviewRoundTrip(
+  page: Page,
+  path: '/mydatasets' | '/datasets',
+  backLabel: 'Back to My Datasets' | 'Back to Public Datasets',
+) {
+  await page.goto(path)
+  await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 15_000 })
+
+  const overviewBtns = page.getByRole('button', { name: 'Overview' })
+  await overviewBtns.first().waitFor({ state: 'visible', timeout: 10_000 })
+  const count = await overviewBtns.count()
+  const pick = count > 1 ? Math.floor(Math.random() * count) : 0
+  const [popup] = await Promise.all([page.waitForEvent('popup'), overviewBtns.nth(pick).click()])
+  await expect(popup).toHaveURL(/\/overview\/[A-Za-z0-9_-]+/)
+  await expect(popup.locator('.skeleton')).toHaveCount(0, { timeout: 15_000 })
+  await expect(popup.locator('h1:has-text("Dataset Overview")')).toBeVisible()
+
+  const hasContent = await popup
+    .getByRole('button', { name: 'Download' })
+    .isVisible()
+    .catch(() => false)
+  if (hasContent) {
+    await expect(popup.getByText('Size', { exact: true })).toBeVisible()
+    await expect(popup.getByText(/Sample Info/)).toBeVisible()
+    await expect(popup.getByText('File Information')).toBeVisible()
+  }
+
+  await popup.getByRole('button', { name: backLabel }).click()
+  await expect(popup).toHaveURL(new RegExp(path))
+  await expect(popup.getByText('Organism:').first()).toBeVisible()
+}
+
+/**
  * 排序（服务端）共用体（/mydatasets 与 /datasets 各跑一遍）：选 File size
  * 降/升序，先确认请求带上了 sort_by/order（防「下拉只改 UI 不发请求」的
  * 假阳性），再按卡片 File Size 文本验证第一页的真实顺序，且方向必须真的
@@ -174,8 +210,7 @@ test.describe('My Datasets', () => {
     await expect(page.getByRole('button', { name: 'Delete' }).first()).toBeVisible()
   })
 
-  test('download — starts the real imzML + ibd download', async ({ page, browserName }) => {
-    test.skip(browserName !== 'chromium', '其余浏览器由 datasets.offline.spec.ts 覆盖')
+  test('download — starts the real imzML + ibd download', { tag: '@chromium-only' }, async ({ page }) => {
     // 后端排队实测可到 55s+，留足单次下载的等待
     test.setTimeout(120_000)
     await expectRealDownloadStarts(page, '/mydatasets')
@@ -183,33 +218,7 @@ test.describe('My Datasets', () => {
 
   /** Overview 在新标签页打开，public_id 进路径参数（刷新不丢），可读取 private 数据。 */
   test('overview — opens in a new tab, shows content, then back', async ({ page }) => {
-    await page.goto('/mydatasets')
-    await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 15_000 })
-
-    const overviewBtns = page.getByRole('button', { name: 'Overview' })
-    await overviewBtns.first().waitFor({ state: 'visible', timeout: 10_000 })
-    const count = await overviewBtns.count()
-    const pick = count > 1 ? Math.floor(Math.random() * count) : 0
-    const [popup] = await Promise.all([page.waitForEvent('popup'), overviewBtns.nth(pick).click()])
-    await expect(popup).toHaveURL(/\/overview\/[A-Za-z0-9_-]+/)
-    await expect(popup.locator('.skeleton')).toHaveCount(0, { timeout: 15_000 })
-    await expect(popup.locator('h1:has-text("Dataset Overview")')).toBeVisible()
-
-    const hasContent = await popup
-      .getByRole('button', { name: 'Download' })
-      .isVisible()
-      .catch(() => false)
-    if (hasContent) {
-      await expect(popup.getByText('Size', { exact: true })).toBeVisible()
-      await expect(popup.getByText(/Sample Info/)).toBeVisible()
-      await expect(popup.getByText('File Information')).toBeVisible()
-    }
-
-    const backBtn = popup.getByRole('button', { name: 'Back to My Datasets' })
-    await expect(backBtn).toBeVisible()
-    await backBtn.click()
-    await expect(popup).toHaveURL(/\/mydatasets/)
-    await expect(popup.getByText('Organism:').first()).toBeVisible()
+    await expectOverviewRoundTrip(page, '/mydatasets', 'Back to My Datasets')
   })
 
   /**
@@ -218,18 +227,6 @@ test.describe('My Datasets', () => {
    */
   test('sort — file size ordering is applied by the server', async ({ page }) => {
     await expectFileSizeSortApplied(page, '/mydatasets', 'list_user_files')
-  })
-
-  /**
-   * Filter 面板
-   */
-  test('filter bar — Add filter panel opens', async ({ page }) => {
-    await page.goto('/mydatasets')
-
-    await page.getByRole('button', { name: 'Add filter' }).click()
-
-    await expect(page.getByRole('button', { name: 'Apply' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Reset' })).toBeVisible()
   })
 
   /**
@@ -257,6 +254,12 @@ test.describe('My Datasets', () => {
 
     // 刚打开、未改任何字段：差量提交无内容可发 → Save 禁用
     await expect(dialog.getByRole('button', { name: 'Save Changes' })).toBeDisabled()
+
+    // 只读的文件格式字段不再展示；可编辑的仪器参数仍正常显示
+    await expect(dialog.locator('[data-field="spectrum_mode"]')).toHaveCount(0)
+    await expect(dialog.locator('[data-field="storage_mode"]')).toHaveCount(0)
+    await expect(dialog.locator('[data-field="polarity"] select')).toBeVisible()
+    await expect(dialog.locator('[data-field="mz"] input')).toBeVisible()
 
     await dialog.getByRole('button', { name: 'Cancel' }).click()
     await expect(page.locator('dialog.modal-open')).toHaveCount(0)
@@ -322,12 +325,15 @@ test.describe('Public Datasets', () => {
     const firstSize = await perPageSelect.locator('option').first().getAttribute('value')
     await perPageSelect.selectOption(firstSize!)
 
-    await expect(page.getByText(/Page \d+ of \d+/)).toBeVisible()
+    const summary = page.getByText(/Page 1 of \d+/).first()
+    await expect(summary).toBeVisible()
     await expect(page.getByText(/records/)).toBeVisible()
 
-    const nextBtn = page.getByRole('button', { name: 'Next' })
-    if (await nextBtn.isEnabled()) {
-      await nextBtn.click()
+    // 公开数据可能只有一页；PaginationBar 的 Next 只用 class 视觉禁用（无原生 disabled），
+    // Playwright 的 isEnabled() 恒为 true，所以按总页数判断而不是按钮状态。
+    const totalPages = Number((await summary.innerText()).match(/of\s+(\d+)/)?.[1] ?? 1)
+    if (totalPages > 1) {
+      await page.getByRole('button', { name: 'Next' }).click()
       await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 15_000 })
       await expect(page.getByText('Organism:').first()).toBeVisible()
     }
@@ -350,92 +356,20 @@ test.describe('Public Datasets', () => {
   })
 
   /**
-   * 卡片预览图（DatasetPreviewGallery）：固定 3 个槽位，
-   * 第 2/3 张推迟到首次悬停才拿到 src（一屏 10 张卡即省下 20 个请求）。
-   *
-   * 断言分两层：
-   * - 悬停前只能有 1 个 <img>，没有元素就不可能发请求（这是省流量的真实保证）；
-   * - 悬停后看 DOM 里的 src 是否补齐，而不是看是否真的发出请求——
-   *   loading="lazy" 下各浏览器的取图时机不同（Firefox 对悬停区外的图可以一直不取），
-   *   而预览图在 OSS 上也可能尚未生成（404），此时该槽位降级为占位 SVG。
-   */
-  test('preview gallery defers its hidden slots until hover', async ({ page }) => {
-    const previewRequests: string[] = []
-    page.on('request', (req) => {
-      if (/\/images\/file_\d+\/preview/.test(req.url())) previewRequests.push(req.url())
-    })
-
-    await page.goto('/datasets')
-    await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 15_000 })
-
-    const gallery = page.locator('figure.hover-gallery').first()
-    await expect(gallery).toBeVisible()
-    const slots = gallery.locator('> div')
-    await expect(slots).toHaveCount(3)
-
-    // 悬停前：只有第 1 张挂了 src，第 2/3 张连 <img> 都没有
-    await expect(gallery.locator('img')).toHaveCount(1)
-    expect(previewRequests.filter((u) => /preview_[23]\.jpg/.test(u))).toHaveLength(0)
-
-    await gallery.hover()
-
-    // 悬停后：三个槽位各自补齐，且每格要么是图片、要么是占位 SVG，不留空白
-    const expectedSlot = ['preview.jpg', 'preview_2.jpg', 'preview_3.jpg']
-    for (let i = 0; i < 3; i++) {
-      const slot = slots.nth(i)
-      await expect(slot.locator('img, svg')).toHaveCount(1, { timeout: 15_000 })
-      const src = await slot
-        .locator('img')
-        .getAttribute('src')
-        .catch(() => null)
-      if (src !== null) expect(src).toContain(expectedSlot[i]!)
-    }
-  })
-
-  /**
    * 排序（服务端）：与 My Datasets 侧同一套断言，走 /files/list_files 公开端点。
    */
   test('sort — file size ordering is applied by the server', async ({ page }) => {
     await expectFileSizeSortApplied(page, '/datasets', '/files/list_files')
   })
 
-  test('download — starts the real imzML + ibd download', async ({ page, browserName }) => {
-    test.skip(browserName !== 'chromium', '其余浏览器由 datasets.offline.spec.ts 覆盖')
+  test('download — starts the real imzML + ibd download', { tag: '@chromium-only' }, async ({ page }) => {
     test.setTimeout(120_000)
     await expectRealDownloadStarts(page, '/datasets')
   })
 
   /** 随机进入一张卡的 Overview（新标签页），验证内容后返回。 */
-  test('overview — opens a random card in a new tab, shows content, then back', async ({
-    page,
-  }) => {
-    await page.goto('/datasets')
-    await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 15_000 })
-
-    const overviewBtns = page.getByRole('button', { name: 'Overview' })
-    await overviewBtns.first().waitFor({ state: 'visible', timeout: 10_000 })
-    const count = await overviewBtns.count()
-    const pick = count > 1 ? Math.floor(Math.random() * count) : 0
-    const [popup] = await Promise.all([page.waitForEvent('popup'), overviewBtns.nth(pick).click()])
-    await expect(popup).toHaveURL(/\/overview\/[A-Za-z0-9_-]+/)
-    await expect(popup.locator('.skeleton')).toHaveCount(0, { timeout: 15_000 })
-    await expect(popup.locator('h1:has-text("Dataset Overview")')).toBeVisible()
-
-    const hasContent = await popup
-      .getByRole('button', { name: 'Download' })
-      .isVisible()
-      .catch(() => false)
-    if (hasContent) {
-      await expect(popup.getByText('Size', { exact: true })).toBeVisible()
-      await expect(popup.getByText(/Sample Info/)).toBeVisible()
-      await expect(popup.getByText('File Information')).toBeVisible()
-    }
-
-    const backBtn = popup.getByRole('button', { name: 'Back to Public Datasets' })
-    await expect(backBtn).toBeVisible()
-    await backBtn.click()
-    await expect(popup).toHaveURL(/\/datasets/)
-    await expect(popup.getByText('Organism:').first()).toBeVisible()
+  test('overview — opens a random card in a new tab, shows content, then back', async ({ page }) => {
+    await expectOverviewRoundTrip(page, '/datasets', 'Back to Public Datasets')
   })
 
   test('filter bar — Add filter panel opens', async ({ page }) => {

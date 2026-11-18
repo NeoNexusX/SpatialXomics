@@ -103,6 +103,21 @@ step 数没有固定上限。工具默认执行超时为 15 秒；模型流的�
 
 `tool-archive` 另行保存成功工具的完整文本。默认结果预算为 4,000 字符，证据类常用 12,000；超出时模型收到截断结果及 `read_archived_result` 提示，可按 offset 读回全文。这与对话摘要压缩是两个独立机制。
 
+## 工具参数与执行
+
+工具参数用 `plugins/tools/schema.ts` 的 DSL 声明。每个值是一个节点：`string`、`number`、`integer`、`boolean`、`null`、`array`、`object`、只给作者用的 `json`（任意 JSON 值），或恰好匹配一个分支的 `oneOf`。对象必须显式写 `additionalProperties`，必填写在属性上（`required: true`），数组可以带 `maxItems`。`defineTool()` 在定义时把它编译成 JSON Schema 并检查写法，写错时工具所在插件启动失败；发给模型的就是这份编译结果，参数类型也从同一份 DSL 推导。
+
+一次调用依次经过：参数复制并冻结，`tools/pre-execute` 闸门，带超时执行（执行前按编译结果严格校验参数：不取整、不截断，`null` 不等于没传），渲染并截断，`tools/post-execute`，`tools/result`。任何失败都成为一条 `Error: <message>` 结果回给模型，这一轮继续；`error.code` 区分 `UNKNOWN_TOOL`、`INVALID_ARGS`、`DENIED`、`ABORTED`、`ABORTED_BEFORE_DISPATCH`、`TOOL_TIMEOUT`。参数错误一次列出全部问题，每条带路径，如 `missing required property "questions[0].question"`。
+
+## 向用户提问
+
+`ask_user_question`（`tool-ask-user`）在需要确认、选择或补充信息时挂起工具调用，由 `user-questions` 提供的 `ctx.userQuestions` 等待回答：
+
+- 同一时间只有一个等待中的提问。计时和草稿都在服务里，面板关着也会到点。等待上限默认 10 分钟（组合表配置 `timeoutMs`），到点按草稿提交：用户没动过的题用推荐项（标签末尾带 `(Recommended)`），没有推荐就记为跳过，这些回答标 `auto`，整批带 `timedOut`。
+- 回答作为普通工具结果回给模型，格式是 `{"answers":[{"id","selected","custom"}]}`；`selected` 为空且没有 `custom` 表示用户跳过了这道题。
+- 停止、刷新或换数据集时这一轮按原有规则中断，没回答的提问记为未回答，用户直接在输入框里回复，不会续答。
+- `QuestionCard`（shadcn-vue Questionnaire）在等待时替换输入框；`userQuestions` 投影从日志折叠出每次提问的问题和回答，回答过的在对话里显示为问答气泡。
+
 ## 插件扩展点
 
 | 事件 | 模式 | 生产用途 |
@@ -112,7 +127,7 @@ step 数没有固定上限。工具默认执行超时为 15 秒；模型流的�
 | `agent/pre-request` | serial | 检查预算并压缩，必要时重记请求快照 |
 | `agent/request-error` | waterfall | 先尝试超窗压缩，再交给重试策略 |
 | `agent/tool-result` | waterfall | 持久化完整结果，生成模型可见摘要 |
-| `tools/pre-execute` | serial | 可返回 `{ kind: 'deny' }` 拒绝执行 |
+| `tools/pre-execute` | serial | 可返回 `{ kind: 'deny' }` 拒绝执行；`exec.arguments` 是冻结的参数，校验在闸门之后 |
 | `tools/post-execute` | waterfall | 改写工具结果 |
 | `tools/result` | emit | 只观察结果 |
 

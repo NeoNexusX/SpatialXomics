@@ -54,6 +54,10 @@ export interface LockedAgentOptions {
   noScriptTools?: boolean
   /** 从生产组合表里去掉这些行 */
   without?: string[]
+  /** 默认不挂的领域工具里，挂上这些行 */
+  with?: string[]
+  /** 按行 id 替换组合表里的配置 */
+  config?: Record<string, unknown>
   retryPolicy?: RetryPolicyConfig
   adapter?: Partial<LlmAdapter>
   /** 替换某个数据集打开的存储 */
@@ -101,6 +105,7 @@ const DOMAIN_TOOLS = [
   'tool-web-search',
   'tool-page-context',
   'tool-ion-image',
+  'tool-ask-user',
 ]
 
 export async function createLockedAgent(
@@ -183,9 +188,9 @@ export async function createLockedAgent(
   const ctx = new Context()
   for (const row of baseBundle) {
     if (row.id === 'llm-anthropic' || row.id === 'session-persistence-opfs') continue
-    if (!options.fullTools && DOMAIN_TOOLS.includes(row.id)) continue
+    if (!options.fullTools && DOMAIN_TOOLS.includes(row.id) && !options.with?.includes(row.id)) continue
     if (options.without?.includes(row.id)) continue
-    ctx.plugin(row.plugin, row.config)
+    ctx.plugin(row.plugin, options.config?.[row.id] ?? row.config)
   }
   ctx.plugin(TestPersistence)
   await settle()
@@ -304,24 +309,85 @@ const checksum = (value: string) => fnv1a(value).toString(16).padStart(8, '0')
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
 const LONG_TEXT = 240
 
-function abbreviate(value: unknown, key: string, baseGeneration: number): unknown {
-  if (key === 'generation' && typeof value === 'number') return value - baseGeneration
-  if (key === 'time' && typeof value === 'number') return 0
+/** 去重状态：跨整个 outcome 共享，同一份内容只全文保留第一次 */
+interface Dedup {
+  baseGeneration: number
+  requests: Map<string, string>
+  messages: Map<string, string>
+  /** 相邻事件里相同的关联 id 只在第一次出现时保留 */
+  last: { turnId?: string; attemptId?: string; compactionId?: string }
+}
+
+/** 首次出现全文保留，之后每次重复都换成同一个标签；内容一变就是新的全文 */
+function firstOnly(
+  seen: Map<string, string>,
+  prefix: string,
+  raw: string,
+  full: () => unknown,
+): unknown {
+  const label = seen.get(raw)
+  if (label) return label
+  seen.set(raw, `<${prefix} ${seen.size + 1}>`)
+  return full()
+}
+
+/**
+ * 事件瘦身：id 是随机数、time 是时钟（顺序由数组位置和 seq 锁定），turnId/attemptId/
+ * compactionId 这类关联 id 与上一条相同时也不再重复。这些字段都没有行为含义，删掉只是去噪。
+ */
+function slimEvent(event: unknown, dedup: Dedup): unknown {
+  if (!event || typeof event !== 'object' || Array.isArray(event)) return event
+  const rest = { ...(event as Record<string, unknown>) }
+  delete rest.id
+  delete rest.time
+  const kept: Record<string, string> = {}
+  for (const field of ['turnId', 'attemptId', 'compactionId'] as const) {
+    const value = rest[field]
+    delete rest[field]
+    if (typeof value === 'string' && value !== dedup.last[field]) {
+      dedup.last[field] = value
+      kept[field] = value
+    }
+  }
+  return { ...kept, ...rest }
+}
+
+function abbreviate(value: unknown, key: string, dedup: Dedup): unknown {
+  if (key === 'generation' && typeof value === 'number') return value - dedup.baseGeneration
   if (key === 'system' && typeof value === 'string') return `<prompt ${checksum(value)}>`
   if (key === 'tools' && Array.isArray(value)) return `<tools ${checksum(JSON.stringify(value))}>`
   if (typeof value === 'string')
     return value.length > LONG_TEXT
       ? `<text ${value.length} ${checksum(value)} ${value.slice(0, 40)}…${value.slice(-80)}>`
       : value
-  if (Array.isArray(value)) return value.map((item) => abbreviate(item, '', baseGeneration))
+  // request/context 与 attempt/start 成对携带同一份 request，calls 逐轮重发整段历史：
+  // 全 outcome 只全文保留第一次，之后换成 <request N> / <message N>。
+  if (value && typeof value === 'object' && key === 'request')
+    return firstOnly(dedup.requests, 'request', JSON.stringify(value), () =>
+      abbreviate(value, '', dedup),
+    )
+  if (value && typeof value === 'object' && (key === 'message' || key === 'user'))
+    return firstOnly(dedup.messages, 'message', JSON.stringify(value), () =>
+      abbreviate(value, '', dedup),
+    )
+  if (Array.isArray(value)) {
+    if (key === 'events') return value.map((event) => abbreviate(slimEvent(event, dedup), '', dedup))
+    if (key === 'messages')
+      return value.map((message) =>
+        firstOnly(dedup.messages, 'message', JSON.stringify(message), () =>
+          abbreviate(message, '', dedup),
+        ),
+      )
+    return value.map((item) => abbreviate(item, '', dedup))
+  }
   if (value && typeof value === 'object')
     return Object.fromEntries(
-      Object.entries(value).map(([name, item]) => [name, abbreviate(item, name, baseGeneration)]),
+      Object.entries(value).map(([name, item]) => [name, abbreviate(item, name, dedup)]),
     )
   return value
 }
 
-/** 随机 id 换成按出现顺序编号的标签，时间清零，长文本和提示词换成校验和 */
+/** 随机 id 换成按出现顺序编号的标签，长文本和提示词换成校验和，重复内容只保留第一次 */
 export function normalize(value: unknown, baseGeneration = 0): string {
   const labels = new Map<string, string>()
   const stable = JSON.stringify(value, (_key, item) =>
@@ -330,7 +396,13 @@ export function normalize(value: unknown, baseGeneration = 0): string {
     if (!labels.has(id)) labels.set(id, `uuid-${labels.size + 1}`)
     return labels.get(id)!
   })
-  return JSON.stringify(abbreviate(JSON.parse(stable), '', baseGeneration), null, 1) + '\n'
+  const dedup: Dedup = {
+    baseGeneration,
+    requests: new Map(),
+    messages: new Map(),
+    last: {},
+  }
+  return JSON.stringify(abbreviate(JSON.parse(stable), '', dedup), null, 1) + '\n'
 }
 
 /** 一次场景的完整结果：写进存储的事件、发给模型的请求、界面状态序列和最终快照 */

@@ -5,13 +5,13 @@
  * - Trim leading/trailing whitespace
  * - Collapse consecutive spaces
  * - Convert to Title Case
- * - Max 50 characters
+ * - Max 50 characters by default (callers such as the metadata editor can pass a larger cap)
  * - Allow only: A-Z a-z 0-9 space - _ / ( ) , .
  */
 
 import { t } from '@/i18n'
 
-const MAX_LENGTH = 50
+const DEFAULT_MAX_LENGTH = 50
 const ALLOWED_RE = /^[A-Za-z0-9\s\-_/(),.]*$/
 
 export function normalizeOtherInput(raw: string): string {
@@ -26,15 +26,15 @@ export function toTitleCase(text: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-export function validateOtherInput(value: string): string {
+export function validateOtherInput(value: string, maxLength = DEFAULT_MAX_LENGTH): string {
   const normalized = normalizeOtherInput(value)
 
   if (!normalized) {
     return ''
   }
 
-  if (normalized.length > MAX_LENGTH) {
-    return t('common.input.otherTooLong', { max: MAX_LENGTH })
+  if (normalized.length > maxLength) {
+    return t('common.input.otherTooLong', { max: maxLength })
   }
 
   if (!ALLOWED_RE.test(normalized)) {

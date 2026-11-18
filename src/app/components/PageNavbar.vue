@@ -1,11 +1,101 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, useTemplateRef } from 'vue'
+import { useResizeObserver } from '@vueuse/core'
+import { useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
+import { useAuthStore } from '@/shared/auth/authStore'
+import SvgIcon from '@/shared/components/SvgIcon.vue'
+import { getBrandParts } from '@/shared/config/appName'
+import { useTheme } from '@/shared/composables/useTheme'
+import { useLocale } from '@/shared/composables/useLocale'
+import { t } from '@/i18n'
+import { localized } from '@/shared/config/localizedText'
+import { getConfig, isNavVisible, filterNavItems } from '@/shared/config/runtimeConfig'
+import type {
+  NavGuestLink,
+  NavItem,
+  NavUserItem,
+  NavVisibility,
+} from '@/shared/config/runtimeConfig'
+
+const router = useRouter()
+const emit = defineEmits<{ resize: [height: number] }>()
+const navbarElement = useTemplateRef<HTMLElement>('navbarElement')
+useResizeObserver(
+  navbarElement,
+  () => {
+    emit('resize', navbarElement.value?.getBoundingClientRect().height ?? 0)
+  },
+  { box: 'border-box' },
+)
+onBeforeUnmount(() => emit('resize', 0))
+const authStore = useAuthStore()
+const { user, isAdmin } = storeToRefs(authStore)
+const { isDark, toggleTheme } = useTheme()
+const { nextLocale, toggleLocale } = useLocale()
+
+const isAuthenticated = computed(() => !!user.value)
+
+// 与 NavDrawer 一致：把大写 X 拆出做渐变，没有 X 时回退为完整名称
+const { pre: namePre, x: nameX, post: namePost } = getBrandParts()
+
+const initials = computed(() => user.value?.username?.slice(0, 2).toUpperCase() ?? '')
+
+// 统一导航配置（与 NavDrawer 共用一份 config.json 的 nav 块）
+const navbar = computed(() => getConfig().nav!)
+const guestHint = computed(() => localized(navbar.value.guestHint) || t('common.nav.signIn'))
+
+// label 可能是按语言分写的对象，不能直接当 key；分组没有 to，用位置区分
+const navKey = (item: NavItem, i: number): string =>
+  item.kind === 'group' ? `group-${i}` : item.to
+
+const visible = (i: NavVisibility): boolean =>
+  isNavVisible(i, { isAuthenticated: isAuthenticated.value, isAdmin: isAdmin.value })
+
+// 与 NavDrawer 相同的过滤规则：先过滤自身再过滤 children，子项被过滤光的分组整组隐藏
+const items = computed<NavItem[]>(() =>
+  filterNavItems(navbar.value.items, {
+    isAuthenticated: isAuthenticated.value,
+    isAdmin: isAdmin.value,
+  }),
+)
+
+const userItems = computed<NavUserItem[]>(() => navbar.value.userMenu.filter(visible))
+const guestLinks = computed<NavGuestLink[]>(() => navbar.value.guestLinks.filter(visible))
+
+// details 下拉不会因路由跳转自动收起，点击子项后手动收起
+const closeDetails = (e: MouseEvent) => {
+  ;(e.currentTarget as HTMLElement).closest('details')?.removeAttribute('open')
+}
+
+// daisyui dropdown 靠 :focus-within 展开，跳转后焦点仍留在菜单里，需主动 blur 收起
+const closeDropdown = () => {
+  ;(document.activeElement as HTMLElement | null)?.blur()
+}
+
+const onMenuToggleLocale = () => {
+  closeDropdown()
+  void toggleLocale()
+}
+
+const onUserAction = async (action: 'logout') => {
+  closeDropdown()
+  if (action === 'logout') {
+    await authStore.logout()
+    router.push('/login')
+  }
+}
+</script>
+
 <template>
-  <!-- relative z-40：让下拉菜单盖过页面内容自建的 stacking context（仍低于 drawer/fab 的 9998/9999）。
+  <!-- sticky z-40：顶栏随滚动保持在顶部，下拉菜单盖过页面内容的 stacking context。
 
        字号一律挂档位，逐处独立。daisyUI 的 .btn / .menu-title 自带固定 font-size，
        所以每处都要显式覆盖。尺寸（[--size:…em]、w-[16em]）继续用 em，
        读所在元素字号，换档时自动跟着缩放。 -->
   <div
-    class="navbar relative z-40 bg-base-100 shadow-sm px-2 md:px-6 kawaru-text-100"
+    ref="navbarElement"
+    class="navbar page-navbar sticky top-0 z-40 shrink-0 px-2 md:px-6 kawaru-text-100"
   >
     <!-- start: 品牌 + 移动端汉堡菜单（小屏合并展示全部分组与用户菜单） -->
     <div class="navbar-start">
@@ -20,7 +110,7 @@
         </div>
         <ul
           tabindex="0"
-          class="menu dropdown-content bg-base-100 rounded-box z-[1] mt-5 w-[16em] p-2 shadow-lg kawaru-text-95"
+          class="menu dropdown-content nav-glass-panel rounded-box z-[1] mt-5 w-[16em] p-2 shadow-lg kawaru-text-95"
         >
           <!-- 只放导航分组：Profile / Sign in 等入口由右侧头像下拉承担，这里不重复。
                分段大标题比内容字号大一档；独立链接（如 Documentation）按同级大标题样式渲染 -->
@@ -73,7 +163,10 @@
             </li>
           </template>
           <!-- 手机宽度下右侧放不下语言按钮（会顶到品牌名），改在菜单底部提供；sm 及以上回到右侧圆形按钮 -->
-          <li v-if="navbar.localeToggle !== false" class="mt-3 border-t border-base-200 pt-2 sm:hidden">
+          <li
+            v-if="navbar.localeToggle !== false"
+            class="mt-3 border-t border-base-200 pt-2 sm:hidden"
+          >
             <a class="rounded-lg transition-colors" @click="onMenuToggleLocale">
               <SvgIcon type="region" class="w-[1.2em] h-[1.2em] text-base-content/60" />
               {{ nextLocale.label }}
@@ -107,7 +200,9 @@
             >
               {{ localized(item.label) }}
             </summary>
-            <ul class="z-[1] mt-2 w-[13em] whitespace-nowrap rounded-box bg-base-100 p-2 shadow-lg kawaru-text-87">
+            <ul
+              class="z-[1] mt-2 w-[13em] whitespace-nowrap rounded-box nav-glass-panel p-2 shadow-lg kawaru-text-87"
+            >
               <li v-for="child in item.children" :key="child.to">
                 <a
                   v-if="child.external"
@@ -188,17 +283,23 @@
           </div>
           <ul
             tabindex="0"
-            class="menu dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-[14em] p-2 shadow-lg kawaru-text-95"
+            class="menu dropdown-content nav-glass-panel rounded-box z-[1] mt-3 w-[14em] p-2 shadow-lg kawaru-text-95"
           >
             <li class="menu-title kawaru-text-75">{{ user?.username }}</li>
             <template v-for="item in userItems" :key="item.kind === 'link' ? item.to : item.action">
               <li v-if="item.kind === 'link'">
-                <router-link :to="item.to" class="rounded-lg transition-colors" @click="closeDropdown">
+                <router-link
+                  :to="item.to"
+                  class="rounded-lg transition-colors"
+                  @click="closeDropdown"
+                >
                   {{ localized(item.label) }}
                 </router-link>
               </li>
               <li v-else>
-                <a class="rounded-lg transition-colors" @click="onUserAction(item.action)">{{ localized(item.label) }}</a>
+                <a class="rounded-lg transition-colors" @click="onUserAction(item.action)">{{
+                  localized(item.label)
+                }}</a>
               </li>
             </template>
           </ul>
@@ -220,7 +321,7 @@
           </div>
           <ul
             tabindex="0"
-            class="menu dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-[14em] p-2 shadow-lg kawaru-text-95"
+            class="menu dropdown-content nav-glass-panel rounded-box z-[1] mt-3 w-[14em] p-2 shadow-lg kawaru-text-95"
           >
             <li class="menu-title kawaru-text-75">{{ $t('common.nav.notSignedIn') }}</li>
             <li v-for="link in guestLinks" :key="link.to">
@@ -239,80 +340,43 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { storeToRefs } from 'pinia'
-import { useAuthStore } from '@/shared/auth/authStore'
-import SvgIcon from '@/shared/components/SvgIcon.vue'
-import { getBrandParts } from '@/shared/config/appName'
-import { useTheme } from '@/shared/composables/useTheme'
-import { useLocale } from '@/shared/composables/useLocale'
-import { t } from '@/i18n'
-import { localized } from '@/shared/config/localizedText'
-import { getConfig, isNavVisible, filterNavItems } from '@/shared/config/runtimeConfig'
-import type {
-  NavGuestLink,
-  NavItem,
-  NavUserItem,
-  NavVisibility,
-} from '@/shared/config/runtimeConfig'
-
-const router = useRouter()
-const authStore = useAuthStore()
-const { user, isAdmin } = storeToRefs(authStore)
-const { isDark, toggleTheme } = useTheme()
-const { nextLocale, toggleLocale } = useLocale()
-
-const isAuthenticated = computed(() => !!user.value)
-
-// 与 NavDrawer 一致：把大写 X 拆出做渐变，没有 X 时回退为完整名称
-const { pre: namePre, x: nameX, post: namePost } = getBrandParts()
-
-const initials = computed(() => user.value?.username?.slice(0, 2).toUpperCase() ?? '')
-
-// 统一导航配置（与 NavDrawer 共用一份 config.json 的 nav 块）
-const navbar = computed(() => getConfig().nav!)
-const guestHint = computed(() => localized(navbar.value.guestHint) || t('common.nav.signIn'))
-
-// label 可能是按语言分写的对象，不能直接当 key；分组没有 to，用位置区分
-const navKey = (item: NavItem, i: number): string =>
-  item.kind === 'group' ? `group-${i}` : item.to
-
-const visible = (i: NavVisibility): boolean =>
-  isNavVisible(i, { isAuthenticated: isAuthenticated.value, isAdmin: isAdmin.value })
-
-// 与 NavDrawer 相同的过滤规则：先过滤自身再过滤 children，子项被过滤光的分组整组隐藏
-const items = computed<NavItem[]>(() =>
-  filterNavItems(navbar.value.items, {
-    isAuthenticated: isAuthenticated.value,
-    isAdmin: isAdmin.value,
-  }),
-)
-
-const userItems = computed<NavUserItem[]>(() => navbar.value.userMenu.filter(visible))
-const guestLinks = computed<NavGuestLink[]>(() => navbar.value.guestLinks.filter(visible))
-
-// details 下拉不会因路由跳转自动收起，点击子项后手动收起
-const closeDetails = (e: MouseEvent) => {
-  ;(e.currentTarget as HTMLElement).closest('details')?.removeAttribute('open')
+<style scoped>
+/* Hero's cool surface colours, with a translucent finish for navigation. */
+.page-navbar {
+  --nav-glass-surface: #edf1f4;
+  --nav-glass-highlight: rgb(255 255 255 / 0.5);
+  --nav-glass-line: color-mix(in oklab, var(--color-base-content) 10%, transparent);
+  --nav-glass-shadow: rgb(28 45 64 / 0.12);
+  border-bottom: 1px solid var(--nav-glass-line);
+  box-shadow:
+    inset 0 1px var(--nav-glass-highlight),
+    0 4px 18px -12px var(--nav-glass-shadow);
 }
-
-// daisyui dropdown 靠 :focus-within 展开，跳转后焦点仍留在菜单里，需主动 blur 收起
-const closeDropdown = () => {
-  ;(document.activeElement as HTMLElement | null)?.blur()
+.page-navbar,
+.nav-glass-panel {
+  /* Opaque fallback where backdrop filtering is unavailable. */
+  background: var(--nav-glass-surface);
 }
-
-const onMenuToggleLocale = () => {
-  closeDropdown()
-  void toggleLocale()
+.nav-glass-panel {
+  border: 1px solid var(--nav-glass-line);
+  box-shadow:
+    inset 0 1px var(--nav-glass-highlight),
+    0 12px 32px -12px var(--nav-glass-shadow);
 }
-
-const onUserAction = async (action: 'logout') => {
-  closeDropdown()
-  if (action === 'logout') {
-    await authStore.logout()
-    router.push('/login')
+[data-theme='dark'] .page-navbar {
+  --nav-glass-surface: #232a33;
+  --nav-glass-highlight: rgb(255 255 255 / 0.06);
+  --nav-glass-line: rgb(230 239 250 / 0.12);
+  --nav-glass-shadow: rgb(0 0 0 / 0.4);
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .page-navbar,
+  .nav-glass-panel {
+    background:
+      linear-gradient(115deg, var(--nav-glass-highlight), transparent 65%),
+      color-mix(in oklab, var(--nav-glass-surface) 82%, transparent);
+    -webkit-backdrop-filter: blur(24px) saturate(0.85);
+    backdrop-filter: blur(24px) saturate(0.85);
   }
 }
-</script>
+</style>

@@ -69,7 +69,8 @@ test.describe('zh-CN · guest routes', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
 
   const routes: [path: string, key: string][] = [
-    ['/', 'home.actions.datasets'],
+    // 首屏保留注册入口的可见文字；数据集入口已移到 Stats，并改为带 aria-label 的图标。
+    ['/', 'home.actions.join'],
     ['/datasets', 'common.page.publicDatasets'],
     ['/login', 'auth.login.title'],
     ['/register', 'auth.register.title'],

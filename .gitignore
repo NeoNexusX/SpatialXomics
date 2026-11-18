@@ -6,7 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
+*.pnpm-store/v11
 node_modules
 .DS_Store
 dist

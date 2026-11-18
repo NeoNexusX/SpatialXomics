@@ -6,8 +6,8 @@
    "mode": "temporary",
    "events": [
     {
-     "type": "turn/start",
      "turnId": "uuid-1",
+     "type": "turn/start",
      "user": {
       "role": "user",
       "content": "question"
@@ -28,45 +28,30 @@
       }
      },
      "baseSurface": [],
-     "seq": 0,
-     "id": "uuid-2",
-     "time": 0
+     "seq": 0
     },
     {
      "type": "message",
-     "turnId": "uuid-1",
-     "message": {
-      "role": "user",
-      "content": "question"
-     },
-     "seq": 1,
-     "id": "uuid-3",
-     "time": 0
+     "message": "<message 1>",
+     "seq": 1
     },
     {
      "type": "message",
-     "turnId": "uuid-1",
      "message": {
       "role": "user",
       "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[],\"pixel\":{\"index\":4,\"x\":1,\"y\":2}}}\nUse these identities for analysis. Live page state may have changed."
      },
      "origin": "context",
-     "seq": 2,
-     "id": "uuid-4",
-     "time": 0
+     "seq": 2
     },
     {
      "type": "step/start",
-     "turnId": "uuid-1",
      "step": 1,
-     "seq": 3,
-     "id": "uuid-5",
-     "time": 0
+     "seq": 3
     },
     {
-     "type": "request/context",
-     "turnId": "uuid-1",
      "attemptId": "uuid-6",
+     "type": "request/context",
      "request": {
       "nodes": [
        1,
@@ -77,57 +62,29 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 92675986>",
-      "tools": "<tools dbaed375>",
+      "system": "<prompt 7bf7b8e2>",
+      "tools": "<tools 85b0d392>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
       "purpose": "conversation",
       "turnStart": 0
      },
-     "seq": 4,
-     "id": "uuid-7",
-     "time": 0
+     "seq": 4
     },
     {
      "type": "attempt/start",
-     "turnId": "uuid-1",
-     "attemptId": "uuid-6",
      "step": 1,
-     "request": {
-      "nodes": [
-       1,
-       2
-      ],
-      "route": {
-       "endpoint": "anthropic",
-       "baseUrl": "https://llm.test/v1",
-       "model": "m"
-      },
-      "system": "<prompt 92675986>",
-      "tools": "<tools dbaed375>",
-      "maxTokens": 64000,
-      "contextWindow": 256000,
-      "imageMode": "image",
-      "purpose": "conversation",
-      "turnStart": 0
-     },
-     "seq": 5,
-     "id": "uuid-8",
-     "time": 0
+     "request": "<request 1>",
+     "seq": 5
     },
     {
      "type": "attempt/end",
-     "turnId": "uuid-1",
-     "attemptId": "uuid-6",
      "status": "committed",
-     "seq": 6,
-     "id": "uuid-9",
-     "time": 0
+     "seq": 6
     },
     {
      "type": "message",
-     "turnId": "uuid-1",
      "message": {
       "role": "assistant",
       "parts": [
@@ -144,13 +101,10 @@
        "baseUrl": "https://llm.test/v1"
       }
      },
-     "seq": 7,
-     "id": "uuid-10",
-     "time": 0
+     "seq": 7
     },
     {
      "type": "message",
-     "turnId": "uuid-1",
      "message": {
       "role": "tool",
       "toolCallId": "c1",
@@ -159,43 +113,29 @@
       "isError": true
      },
      "callKey": "7:0",
-     "seq": 8,
-     "id": "uuid-11",
-     "time": 0
+     "seq": 8
     },
     {
      "type": "step/end",
-     "turnId": "uuid-1",
      "step": 1,
-     "seq": 9,
-     "id": "uuid-12",
-     "time": 0
+     "seq": 9
     },
     {
      "type": "turn/end",
-     "turnId": "uuid-1",
      "reason": "failed",
      "error": "The selected pixel changed. Submit the question again.",
-     "seq": 10,
-     "id": "uuid-13",
-     "time": 0
+     "seq": 10
     }
    ]
   }
  ],
  "calls": [
   {
-   "system": "<prompt 92675986>",
-   "tools": "<tools dbaed375>",
+   "system": "<prompt 7bf7b8e2>",
+   "tools": "<tools 85b0d392>",
    "messages": [
-    {
-     "role": "user",
-     "content": "question"
-    },
-    {
-     "role": "user",
-     "content": "[Analysis context captured for this question]\n{\"datasetId\":\"dataset-a\",\"selection\":{\"clusters\":[],\"pixel\":{\"index\":4,\"x\":1,\"y\":2}}}\nUse these identities for analysis. Live page state may have changed."
-    }
+    "<message 1>",
+    "<message 2>"
    ],
    "turnStart": 0,
    "maxTokens": 64000
@@ -240,11 +180,11 @@
   ],
   "error": "The selected pixel changed. Submit the question again.",
   "pressure": {
-   "inputTokens": 11414,
+   "inputTokens": 11750,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.06107662671232877,
+   "ratio": 0.06287457191780822,
    "estimated": true
   }
  }

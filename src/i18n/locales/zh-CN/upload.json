@@ -73,10 +73,13 @@
       "storageModeLower": "存储模式"
     },
     "solvent": {
-      "percentage": "比例（%）",
+      "amount": "用量",
+      "unit": "单位",
       "add": "添加溶剂",
-      "percentageError": "比例须为 1 到 100 之间的数字",
-      "invalidPercentage": "请输入有效比例（1-100）",
+      "percentageError": "百分比须大于 0 且不超过 100",
+      "concentrationError": "浓度须为大于 0 的数字",
+      "customUnitPlaceholder": "例如 mg/kg",
+      "customUnitRequired": "请填写单位",
       "selectSolvent": "请选择溶剂"
     },
     "validation": {

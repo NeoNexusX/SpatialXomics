@@ -5,9 +5,11 @@ import { getConfig } from '@/shared/config/runtimeConfig'
 import type {
   DownloadRawResponse,
   FilePublicId,
+  FilePublicResponse,
   ProcessItem,
   ProcessingStats,
 } from '@/features/datasets/types/dataset'
+import { isDirectRun } from '@/shared/utils/processRun'
 
 // GET /files/{public_id}/download — ZIP 打包下载；只消费 oss_download_url 与 filename，
 // 不再声明或读取 file_id/path 等字段
@@ -62,8 +64,9 @@ export async function setFilePublic(publicId: FilePublicId): Promise<{ public_id
 }
 
 // PATCH /files/{public_id} — 文件元数据部分更新（键为后端 snake_case）。
-// 可改：样本属性 9 个（含 solvent）+ spectrum_mode + storage_mode；is_public/
-// experiment_type/filename 等系统字段禁改。权限：任一文件持有者。响应为更新后的 FilePublic。
+// 可改：样本属性 9 个（含 solvent）+ 仪器参数 7 个；is_public/experiment_type/
+// filename 等系统字段禁改。spectrum_mode / storage_mode 已不可改（请求里带着会
+// 被后端静默忽略），不再声明。权限：任一文件持有者。响应为更新后的 FilePublic。
 export interface FileMetadataPatch {
   organism?: string
   organism_part?: string
@@ -74,12 +77,20 @@ export interface FileMetadataPatch {
   maldi_matrix?: string
   maldi_matrix_application?: string
   solvent?: string // "N% Name, ..." 复合串，与上传表单同构
-  spectrum_mode?: string // 'profile' | 'centroid'
-  storage_mode?: string // 'continuous' | 'processed'
+  polarity?: string // e.g. Positive / Negative
+  ionisation_source?: string // e.g. MALDI / ESI / DESI
+  analyzer?: string // e.g. TOF / Orbitrap / FTICR
+  pixel_size_horizontal?: number // μm，>= 0
+  pixel_size_vertical?: number // μm，>= 0
+  resolving_power?: number // >= 0，无单位
+  mz?: number // 质荷比，>= 0
 }
 
-export async function patchFileMetadata(publicId: FilePublicId, patch: FileMetadataPatch) {
-  return unwrap(auth_api.patch(`/files/${publicId}`, patch))
+export async function patchFileMetadata(
+  publicId: FilePublicId,
+  patch: FileMetadataPatch,
+): Promise<FilePublicResponse> {
+  return unwrap(auth_api.patch<FilePublicResponse>(`/files/${publicId}`, patch))
 }
 
 /** 文件列表服务端排序（sort_by/order 白名单与后端一致，非法值 422） */
@@ -174,6 +185,39 @@ export async function listMyProcesses(
 // GET /stats/processing - Processing statistics for current user
 export async function getProcessingStats(): Promise<ProcessingStats> {
   return unwrap(auth_api.get('/stats/processing'))
+}
+
+/** 新建分析入口的配额上限：非直转任务达到此数量后禁止再创建 */
+export const ANALYSIS_LIMIT = 5
+
+const QUOTA_PAGE_SIZE = 100
+
+/**
+ * 统计当前用户的非直转处理任务数量（所有状态都计入，直转任务排除）。
+ *
+ * /processes/mine 返回全部状态的任务记录，processing 也在其中；逐条判断 params_json
+ * 是否为直转标记即可。后端没有「排除直转」的服务端过滤条件，只能按页取回再本地过滤。
+ * 调用方只需要判断是否达到上限，所以累计到 limit 即提前返回（返回值封顶为 limit），
+ * 避免为精确总数翻完所有页。单页大小只是请求值，翻页以响应 meta.total_pages 为准。
+ */
+export async function countNonDirectProcesses(limit = ANALYSIS_LIMIT): Promise<number> {
+  let count = 0
+  let page = 1
+  let totalPages = 1
+
+  do {
+    const result = await listMyProcesses(page, QUOTA_PAGE_SIZE, {})
+    totalPages = result.meta.total_pages
+
+    for (const process of result.data) {
+      if (!isDirectRun(process.params_json)) count += 1
+    }
+
+    if (count >= limit) return limit
+    page += 1
+  } while (page <= totalPages)
+
+  return count
 }
 
 // DELETE /processes/{run_id} - Delete a process/result

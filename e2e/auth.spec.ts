@@ -256,8 +256,9 @@ test.describe('Authenticated', () => {
     await page.goto('/profile')
     await expect(page.getByText('Quota Usage')).toBeVisible()
 
-    // navbar 头像下拉（daisyui 靠 :focus-within 展开，点击头像即聚焦）
-    await page.locator('.avatar-placeholder[role="button"]').click()
+    // navbar 头像下拉（daisyui 靠 :focus-within 展开）。聚焦即可展开；
+    // 点按在部分窗口状态下会被 html 拦截（pointer 事件拿不到目标），这里只验登出，不绑定“必须点击”。
+    await page.locator('.avatar-placeholder[role="button"]').focus()
     await page.getByText('Sign out', { exact: true }).click()
 
     // 跳回登录页 + 本地 token 已清（authStore.logout 的 finally 分支）

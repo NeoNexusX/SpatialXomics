@@ -18,7 +18,7 @@ For comparisons use `get_ion_image(mzs=[...], normalize="shared")`: at most 4 se
 
 ## Identity and biology
 
-If annotations exist, read the relevant `get_annotation(rowIds=[...])`; use exact row ids from a `get_annotation` window to retain competing assignments. For de novo lipid matching, ask the user to run the annotation panel against an appropriate database. `kegg_mass_search(mz=..., polarity=...)` can supply small-molecule candidates when the actual polarity is known (KEGG compound does not cover lipids). `pubchem_formula_search` needs a molecular formula, not m/z. A mass window or lipid shorthand cannot identify a unique isomer.
+If annotations exist, read the relevant `get_annotation(rowIds=[...])`; use exact row ids from a `get_annotation` window to retain competing assignments. For de novo lipid matching, ask the user to run the annotation panel against an appropriate database. `kegg_mass_search(mz=..., adduct="[M+H]+")` can supply KEGG small-molecule candidates for one peak. Select an adduct consistent with the acquisition polarity. `pubchem_formula_search` needs a molecular formula, not m/z. A mass window or lipid shorthand cannot identify a unique isomer.
 
 Use targeted identity/context lookups and `europepmc_search(query="molecule tissue mass spectrometry imaging", maxResults=3)` for biological claims. Batch names per relevant source and follow page/archive pointers only when necessary. Database presence, pathway membership and literature about a candidate do not prove the measured ion's identity or pathway activity.
 

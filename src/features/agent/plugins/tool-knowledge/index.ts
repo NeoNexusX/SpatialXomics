@@ -195,7 +195,7 @@ export function apply(ctx: Context) {
         },
         names: {
           type: 'array',
-          items: 'string',
+          items: { type: 'string' },
           maxItems: MAX_BATCH_QUERIES,
           description: 'Batch compound names, each queried independently.',
         },
@@ -298,7 +298,7 @@ export function apply(ctx: Context) {
         },
         queries: {
           type: 'array',
-          items: 'string',
+          items: { type: 'string' },
           maxItems: MAX_BATCH_QUERIES,
           description: 'Batch names or id fragments, each searched independently.',
         },
@@ -381,7 +381,7 @@ export function apply(ctx: Context) {
         },
         ids: {
           type: 'array',
-          items: 'string',
+          items: { type: 'string' },
           maxItems: MAX_BATCH_QUERIES,
           description: 'Up to 25 accessions, fetched sequentially; combinable with name queries.',
         },
@@ -392,7 +392,7 @@ export function apply(ctx: Context) {
         },
         queries: {
           type: 'array',
-          items: 'string',
+          items: { type: 'string' },
           maxItems: MAX_BATCH_QUERIES,
           description: 'Up to 25 names, each resolved to candidate accessions for review.',
         },

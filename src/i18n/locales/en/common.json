@@ -237,7 +237,29 @@
       "retrySave": "Retry saving",
       "compactNow": "Compact context",
       "compactionFailed": "Context compaction did not complete · {reason}",
-      "compactionNoProgress": "This compaction did not reduce the context"
+      "compactionNoProgress": "This compaction did not reduce the context",
+      "question": {
+        "previous": "Previous",
+        "next": "Next",
+        "skip": "Skip",
+        "submit": "Submit",
+        "recommended": "Recommended",
+        "custom": "Type your answer",
+        "other": "Other answer",
+        "multipleHint": "Select all that apply",
+        "separator": ", ",
+        "incomplete": "Answer or skip this question",
+        "progress": "Question {current} of {total}",
+        "autoSubmit": "Recommended options are submitted in {time}",
+        "collapse": "Collapse",
+        "expand": "Expand",
+        "waiting": "Waiting for your answer",
+        "unanswered": "Not answered",
+        "skipped": "Skipped",
+        "auto": "Default",
+        "timedOut": "Timed out; recommended options were submitted",
+        "submitFailed": "Could not submit: {reason}"
+      }
     },
     "page": {
       "myDatasets": "My Datasets",

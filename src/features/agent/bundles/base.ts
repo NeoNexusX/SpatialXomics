@@ -34,6 +34,8 @@ import * as toolPageContext from '../plugins/tool-page-context'
 import { SkillsRegistry } from '../plugins/skill'
 import * as skillBundled from '../plugins/skill-bundled'
 import * as toolSkill from '../plugins/tool-skill'
+import { UserQuestionService } from '../plugins/user-questions'
+import * as toolAskUser from '../plugins/tool-ask-user'
 import { AgentRuntime } from '../plugins/agent'
 import { AgentLoop } from '../plugins/agent-loop'
 
@@ -82,6 +84,10 @@ export const baseBundle: BundleRow[] = [
   { id: 'skill', plugin: SkillsRegistry },
   { id: 'skill-bundled', plugin: skillBundled },
   { id: 'tool-skill', plugin: toolSkill },
+
+  // 向用户提问
+  { id: 'user-questions', plugin: UserQuestionService },
+  { id: 'tool-ask-user', plugin: toolAskUser },
 
   // 循环
   { id: 'agent', plugin: AgentRuntime },

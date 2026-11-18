@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { ADDUCTS, apply, keggFind, keggMassSearch } from '../index'
+import { apply, keggFind, keggMassSearch } from '../index'
 import { KeggClient, parseAtext } from '../kegg'
-import { polarityRef } from '@/services/zarr/zarrSharedState'
 import { ToolRuntime } from '../../tools'
 import { SystemPrompt } from '../../system-prompt'
 
@@ -14,7 +13,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
-  polarityRef.value = ''
 })
 
 async function complete<T>(promise: Promise<T>): Promise<T> {
@@ -70,34 +68,6 @@ function pathwayCompoundLinks(id: string, compounds: string[]): string {
   return compounds.map((compound) => `path:${id}\tcpd:${compound}`).join('\n')
 }
 
-function exactMassEntry(id: string, name: string, exactMass: number): string {
-  return [
-    field('ENTRY', `${id}                      Compound`),
-    field('NAME', name),
-    field('EXACT_MASS', String(exactMass)),
-    '///',
-  ].join('\n')
-}
-
-function massFindRoutes(
-  mz: number,
-  polarity: 'positive' | 'negative',
-  ppm: number,
-  hits: Record<string, [string, string][]> = {},
-): Record<string, string> {
-  const routes: Record<string, string> = {}
-  const tolerance = (mz * ppm) / 1e6
-  for (const [adduct, shift] of Object.entries(ADDUCTS[polarity])) {
-    const neutral = mz - shift
-    const lo = Math.max(neutral - tolerance, 1e-6)
-    const hi = neutral + tolerance
-    routes[`find/compound/${lo.toFixed(6)}-${hi.toFixed(6)}/exact_mass`] = (hits[adduct] ?? [])
-      .map(([id, name]) => `${id}\t${name}`)
-      .join('\n')
-  }
-  return routes
-}
-
 function resultJson(text: string) {
   return JSON.parse(text.slice(0, text.indexOf('\nsource:')))
 }
@@ -108,6 +78,22 @@ async function makeContext(): Promise<Context> {
   await ctx.plugin(ToolRuntime)
   apply(ctx)
   return ctx
+}
+
+async function callTool(name: string, args: Record<string, unknown>) {
+  const ctx = await makeContext()
+  try {
+    return await complete(
+      ctx.tools.execute({
+        callId: name,
+        name,
+        arguments: args,
+        signal: new AbortController().signal,
+      }),
+    )
+  } finally {
+    await ctx.fiber.dispose()
+  }
 }
 
 it('retrieves all matches before slicing and reports the result window', async () => {
@@ -124,10 +110,14 @@ it('retrieves all matches before slicing and reports the result window', async (
   expect(fetcher).toHaveBeenCalledTimes(1)
 })
 
-it('sends multi-word queries without /nop so DBGET AND semantics apply', async () => {
+it('uses one AND search for a multi-word query through the registered tool', async () => {
   const fetcher = stub({ 'find/compound/glucose%20phosphate': 'C00092\tGlucose 6-phosphate\n' })
-  const result = resultJson(await complete(keggFind('glucose phosphate', 'compound', 0, 10)))
-  expect(result.entries).toEqual([{ id: 'C00092', name: 'Glucose 6-phosphate' }])
+  const result = await callTool('kegg_find', { query: 'glucose phosphate' })
+  expect(result.isError).toBe(false)
+  expect(resultJson(result.content).entries).toEqual([
+    { id: 'C00092', name: 'Glucose 6-phosphate' },
+  ])
+  expect(fetcher).toHaveBeenCalledTimes(1)
   expect(fetcher).toHaveBeenCalledWith(
     '/kegg-rest/find/compound/glucose%20phosphate',
     expect.anything(),
@@ -150,34 +140,6 @@ it('uses the pathway endpoint only when db is pathway', async () => {
   expect(fetcher).toHaveBeenCalledTimes(1)
 })
 
-it('applies one independent result window to every query in a batch', async () => {
-  stub({
-    'find/compound/alpha': compoundRows(3),
-    'find/compound/beta': compoundRows(3),
-  })
-  const ctx = await makeContext()
-  try {
-    const result = await complete(
-      ctx.tools.execute({
-        callId: 'batch-window',
-        name: 'kegg_find',
-        arguments: { queries: ['alpha', 'beta'], offset: 1, limit: 1 },
-        signal: new AbortController().signal,
-      }),
-    )
-    expect(result.isError).toBe(false)
-    expect(result.content).toContain('### alpha')
-    expect(result.content).toContain('### beta')
-    expect(result.content.match(/"total": 3/g)).toHaveLength(2)
-    expect(result.content.match(/"offset": 1/g)).toHaveLength(2)
-    expect(result.content.match(/"id": "C00002"/g)).toHaveLength(2)
-    expect(result.content).not.toContain('C00001')
-    expect(result.content).not.toContain('C00003')
-  } finally {
-    await ctx.fiber.dispose()
-  }
-})
-
 it('caps each result page at 25 without treating limit as a total cap', async () => {
   stub({ 'find/compound/target': compoundRows(30) })
   const ctx = await makeContext()
@@ -193,27 +155,6 @@ it('caps each result page at 25 without treating limit as a total cap', async ()
     const parsed = resultJson(result.content)
     expect(parsed.window).toMatchObject({ total: 30, limit: 25, returned: 25, nextOffset: 25 })
     expect(parsed.entries).toHaveLength(25)
-  } finally {
-    await ctx.fiber.dispose()
-  }
-})
-
-it('does not reuse result offset/limit as batch input pagination', async () => {
-  const queries = Array.from({ length: 9 }, (_, index) => `q${index}`)
-  stub(Object.fromEntries(queries.map((query) => [`find/compound/${query}`, ''])))
-  const ctx = await makeContext()
-  try {
-    const result = await complete(
-      ctx.tools.execute({
-        callId: 'nine-inputs',
-        name: 'kegg_find',
-        arguments: { queries, offset: 2, limit: 1 },
-        signal: new AbortController().signal,
-      }),
-    )
-    expect(result.isError).toBe(false)
-    for (const query of queries) expect(result.content).toContain(`### ${query}`)
-    expect(result.content).not.toContain('queries not returned')
   } finally {
     await ctx.fiber.dispose()
   }
@@ -290,7 +231,7 @@ it('parses real pathway entries with bare key-only lines and space-separated DBL
   })
 })
 
-it('skips a single malformed entry and malformed value lines instead of failing the chunk', () => {
+it('reads the other entries in a response containing a malformed record', () => {
   const text = [
     field('ENTRY', 'C00031                      Compound'),
     field('NAME', 'D-Glucose'),
@@ -323,8 +264,8 @@ it('frames an empty successful keyword search as a database miss, not biological
 })
 
 it('frames an empty mass search as a database miss, not biological absence', async () => {
-  stub(massFindRoutes(500.5, 'positive', 10))
-  const out = await complete(keggMassSearch(500.5, 'positive', 10, 0, 10))
+  stub({ 'find/compound/101.006276-101.008276/exact_mass': '' })
+  const out = await complete(keggMassSearch(100, '[M-H]-', 10, 0, 10))
   expect(out).toContain('"matches": []')
   expect(out).toContain('This is a database search miss, not biological absence.')
 })
@@ -358,8 +299,6 @@ it('isolates one invalid compound id in a batch instead of failing the whole cal
 it('isolates one invalid pathway id in a batch instead of failing the whole call', async () => {
   stub({
     'get/map00010': pathwayEntry('map00010', 'Glycolysis / Gluconeogenesis'),
-    'link/compound/map00010': pathwayCompoundLinks('map00010', ['C00031']),
-    'list/C00031': 'C00031\tD-Glucose; Glucose\n',
   })
   const ctx = await makeContext()
   try {
@@ -419,52 +358,57 @@ it('returns compound identity fields, official links and an explicit PubChem SID
   }
 })
 
-it.each([11, 25])('chunks %i compound ids into get requests of at most ten', async (count) => {
-  const ids = compoundIds(count)
-  const routes: Record<string, string> = {}
-  for (let index = 0; index < ids.length; index += 10) {
-    const chunk = ids.slice(index, index + 10)
-    routes[`get/${chunk.join('+')}`] = chunk.map((id) => compoundEntry(id)).join('')
-  }
-  const fetcher = stub(routes)
-  const entries = await complete(new KeggClient().getEntries(ids))
-  expect(entries.map((entry) => entry.id)).toEqual(ids)
-  expect(fetcher).toHaveBeenCalledTimes(Math.ceil(count / 10))
-  expect(fetcher.mock.calls.every(([url]) => url.split('get/')[1]!.split('+').length <= 10)).toBe(
-    true,
-  )
+it.each(['kegg_compound', 'kegg_pathway'])(
+  'gets ten distinct entries in one request for %s',
+  async (name) => {
+    const pathway = name === 'kegg_pathway'
+    const ids = compoundIds(10).map((id) => (pathway ? id.replace('C', 'map') : id))
+    const fetcher = stub({
+      [`get/${ids.join('+')}`]: ids
+        .map((id) => (pathway ? pathwayEntry(id) : compoundEntry(id)))
+        .join('\n'),
+    })
+    const result = await callTool(name, { ids })
+    expect(result.isError).toBe(false)
+    for (const id of ids) expect(result.content).toContain(`### ${id}`)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  },
+)
+
+it.each(['kegg_compound', 'kegg_pathway'])(
+  'rejects eleven submitted ids before deduplication or I/O for %s',
+  async (name) => {
+    const fetcher = stub({})
+    const ids = Array<string>(11).fill(name === 'kegg_compound' ? 'C00031' : 'map00010')
+    const result = await callTool(name, { ids })
+    expect(result.isError).toBe(true)
+    expect(result.content).toContain('at most 10')
+    expect(fetcher).not.toHaveBeenCalled()
+  },
+)
+
+it('enforces the native get and list limits in the client', async () => {
+  const fetcher = stub({})
+  const client = new KeggClient()
+  await expect(client.getEntries(compoundIds(11))).rejects.toThrow('1–10')
+  await expect(client.list(Array<string>(11).fill('C00031'))).rejects.toThrow('1–10')
+  expect(fetcher).not.toHaveBeenCalled()
 })
 
-it('treats an all-unknown 10-id chunk 404 as absent entries instead of failing the whole call', async () => {
-  // Live-verified against rest.kegg.jp (2026-11-10): get/<unknown> alone → 404;
-  // mixed valid+unknown → 200 with only the valid entries. A 404 chunk must
-  // degrade to per-id "not returned" messages, never reject the batch.
-  const ids = compoundIds(11)
-  const routes: Record<string, string | Response> = {}
-  for (let index = 0; index < ids.length - 1; index += 10) {
-    const chunk = ids.slice(index, index + 10)
-    routes[`get/${chunk.join('+')}`] = chunk.map((id) => compoundEntry(id)).join('')
-  }
-  routes[`get/${ids[10]}`] = new Response('not found', { status: 404 })
-  stub(routes)
-  const ctx = await makeContext()
-  try {
-    const result = await complete(
-      ctx.tools.execute({
-        callId: 'compound-unknown-tail',
-        name: 'kegg_compound',
-        arguments: { ids },
-        signal: new AbortController().signal,
-      }),
-    )
-    expect(result.isError).toBe(false)
-    expect(result.content).toContain(`names: Compound ${ids[9]}`)
-    expect(result.content).toContain(
-      `No KEGG compound entry was returned for ${ids[10]}; the request succeeded but this id was absent.`,
-    )
-  } finally {
-    await ctx.fiber.dispose()
-  }
+it('reports partial records and all-unknown get responses per id', async () => {
+  const fetcher = stub({
+    'get/C00031+C99999': compoundEntry('C00031', 'D-Glucose'),
+    'get/C99998+C99999': new Response('not found', { status: 404 }),
+  })
+  const mixed = await callTool('kegg_compound', { ids: ['cpd:c00031', 'C00031', 'C99999'] })
+  expect(mixed.isError).toBe(false)
+  expect(mixed.content).toContain('names: D-Glucose')
+  expect(mixed.content).toContain('No KEGG compound entry was returned for C99999')
+  const missing = await callTool('kegg_compound', { ids: ['C99998', 'C99999'] })
+  expect(missing.isError).toBe(false)
+  expect(missing.content).toContain('No KEGG compound entry was returned for C99998')
+  expect(missing.content).toContain('No KEGG compound entry was returned for C99999')
+  expect(fetcher).toHaveBeenCalledTimes(2)
 })
 
 it.each([
@@ -479,10 +423,7 @@ it.each([
   },
 )
 
-it('one failing request no longer cancels its sibling requests in the same invocation', async () => {
-  // The old client aborted the whole invocation on the first upstream error;
-  // with 50 funnelled queries one 429/503 would kill the other 49 (R2-5).
-  // Now only the failing request rejects; siblings complete normally.
+it('allows independent requests to continue after an upstream error', async () => {
   const fetcher = stub({
     'find/compound/bad': new Response('rate limited', { status: 429 }),
     'find/compound/good': 'C00031\tD-Glucose\n',
@@ -507,7 +448,7 @@ it('validates compound ids and documents identity verification', async () => {
   try {
     const tool = ctx.tools.list().find((item) => item.name === 'kegg_compound')!
     expect(tool.description).toContain('identity checking')
-    expect(tool.description).toContain('SIDs, not CIDs')
+    expect(tool.description).toContain('PubChem cross-references are SIDs')
     for (const [callId, arguments_, expected] of [
       ['missing-id', {}, 'Provide "id" or "ids"'],
       ['invalid-id', { id: 'map00010' }, 'Invalid KEGG compound id'],
@@ -528,118 +469,71 @@ it('validates compound ids and documents identity verification', async () => {
   }
 })
 
-it('returns pathway details and rank 10-20 after retrieving the complete member list', async () => {
-  const members = compoundIds(25)
-  const selected = members.slice(9, 20)
-  const routes: Record<string, string> = {
-    'get/map00010': pathwayEntry('map00010', 'Glycolysis / Gluconeogenesis'),
-    'link/compound/map00010': pathwayCompoundLinks('map00010', members),
-  }
-  for (let index = 0; index < selected.length; index += 10) {
-    const chunk = selected.slice(index, index + 10)
-    routes[`list/${chunk.join('+')}`] = chunk
-      .map((id) => `${id}\tMember ${id}; Synonym ${id}`)
-      .join('\n')
-  }
-  const fetcher = stub(routes)
-  const ctx = await makeContext()
-  try {
-    const result = await complete(
-      ctx.tools.execute({
-        callId: 'pathway-window',
-        name: 'kegg_pathway',
-        arguments: { id: 'path:map00010', offset: 9, limit: 11 },
-        signal: new AbortController().signal,
-      }),
-    )
-    expect(result.isError).toBe(false)
-    expect(result.content).toContain('name: Glycolysis / Gluconeogenesis')
-    expect(result.content).toContain('class: Global and overview maps')
-    expect(result.content).toContain('description: Description of Glycolysis / Gluconeogenesis')
-    expect(result.content).toContain('https://www.kegg.jp/pathway/map00010')
-    expect(result.content).toContain(
-      'window: {"total":25,"offset":9,"limit":11,"returned":11,"nextOffset":20}',
-    )
-    expect(result.content).toContain('[Member C00010](https://www.kegg.jp/entry/C00010)')
-    expect(result.content).toContain('[Member C00020](https://www.kegg.jp/entry/C00020)')
-    expect(result.content).not.toContain('Member C00009')
-    expect(result.content).not.toContain('Member C00021')
-    const listRequests = fetcher.mock.calls.filter(([url]) => url.includes('/list/'))
-    expect(listRequests).toHaveLength(2)
-    expect(listRequests.every(([url]) => !/C0000[1-9](?:\D|$)/.test(url))).toBe(true)
-    expect(listRequests.every(([url]) => !/C0002[1-5](?:\D|$)/.test(url))).toBe(true)
-  } finally {
-    await ctx.fiber.dispose()
-  }
+it('returns pathway details with a single get request', async () => {
+  const fetcher = stub({ 'get/map00010': pathwayEntry('map00010', 'Glycolysis / Gluconeogenesis') })
+  const result = await callTool('kegg_pathway', { id: 'path:map00010' })
+  expect(result.isError).toBe(false)
+  expect(result.content).toContain('name: Glycolysis / Gluconeogenesis')
+  expect(result.content).toContain('class: Global and overview maps')
+  expect(result.content).toContain('description: Description of Glycolysis / Gluconeogenesis')
+  expect(result.content).toContain('https://www.kegg.jp/pathway/map00010')
+  expect(fetcher).toHaveBeenCalledTimes(1)
 })
 
-it('applies member windows independently to multiple pathways', async () => {
-  stub({
-    'get/map00010+map00020': `${pathwayEntry('map00010')}\n${pathwayEntry('map00020')}`,
-    'link/compound/map00010': pathwayCompoundLinks('map00010', compoundIds(3)),
-    'link/compound/map00020': pathwayCompoundLinks('map00020', compoundIds(6).slice(3)),
-    'list/C00002': 'C00002\tMember C00002',
-    'list/C00005': 'C00005\tMember C00005',
+it('groups one combined link response by pathway and pages member ids without looking up names', async () => {
+  const firstMembers = compoundIds(25)
+  const secondMembers = ['C00031', 'C00010', 'C00032']
+  const fetcher = stub({
+    'link/compound/map00010+map00020': [
+      pathwayCompoundLinks('map00020', secondMembers),
+      pathwayCompoundLinks('map00010', [...firstMembers, firstMembers[0]!]),
+    ].join('\n'),
   })
-  const ctx = await makeContext()
-  try {
-    const result = await complete(
-      ctx.tools.execute({
-        callId: 'pathway-batch',
-        name: 'kegg_pathway',
-        arguments: { ids: ['map00010', 'map00020'], offset: 1, limit: 1 },
-        signal: new AbortController().signal,
-      }),
-    )
-    expect(result.isError).toBe(false)
-    expect(result.content).toContain('### map00010')
-    expect(result.content).toContain('### map00020')
-    expect(
-      result.content.match(/"total":3,"offset":1,"limit":1,"returned":1,"nextOffset":2/g),
-    ).toHaveLength(2)
-    expect(result.content).toContain('Member C00002')
-    expect(result.content).toContain('Member C00005')
-    expect(result.content).not.toContain('Member C00001')
-    expect(result.content).not.toContain('Member C00004')
-  } finally {
-    await ctx.fiber.dispose()
-  }
+  const result = await callTool('kegg_pathway', {
+    membersOf: ['path:map00010', 'map00020'],
+    offset: 1,
+    limit: 11,
+  })
+  expect(result.isError).toBe(false)
+  const [first, second] = result.content.split('### map00020')
+  expect(first).toContain('### map00010')
+  expect(first).toContain(
+    'window: {"total":25,"offset":1,"limit":11,"returned":11,"nextOffset":12}',
+  )
+  expect(first).toContain('[C00012](https://www.kegg.jp/entry/C00012)')
+  expect(first).not.toContain('C00031')
+  expect(second).toContain(
+    'window: {"total":3,"offset":1,"limit":11,"returned":2,"nextOffset":null}',
+  )
+  expect(second).toContain('[C00010](https://www.kegg.jp/entry/C00010)')
+  expect(second).toContain('[C00032](https://www.kegg.jp/entry/C00032)')
+  expect(fetcher).toHaveBeenCalledTimes(1)
 })
 
-it('distinguishes an empty member list from an out-of-range member window', async () => {
-  stub({
-    'get/map00010': pathwayEntry('map00010'),
-    'link/compound/map00010': pathwayCompoundLinks('map00010', compoundIds(2)),
-    'get/map00020': pathwayEntry('map00020'),
-    'link/compound/map00020': '',
+it('accepts more than ten path ids in a single link query and distinguishes empty windows from empty groups', async () => {
+  const maps = compoundIds(11).map((id) => id.replace('C', 'map'))
+  const fetcher = stub({
+    [`link/compound/${maps.join('+')}`]: pathwayCompoundLinks(maps[0]!, ['C00031']),
   })
-  const ctx = await makeContext()
-  try {
-    const beyond = await complete(
-      ctx.tools.execute({
-        callId: 'pathway-beyond',
-        name: 'kegg_pathway',
-        arguments: { id: 'map00010', offset: 5, limit: 10 },
-        signal: new AbortController().signal,
-      }),
-    )
-    expect(beyond.content).toContain(
-      'window: {"total":2,"offset":5,"limit":10,"returned":0,"nextOffset":null}',
-    )
-    expect(beyond.content).toContain('No compounds in this window')
-    const empty = await complete(
-      ctx.tools.execute({
-        callId: 'pathway-empty',
-        name: 'kegg_pathway',
-        arguments: { id: 'map00020' },
-        signal: new AbortController().signal,
-      }),
-    )
-    expect(empty.content).toContain('"total":0')
-    expect(empty.content).toContain('No member compounds returned by KEGG')
-  } finally {
-    await ctx.fiber.dispose()
-  }
+  const result = await callTool('kegg_pathway', { membersOf: maps, offset: 1 })
+  expect(result.isError).toBe(false)
+  expect(result.content).toContain('No compounds in this window')
+  expect(result.content).toContain('No member compounds returned by KEGG')
+  expect(result.content).toContain('### map00011')
+  expect(fetcher).toHaveBeenCalledTimes(1)
+})
+
+it.each<[string, Record<string, unknown>]>([
+  ['kegg_pathway', { id: 'map00010', membersOf: ['map00010'] }],
+  ['kegg_pathway', { membersOf: [] }],
+  ['kegg_pathway', { membersOf: ['hsa00010'] }],
+  ['kegg_compound', { id: 'C00031', ids: ['C00031'] }],
+  ['kegg_compound', { ids: [] }],
+])('rejects conflicting or invalid selectors for %s before dispatch', async (name, args) => {
+  const fetcher = stub({})
+  const result = await callTool(name, args)
+  expect(result.isError).toBe(true)
+  expect(fetcher).not.toHaveBeenCalled()
 })
 
 it('reports a successfully requested pathway whose entry was absent', async () => {
@@ -673,7 +567,7 @@ it('suggests the map form when an organism-specific pathway code is rejected', a
       }),
     )
     expect(result.isError).toBe(true)
-    expect(result.content).toContain('organism-specific codes like hsa00010 are not accepted')
+    expect(result.content).toContain('organism-specific codes like hsa00010')
     expect(result.content).toContain('map00010')
   } finally {
     await ctx.fiber.dispose()
@@ -690,234 +584,82 @@ it('hints at the map form when find/pathway drops an organism-code query', async
   expect(out).not.toContain('database search miss')
 })
 
-it('prefetches member lists in parallel inside one shared client for pathway batches', async () => {
-  // R2-3: members must be fetched via one invocation-shared client (dedup +
-  // rate funnel) rather than per-item serial round trips.
-  const routes: Record<string, string> = {
-    'get/map00010+map00020': `${pathwayEntry('map00010')}\n${pathwayEntry('map00020')}`,
-    'link/compound/map00010': pathwayCompoundLinks('map00010', compoundIds(3)),
-    'link/compound/map00020': pathwayCompoundLinks('map00020', compoundIds(6).slice(3)),
-    'list/C00001+C00002': 'C00001\tMember C00001\nC00002\tMember C00002\n',
-    'list/C00004+C00005': 'C00004\tMember C00004\nC00005\tMember C00005\n',
-  }
-  const fetcher = stub(routes)
-  const ctx = await makeContext()
-  try {
-    const result = await complete(
-      ctx.tools.execute({
-        callId: 'pathway-prefetch',
-        name: 'kegg_pathway',
-        arguments: { ids: ['map00010', 'map00020'], offset: 0, limit: 2 },
-        signal: new AbortController().signal,
-      }),
-    )
-    expect(result.isError).toBe(false)
-    expect(result.content).toContain('Member C00001')
-    expect(result.content).toContain('Member C00004')
-    // one get (10-chunk) + two link requests + two list requests for names
-    const paths = fetcher.mock.calls.map(([url]) => url.slice('/kegg-rest/'.length))
-    expect(paths.filter((path) => path.startsWith('link/'))).toHaveLength(2)
-  } finally {
-    await ctx.fiber.dispose()
-  }
-})
-
-it('validates pathway ids and documents full-result window semantics', async () => {
-  const ctx = await makeContext()
-  try {
-    const tool = ctx.tools.list().find((item) => item.name === 'kegg_pathway')!
-    expect(tool.description).toContain('per-pathway window')
-    expect(tool.description).toContain('offset 9 + limit 11')
-    for (const [callId, arguments_, expected] of [
-      ['missing-pathway', {}, 'Provide "id" or "ids"'],
-      ['invalid-pathway', { id: 'C00031' }, 'Invalid KEGG pathway id'],
-    ] as const) {
-      const result = await complete(
-        ctx.tools.execute({
-          callId,
-          name: 'kegg_pathway',
-          arguments: arguments_,
-          signal: new AbortController().signal,
-        }),
-      )
-      expect(result.isError).toBe(true)
-      expect(result.content).toContain(expected)
-    }
-  } finally {
-    await ctx.fiber.dispose()
-  }
-})
-
-it('uses six-decimal exact-mass ranges and parses KEGG id/name candidates', async () => {
+it('reads numeric exact masses from the KEGG range response', async () => {
   const fetcher = stub({
-    'find/compound/75.030000-75.040000/exact_mass': 'C00037\tGlycine\nC01837\tGlycine derivative',
+    'find/compound/174.045000-174.055000/exact_mass': 'C00493\t174.052823\nC04236\t174.052823',
   })
-  const result = await complete(new KeggClient().findExactMass(75.03, 75.04))
-  expect(result).toEqual([
-    ['C00037', 'Glycine'],
-    ['C01837', 'Glycine derivative'],
+  expect(await complete(new KeggClient().findExactMass(174.045, 174.055))).toEqual([
+    { id: 'C00493', exactMass: 174.052823 },
+    { id: 'C04236', exactMass: 174.052823 },
   ])
   expect(fetcher).toHaveBeenCalledTimes(1)
 })
 
-it('merges adducts, recalculates delta ppm from get entries, sorts and then slices', async () => {
-  const mz = 200
-  const ppm = 10
-  const h = mz - ADDUCTS.positive['[M+H]+']!
-  const na = mz - ADDUCTS.positive['[M+Na]+']!
-  const k = mz - ADDUCTS.positive['[M+K]+']!
-  stub({
-    ...massFindRoutes(mz, 'positive', ppm, {
-      '[M+H]+': [['C00001', 'Five ppm']],
-      '[M+Na]+': [['C00002', 'Closest']],
-      '[M+K]+': [['C00003', 'Second']],
-    }),
-    'get/C00001+C00002+C00003': [
-      exactMassEntry('C00001', 'Five ppm', h + 0.001),
-      exactMassEntry('C00002', 'Closest', na + 0.00002),
-      exactMassEntry('C00003', 'Second', k - 0.0004),
+it('ranks signed ppm errors for one adduct before paging, using one request for more than ten hits', async () => {
+  const more = compoundIds(9).map((id) => id + '\t198.993724')
+  const fetcher = stub({
+    'find/compound/198.990724-198.994724/exact_mass': [
+      ...more,
+      'C00010\t198.992324',
+      'C00011\t198.992744',
+      'C00012\t199.000000',
     ].join('\n'),
   })
-  const result = resultJson(await complete(keggMassSearch(mz, 'positive', ppm, 0, 2)))
-  expect(result.window).toEqual({ total: 3, offset: 0, limit: 2, returned: 2, nextOffset: 2 })
-  expect(result.matches.map((match: { id: string }) => match.id)).toEqual(['C00002', 'C00003'])
-  expect(result.matches[0].deltaPpm).toBeCloseTo(0.1, 6)
-  expect(result.matches[1].deltaPpm).toBeCloseTo(-2, 6)
-  expect(result.matches.map((match: { adduct: string }) => match.adduct)).toEqual([
-    '[M+Na]+',
-    '[M+K]+',
-  ])
-})
-
-it('chunks candidate detail requests at ten ids without capping total matches', async () => {
-  const mz = 100
-  const ppm = 10
-  const neutral = mz - ADDUCTS.positive['[M+H]+']!
-  const ids = compoundIds(11)
-  const routes: Record<string, string> = massFindRoutes(mz, 'positive', ppm, {
-    '[M+H]+': ids.map((id) => [id, `Candidate ${id}`] as [string, string]),
+  const result = await callTool('kegg_mass_search', {
+    mz: 200,
+    adduct: '[M+H]+',
+    ppm: 10,
+    limit: 2,
   })
-  for (let index = 0; index < ids.length; index += 10) {
-    const chunk = ids.slice(index, index + 10)
-    routes[`get/${chunk.join('+')}`] = chunk
-      .map((id) => exactMassEntry(id, `Mass ${id}`, neutral))
-      .join('\n')
-  }
-  const fetcher = stub(routes)
-  const result = resultJson(await complete(keggMassSearch(mz, 'positive', ppm, 0, 25)))
-  expect(result.window).toMatchObject({ total: 11, returned: 11, nextOffset: null })
-  expect(result.matches).toHaveLength(11)
-  expect(fetcher.mock.calls.filter(([url]) => url.includes('/get/'))).toHaveLength(2)
+  expect(result.isError).toBe(false)
+  const page = resultJson(result.content)
+  expect(page).toMatchObject({
+    queryMz: 200,
+    adduct: '[M+H]+',
+    polarity: 'positive',
+    window: { total: 11, returned: 2, nextOffset: 2 },
+  })
+  expect(page.matches.map((hit: { id: string }) => hit.id)).toEqual(['C00011', 'C00010'])
+  expect(page.matches[0].exactMass).toBe(198.992744)
+  expect(page.matches[0].deltaPpm).toBeCloseTo(0.1, 2)
+  expect(page.matches[1].deltaPpm).toBeCloseTo(-2, 2)
+  expect(fetcher).toHaveBeenCalledTimes(1)
 })
 
-it('uses dataset polarity and keeps batch m/z windows independent with empty results', async () => {
-  polarityRef.value = 'negative'
-  stub({ ...massFindRoutes(100, 'negative', 10), ...massFindRoutes(200, 'negative', 10) })
-  const ctx = await makeContext()
-  try {
-    const result = await complete(
-      ctx.tools.execute({
-        callId: 'mass-batch',
-        name: 'kegg_mass_search',
-        arguments: { mzs: [100, 200] },
-        signal: new AbortController().signal,
-      }),
-    )
-    expect(result.isError).toBe(false)
-    expect(result.content).toContain('### m/z 100')
-    expect(result.content).toContain('### m/z 200')
-    expect(result.content.match(/"polarity": "negative"/g)).toHaveLength(2)
-    expect(result.content.match(/"total": 0/g)).toHaveLength(2)
-    expect(result.content.match(/"matches": \[\]/g)).toHaveLength(2)
-  } finally {
-    await ctx.fiber.dispose()
-  }
+it('uses the selected negative adduct and applies the local ppm cap to its range', async () => {
+  const fetcher = stub({ 'find/compound/101.002276-101.012276/exact_mass': 'C00001\t101.007276' })
+  const result = await callTool('kegg_mass_search', { mz: 100, adduct: '[M-H]-', ppm: 100 })
+  expect(result.isError).toBe(false)
+  expect(resultJson(result.content)).toMatchObject({
+    polarity: 'negative',
+    ppm: 50,
+    matches: [{ id: 'C00001', adduct: '[M-H]-' }],
+  })
+  expect(fetcher).toHaveBeenCalledTimes(1)
 })
 
-it('caps ppm at 50 before constructing exact-mass ranges', async () => {
-  const fetcher = stub(massFindRoutes(100, 'positive', 50))
-  const ctx = await makeContext()
-  try {
-    const result = await complete(
-      ctx.tools.execute({
-        callId: 'mass-ppm-cap',
-        name: 'kegg_mass_search',
-        arguments: { mz: 100, polarity: 'positive', ppm: 100 },
-        signal: new AbortController().signal,
-      }),
-    )
-    expect(result.isError).toBe(false)
-    expect(fetcher).toHaveBeenCalledTimes(Object.keys(ADDUCTS.positive).length)
-  } finally {
-    await ctx.fiber.dispose()
-  }
+it('treats an invalid exact-mass response as an upstream failure', async () => {
+  stub({ 'find/compound/101.006276-101.008276/exact_mass': 'C00001\tnot a mass' })
+  const result = await callTool('kegg_mass_search', { mz: 100, adduct: '[M-H]-' })
+  expect(result.isError).toBe(true)
+  expect(result.content).toContain('Invalid KEGG exact_mass response')
 })
 
-it('validates mass-search inputs and documents KEGG small-molecule coverage', async () => {
-  polarityRef.value = ''
-  const ctx = await makeContext()
-  try {
-    const tool = ctx.tools.list().find((item) => item.name === 'kegg_mass_search')!
-    expect(tool.description).toContain('roughly 19,000')
-    expect(tool.description).toContain('excludes lipids')
-    for (const [callId, arguments_, expected] of [
-      ['missing-mz', { polarity: 'positive' }, 'Provide "mz" or "mzs"'],
-      ['invalid-mz', { mz: -1, polarity: 'positive' }, 'Provide a positive m/z'],
-      ['missing-polarity', { mz: 100 }, 'Unknown ion polarity'],
-    ] as const) {
-      const result = await complete(
-        ctx.tools.execute({
-          callId,
-          name: 'kegg_mass_search',
-          arguments: arguments_,
-          signal: new AbortController().signal,
-        }),
-      )
-      expect(result.isError).toBe(true)
-      expect(result.content).toContain(expected)
-    }
-  } finally {
-    await ctx.fiber.dispose()
-  }
+it.each<[string, Record<string, unknown>]>([
+  ['kegg_find', {}],
+  ['kegg_find', { query: '  ' }],
+  ['kegg_mass_search', { mz: 100 }],
+  ['kegg_mass_search', { mz: 100, adduct: 'unknown' }],
+  ['kegg_mass_search', { mz: -1, adduct: '[M-H]-' }],
+  ['kegg_mass_search', { mz: 1, adduct: '[M+Na]+' }],
+])('validates %s inputs before I/O', async (name, args) => {
+  const fetcher = stub({})
+  const result = await callTool(name, args)
+  expect(result.isError).toBe(true)
+  expect(fetcher).not.toHaveBeenCalled()
 })
 
-it('covers the annotation panel adducts in KEGG mass searches', () => {
-  // 数值来自共享加合物表（shared/chem/adducts.ts）；面板规则表的每个键都必须可检索（防未来漂移）
-  expect(ADDUCTS.positive['[M+Li]+']).toBeCloseTo(7.015455, 5)
-  expect(ADDUCTS.negative['[M-2H+Na]-']).toBeCloseTo(20.974666, 5)
-  expect(ADDUCTS.negative['[M-2H+K]-']).toBeCloseTo(36.948606, 5)
-  for (const key of ['M+H', 'M+Na', 'M+K', 'M+NH4', 'M+Li']) {
-    expect(ADDUCTS.positive[`[${key}]+`]).toBeDefined()
-  }
-  for (const key of ['M-H', 'M+Cl', 'M+HCOO', 'M+CH3COO', 'M-2H+Na', 'M-2H+K']) {
-    expect(ADDUCTS.negative[`[${key}]-`]).toBeDefined()
-  }
-})
-
-it('validates missing queries and documents that keyword hits need verification', async () => {
-  const ctx = await makeContext()
-  try {
-    const tool = ctx.tools.list().find((item) => item.name === 'kegg_find')!
-    expect(tool.description).toContain('Keyword hits are search candidates, not identity')
-    expect(tool.description).toContain('AND semantics')
-    const result = await complete(
-      ctx.tools.execute({
-        callId: 'missing-query',
-        name: 'kegg_find',
-        arguments: {},
-        signal: new AbortController().signal,
-      }),
-    )
-    expect(result.isError).toBe(true)
-    expect(result.content).toContain('Provide "query" or "queries"')
-  } finally {
-    await ctx.fiber.dispose()
-  }
-})
-
-// ---- Mechanism tests (migrated from tool-bio/__tests__/kegg.test.ts, R2-10) ----
-
-it('shares rate limits across clients and deduplicates only within each invocation', async () => {
+it('shares the start-time limit across independent clients', async () => {
   const fetcher = stub({ 'list/C00031': 'C00031\tD-Glucose; Glucose\n' })
   const starts: number[] = []
   const original = fetcher.getMockImplementation()!
@@ -925,12 +667,10 @@ it('shares rate limits across clients and deduplicates only within each invocati
     starts.push(Date.now())
     return original(...(args as Parameters<typeof original>))
   })
-  const first = new KeggClient()
   await complete(
     Promise.all([
-      first.findCompounds('C00031'),
-      first.findCompounds('C00031'), // same invocation → deduped onto the in-flight request
-      new KeggClient().findCompounds('C00031'), // separate invocation → its own request
+      new KeggClient().findCompounds('C00031'),
+      new KeggClient().findCompounds('C00031'),
     ]),
   )
   expect(fetcher).toHaveBeenCalledTimes(2)

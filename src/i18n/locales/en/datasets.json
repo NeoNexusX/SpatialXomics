@@ -108,7 +108,14 @@
     },
     "metadata": {
       "title": "Edit Metadata",
-      "notOwner": "You do not own this dataset, so you cannot modify it."
+      "notOwner": "You do not own this dataset, so you cannot modify it.",
+      "tooLong": "Must be at most {max} characters.",
+      "invalidNumber": "Must be a number greater than or equal to 0.",
+      "invalidFields": "Some fields are invalid. Please check the highlighted fields.",
+      "notSpecified": "Not specified",
+      "numberHint": "Use 0 or leave blank for an unspecified value. Decimals are allowed.",
+      "changedCount": "Fields changed: {count}",
+      "savedWithAdjustments": "Saved. The server adjusted these numbers: {changes}. The form now shows the saved values."
     },
     "my": {
       "searchPlaceholder": "Search my datasets",

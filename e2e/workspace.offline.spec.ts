@@ -1,4 +1,51 @@
 import { test, expect, fileRecord, processRecord } from './fixtures/offline.js'
+import { processRow } from './utils.js'
+
+test('entry links navigate below the analysis quota and ignore direct conversions', async ({ page, backend }) => {
+  // 总共六条记录，但两条直转不占配额；入口行为不依赖 CI 账号遗留了多少任务。
+  backend.processes = [
+    ...Array.from({ length: 4 }, (_, index) => processRecord(index + 1)),
+    processRecord(5, { params_json: '__RAW_CONVERT__' }),
+    processRecord(6, { params_json: '__RAW_CONVERT__' }),
+  ]
+  await page.goto('/workspace')
+  await page.getByRole('button', { name: 'New Task', exact: true }).click()
+  await expect(page).toHaveURL(/\/workspace\/new$/)
+  await expect(page.getByRole('heading', { name: 'Create New Analysis', exact: true })).toBeVisible()
+
+  await page.goto('/workspace')
+  await page.getByRole('link', { name: 'Go to MyDatasets', exact: true }).click()
+  await expect(page).toHaveURL(/\/mydatasets$/)
+  await expect(page.getByRole('heading', { name: 'My Datasets', exact: true })).toBeVisible()
+})
+
+test('blocks new analysis at the quota and allows it after deleting a result', async ({ page, backend }) => {
+  backend.processes = [
+    processRecord(1),
+    processRecord(2, { status: 'processing', finished_at: null }),
+    processRecord(3, { status: 'failed' }),
+    processRecord(4),
+    processRecord(5),
+  ]
+  await page.goto('/workspace')
+  await page.getByRole('button', { name: 'New Task', exact: true }).click()
+  const limitDialog = page.getByRole('dialog').filter({ hasText: 'Unable to Create Analysis' })
+  await expect(limitDialog).toBeVisible()
+  await expect(limitDialog).toContainText('You have reached the limit of 5 analyses.')
+  await expect(page).toHaveURL(/\/workspace$/)
+  await limitDialog.locator('.modal-action').getByRole('button', { name: 'Close', exact: true }).click()
+
+  const row = processRow(page, 1)
+  await row.getByRole('button', { name: 'Delete', exact: true }).click()
+  const deleteDialog = page.getByRole('dialog').filter({ hasText: 'Delete Result' })
+  await deleteDialog.getByRole('button', { name: 'Delete', exact: true }).click()
+  await expect(row).toHaveCount(0)
+  expect(backend.deleted).toEqual([1])
+
+  await page.getByRole('button', { name: 'New Task', exact: true }).click()
+  await expect(page).toHaveURL(/\/workspace\/new$/)
+  await expect(page.getByRole('heading', { name: 'Create New Analysis', exact: true })).toBeVisible()
+})
 
 test('searches on submit, resets pagination, and clears the filename filter', async ({ page, backend }) => {
   backend.processes = [processRecord(1), processRecord(2), processRecord(3, { filename: 'Kidney.imzML' })]
@@ -91,17 +138,19 @@ test('expires authentication in the store and redirects to login with the origin
 })
 
 test('creates a Peak Alignment task from a dataset and follows it to completion', async ({ page, backend }) => {
-  backend.files = [fileRecord('E2eDataset000001', { filename: 'Brain_Align.imzML', spectrum_mode: 'centroid', storage_mode: 'processed' })]
+  // 新建的是 #2，旁边保留 #20；文件名以数字开头，覆盖 ID 前缀和跨单元格文本拼接。
+  backend.processes = [processRecord(20)]
+  backend.files = [fileRecord('E2eDataset000001', { filename: '69bdd1_Human_Kidney_DESI_50_Negative.imzML', spectrum_mode: 'centroid', storage_mode: 'processed' })]
   await page.goto('/workspace/new')
   await expect(page.getByRole('button', { name: 'Start Analysis', exact: true })).toBeDisabled()
   await page.locator('.tab:has-text("My Datasets")').click()
-  await page.locator('li').filter({ hasText: 'Brain_Align' }).click()
+  await page.locator('li').filter({ hasText: '69bdd1_Human_Kidney' }).click()
   await page.locator('details[open] label').filter({ hasText: 'Python Backend' }).click()
   await page.getByRole('button', { name: 'Start Analysis', exact: true }).click()
 
   await expect(page).toHaveURL(/\/workspace$/)
   expect(backend.created).toEqual([{ file_public_id: 'E2eDataset000001', algorithms: { peak_align: expect.anything() } }])
-  const row = page.getByRole('row').filter({ hasText: /Process #1(?!\d)/ })
+  const row = processRow(page, 2)
   await expect(row.getByText('Running', { exact: true })).toBeVisible()
   await expect(row).toContainText('Peak Alignment')
   await expect(row.getByRole('button', { name: 'View', exact: true })).toHaveCount(0)

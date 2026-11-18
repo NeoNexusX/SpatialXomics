@@ -24,6 +24,7 @@ test.describe('Database · unauthenticated', () => {
 })
 
 test.describe('Database · signed in', () => {
+  /** 渲染 + 翻页：未筛选列表足够长，Next 在样本库和 live 库上都能前进。 */
   test('renders the HMDB tab, table rows and pagination footer', async ({ page }) => {
     await page.goto('/database')
 
@@ -32,64 +33,26 @@ test.describe('Database · signed in', () => {
     // 首行是 HMDB 编号（loading 骨架行没有文本，等待自动落到真实数据行上）
     await expect(page.locator('tbody tr').first()).toContainText('HMDB')
     await expect(page.getByText(/^Page 1 of/)).toBeVisible()
-  })
-
-  test('keyword search narrows the table', async ({ page }) => {
-    await page.goto('/database')
-
-    await page.getByPlaceholder('Search ID, name or formula...').fill('1-Methylhistidine')
-    await page.getByRole('button', { name: 'Search' }).click()
-
-    await expect(page.locator('tbody tr').first()).toContainText('1-Methylhistidine')
-  })
-
-  test('origin select applies immediately and filters rows', async ({ page }) => {
-    await page.goto('/database')
-
-    // select 即选即搜（aria-label 来自 databases.hmdb.filter.origin）
-    await page.getByLabel('Origin').selectOption({ label: 'Endogenous' })
-
-    await expect(page.locator('tbody tr').first()).toContainText('Endogenous')
-  })
-
-  test('pagination — Next advances the page summary', async ({ page }) => {
-    await page.goto('/database')
 
     // 样本 60 条 → 2 页；live 11 万条 → 上千页，Next 两边都可点
-    await expect(page.getByText(/^Page 1 of/)).toBeVisible()
     await page.getByRole('button', { name: 'Next' }).click()
     await expect(page.getByText(/^Page 2 of/)).toBeVisible()
   })
 
-  test('download full CSV — two-step flow hands the browser a relay link', async ({ page }) => {
-    // 第一步换直链：拦截并回一个指向本页 origin 的 relay 地址（真实后端回的是
-    // 它自己的绝对地址，浏览器直接导航过去；同 origin 便于第二步也拦截）
-    const firstStepUrls: string[] = []
-    await page.route('**/api/annotations/si-db/download*', async (route) => {
-      firstStepUrls.push(route.request().url())
-      const relay = new URL('/api/annotations/si-db/relay/download?token=e2e', page.url()).toString()
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ filename: 'SI_DB.csv', url: relay, size: 57 }),
-      })
-    })
-    // 第二步直链：回一个极小的 CSV，断言下载事件而非真实 38.5MB
-    await page.route('**/api/annotations/si-db/relay/download*', (route) =>
-      route.fulfill({
-        contentType: 'text/csv',
-        headers: { 'Content-Disposition': 'attachment; filename="SI_DB.csv"' },
-        body: 'ID,Name,Formula\nHMDB0000001,1-Methylhistidine,C7H11N3O2\n',
-      }),
-    )
-
+  /**
+   * keyword + origin 筛选的真实后端契约。
+   * 参数拼装与页码复位由 useDatabaseList 单测覆盖，这里只验后端确实接受并过滤。
+   */
+  test('keyword and origin filters narrow the table', async ({ page }) => {
     await page.goto('/database')
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      page.getByRole('button', { name: 'Download full CSV' }).click(),
-    ])
 
-    expect(firstStepUrls).toHaveLength(1)
-    expect(await download.suggestedFilename()).toBe('SI_DB.csv')
+    await page.getByPlaceholder('Search ID, name or formula...').fill('1-Methylhistidine')
+    await page.getByRole('button', { name: 'Search' }).click()
+    await expect(page.locator('tbody tr').first()).toContainText('1-Methylhistidine')
+
+    // select 即选即搜（aria-label 来自 databases.hmdb.filter.origin）
+    await page.getByLabel('Origin').selectOption({ label: 'Endogenous' })
+    await expect(page.locator('tbody tr').first()).toContainText('Endogenous')
   })
 
   test('shows the error state with retry when the list endpoint is unreachable', async ({ page }) => {

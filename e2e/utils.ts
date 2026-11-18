@@ -30,9 +30,20 @@ export function sizeToMB(text: string | null): number {
  * 任务 Failed，等待 Completed 的断言会超时。必须换成后端上真实存在的 MSI 数据集。
  */
 export const ALGO_DATASET_NAMES = [
-  'Ecoli_Brain_MALDI_49_Negative_a6e46f',
-  'Human_Kidney_MALDI_50_Negative_69bdd1',
+  'a6e46f_Ecoli_Brain_MALDI_49_Negative',
+  '69bdd1_Human_Kidney_DESI_50_Negative',
 ] as const
+
+/**
+ * 按任务编号单元格精确找行，避免 #2 命中 #20。
+ * 不匹配整行文本：相邻单元格会拼成 "Process #269bdd1_Human..."，
+ * 数字开头的数据集名会让 ID 后面的数字边界判断失效。
+ */
+export function processRow(page: Page, id: number): Locator {
+  return page.getByRole('row').filter({
+    has: page.getByRole('cell', { name: `Process #${id}`, exact: true }),
+  })
+}
 
 /** 下载前的资料校验只等 GET /user，签发接口也是毫秒级，20s 没结果就不用再等了 */
 const SIGN_TIMEOUT_MS = 20_000

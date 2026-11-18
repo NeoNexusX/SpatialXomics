@@ -3,7 +3,7 @@
  *
  * 与 `shared/config/runtimeConfig.ts` 的 `config.json` 是**两份不同用途的运行时配置**：
  * - config.json  ：全站都要用的部署开关（导航、分页、验证码……），在 main.ts 里阻塞 await；
- * - content.json ：只有首页用到的展示内容（团队、时间线、Hero 文案……）。
+ * - content.json ：只有首页用到的展示内容（团队、Hero 文案……）。
  *
  * 拆开是为了让首页那 5KB 不再压在全站启动的关键路径上。它由路由在进入 `/` 时与 HomeView
  * 的 chunk 并行加载（见 router/index.ts），因此 HomeView 及其子组件渲染时 `getContent()`
@@ -17,42 +17,6 @@
  */
 
 import type { LocalizedText } from '@/shared/config/localizedText'
-
-/**
- * 功能展示项（FeatureScene 联动画廊的「联动单元」：词语 + 图片 + 卡片文案，按数组顺序一一对应）。
- *
- * 悬停画廊里第 i 张图时，左侧卡片同步展示第 i 项的 word/title/desc，实现「图 ↔ 卡片」联动。
- * - word:  画廊图片上方的词，可本地化，如 { "en": "VISUAL", "zh-CN": "可视化" }
- *          （旧写法纯字符串仍兼容，视为各语言通用）
- * - title: 左侧卡片标题（可选）
- * - desc:  左侧卡片描述（可选）
- * - image: 图片 URL（可选）；留空则回退到 hero.gallery 中同序号的图，便于先复用 Hero 的配图
- */
-export interface FeatureItem {
-  /** 画廊图片上方的词，如 'VISUAL' / '可视化'；可本地化 */
-  word: LocalizedText
-  /** 左侧卡片标题 */
-  title?: LocalizedText
-  /** 左侧卡片描述 */
-  desc?: LocalizedText
-  /** 图片 URL；留空回退到 hero.gallery 同序号图 */
-  image?: string
-}
-
-/**
- * 版本时间线项。
- * - date:     时间节点，如 '2024 Q1'
- * - version:  版本号，如 '1.0' / '2.5'
- * - features: 该版本新增特性列表
- */
-export interface TimelineItem {
-  /** 时间节点 */
-  date: LocalizedText
-  /** 版本号 */
-  version: string
-  /** 版本更新特性 */
-  features: LocalizedText[]
-}
 
 /**
  * 开发团队成员（非技术同学可直接编辑 content.json 的 `team`，刷新即生效）。
@@ -91,16 +55,12 @@ export interface GithubHeatmapConfig {
   branch?: string
   /** 统计最近多少天，默认 365 */
   days?: number
-  /** 热力图标题；缺省时显示 "{owner}/{repo} Commit Activity" */
-  title?: LocalizedText
   /** 点击标题跳转的仓库页面地址；缺省时标题不可点击 */
   repoUrl?: string
-  /** 热力图朝向：'auto'（大屏纵向/小屏横向，默认）| 'horizontal' | 'vertical' */
-  orientation?: 'auto' | 'horizontal' | 'vertical'
 }
 
-/** 联系方式（FooterScene 的社交入口，逐项缺省即不显示该入口） */
-export interface ContactInfo {
+/** 联系方式（HomeFooter 的社交入口，逐项缺省即不显示该入口） */
+interface ContactInfo {
   /** 实验室 / 项目官网 */
   website?: string
   /** 主联系邮箱 */
@@ -121,16 +81,9 @@ export interface HomeContent {
   hero: {
     /** 轮播展示的标语（每行一句，可含符号，如 "FREE ∞"） */
     taglines: LocalizedText[]
-    /** 悬停画廊：一组图片 URL，横向并排，悬停某张时展开放大；留空则不显示 */
+    /** 首屏图像切换的几张图：同一张切片的几种视图，尺寸一致、透明底 */
     gallery?: string[]
   }
-  /** 功能展示区（FeatureScene 联动画廊）；为空时该场景回退为占位标题 */
-  features: {
-    /** 联动单元列表，按序对应画廊从左到右的图片 */
-    items: FeatureItem[]
-  }
-  /** 版本时间线；为空时不显示时间线区域 */
-  timeline: TimelineItem[]
   /** 开发团队成员 */
   team: TeamMember[]
   /** 联系方式 */
@@ -140,13 +93,11 @@ export interface HomeContent {
 }
 
 /**
- * 取不到内容时的兜底：首页各区块自身已处理「列表为空」的情况（画廊不渲染、时间线隐藏、
+ * 取不到内容时的兜底：首页各区块自身已处理「列表为空」的情况（首屏不显示图像、
  * 社交入口不显示），因此降级后首页仍可正常打开，只是少了这些展示区，好过整页起不来。
  */
 const EMPTY_CONTENT: HomeContent = {
   hero: { taglines: [], gallery: [] },
-  features: { items: [] },
-  timeline: [],
   team: [],
   contact: {},
 }
@@ -158,8 +109,6 @@ let _pending: Promise<HomeContent> | null = null
 function normalize(raw: Partial<HomeContent>): HomeContent {
   return {
     hero: raw.hero ?? { taglines: [], gallery: [] },
-    features: raw.features ?? { items: [] },
-    timeline: raw.timeline ?? [],
     team: raw.team ?? [],
     contact: raw.contact ?? {},
     githubHeatmap: raw.githubHeatmap,

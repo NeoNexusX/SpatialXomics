@@ -13,9 +13,9 @@
  * 实例 provider 注册表；外部库/文献/文件工具走真实网络与 /kegg-rest、/hmdb-archive、
  * /api 代理（离线夹具提供后端与 LLM，不发真实模型请求）。
  *
- * 运行（先起 dev server，端口用 E2E_PORT 指定）：
- *   npx playwright test tools.offline --project=offline-chromium
- * 输出目录用 CAPTURE_OUT 指定（默认仓库根 tools-output）。
+ * 运行（先起 dev server，端口用 E2E_PORT 指定；CAPTURE_OUT 同时是启用开关和输出目录）：
+ *   CAPTURE_OUT=tools-output npx playwright test tools.offline --project=offline-chromium
+ * 不设置 CAPTURE_OUT 时本文件被 playwright.config.ts 的 testIgnore 排除，不参与任何回归。
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -859,9 +859,9 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
       'ChEBI 本体检索（EBI OLS4）：每条是「标签 (CHEBI:id) | page | syn: …」加上定义摘录。',
       '结果按 OLS4 相关性排序，第一条不保证是查询分子本身。',
     ] },
-    { id: 'kegg-find', group: 'biology', tool: 'kegg_find', args: { query: 'glucose', db: 'compound', limit: 3 },
+    { id: 'kegg-find', group: 'biology', tool: 'kegg_find', args: { query: 'glucose phosphate', db: 'compound', limit: 3 },
       note: [
-      'KEGG 关键词检索：返回 JSON {query, window, entries:[{id,name}]} + 实时来源行。',
+      'KEGG 在一次检索中按 AND 匹配多个关键词，返回一组 {query, window, entries:[{id,name}]} 和实时来源。',
       'window 是完整结果集的零基分页窗口；limit 只是页大小，不是总量上限。',
     ] },
     { id: 'kegg-compound', group: 'biology', tool: 'kegg_compound', args: { id: 'C00031' },
@@ -869,15 +869,17 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
       '按 C 编号取官方条目：names / formula / exact_mass / mol_weight / pathways / dblinks，全用 Markdown 链接。',
       '这是身份核验的首选：对照 formula 与 exact_mass，而不是信关键词排名。',
     ] },
-    { id: 'kegg-pathway', group: 'biology', tool: 'kegg_pathway', args: { id: 'map00010', limit: 3 },
+    { id: 'kegg-pathway', group: 'biology', tool: 'kegg_pathway', args: { id: 'map00010' },
       note: [
-      '通路的 NAME / CLASS / DESCRIPTION 摘录 + 成员化合物窗口（每通路独立分页）。',
+      '一次 get 返回通路的 NAME、CLASS 和 DESCRIPTION 摘录。',
       '只接受 map 编号；hsa 等 organism 编号会被拒。',
     ] },
-    { id: 'kegg-mass', group: 'biology', tool: 'kegg_mass_search', args: { mz: 180.0634, polarity: 'positive', ppm: 10, limit: 3 },
+    { id: 'kegg-members', group: 'biology', tool: 'kegg_pathway', args: { membersOf: ['map00010', 'map00020'], limit: 3 },
+      note: ['一次 link 查询两个通路的成员化合物编号，各通路独立分页。'] },
+    { id: 'kegg-mass', group: 'biology', tool: 'kegg_mass_search', args: { mz: 181.0707, adduct: '[M+H]+', ppm: 10, limit: 3 },
       note: [
-      '按观测 m/z 的加合物感知搜索：JSON {queryMz, polarity, window, matches:[…]}。',
-      'matches 已按 |Δppm| 排序并用条目 EXACT_MASS 复核过，每项带 adduct 与 deltaPpm。',
+      '使用指定加合物换算观测 m/z，一次查询一个中性精确质量区间。',
+      'matches 按 |Δppm| 排序，包含候选 C 编号、加合物、KEGG 返回的精确质量及有符号质量误差。',
     ] },
     { id: 'hmdb', group: 'biology', tool: 'hmdb_lookup', args: { id: 'HMDB0000122' },
       note: [
@@ -892,7 +894,7 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
     { id: 'europepmc', group: 'literature', tool: 'europepmc_search', args: { query: 'mass spectrometry imaging lipidomics', maxResults: 2 },
       note: [
       'Europe PMC：每条 title / journal year / 标识符 + abstract 摘录（≤600 字符），OA 且有 PMCID 时附全文链接。',
-      '这一轮出现了真实超时（工具默认 15s）：正文只有一行 "Tool execution timed out after 15000ms"，没有部分结果。',
+      '这一轮出现了真实超时（工具默认 15s）：正文只有一行 "Error: tool call timed out after 15000ms"，没有部分结果。',
     ] },
     { id: 'openalex', group: 'literature', tool: 'openalex_search', args: { query: 'mass spectrometry imaging lipidomics', maxResults: 2 },
       note: [
