@@ -64,6 +64,10 @@ describe('acquisition context', () => {
     expect(additivesOf('0.1% Ammonium acetate').sort()).toEqual(['acetate', 'ammonium'])
     expect(additivesOf('1% Lithium chloride (LiCl)').sort()).toEqual(['chloride', 'lithium'])
     expect(additivesOf('0.1% Silver nitrate (AgNO3)')).toEqual(['silver'])
+    // 回归：浓度单位（mM/μM）的添加剂也要能剥出词表组分名
+    expect(
+      additivesOf('50% Acetonitrile (ACN), 1 mM Acetic acid, 350 μM Ammonium fluoride').sort(),
+    ).toEqual(['acetate', 'ammonium'])
   })
 
   it('avoids keyword traps in free text', () => {

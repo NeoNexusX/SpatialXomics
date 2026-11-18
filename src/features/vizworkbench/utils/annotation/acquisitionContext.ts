@@ -12,6 +12,7 @@ import type {
   MALDI_MATRICES,
   SOLVENTS,
 } from '@/features/datasets/constants/datasetMetadata'
+import { parseSolventEntry } from '@/features/datasets/utils/solventEntry'
 import type { Acquisition } from '@/features/vizworkbench/types/acquisition'
 import type {
   AcquisitionContext,
@@ -169,11 +170,15 @@ const ADDITIVE_KEYWORDS: [AdditiveKey, RegExp][] = [
   ['silver', /silver|AgNO3|银/i],
 ]
 
-/** 溶剂串（"70% Methanol (MeOH), 0.1% Formic acid" 或自由文本）→ 添加剂 */
+/** 溶剂串（"70% Methanol (MeOH), 1 mM Acetic acid" 或自由文本）→ 添加剂 */
 export function additivesOf(solvent: string | null | undefined): AdditiveKey[] {
   const out = new Set<AdditiveKey>()
   for (const part of (solvent ?? '').split(',')) {
-    const name = part.replace(/^\s*[\d.]+\s*%\s*/, '').trim()
+    const trimmed = part.trim()
+    if (!trimmed) continue
+    // 条目可能是 "50% Water" 或 "1 mM Acetic acid"：剥掉「数值+单位」前缀，
+    // 只留组分名去匹配词表/关键词。自由文本解析不出来就整条当名字。
+    const name = parseSolventEntry(trimmed)?.name ?? trimmed
     if (!name) continue
     const exact = (SOLVENT_ADDITIVES as Record<string, AdditiveKey[]>)[name]
     if (exact) {

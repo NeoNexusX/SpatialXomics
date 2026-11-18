@@ -43,7 +43,7 @@ Fields marked with \* are required. The spectrum and storage modes are read from
 | **Pixel Size Y (μm)** | Yes | Vertical pixel size | Integer, 1–200 |
 | **Spectrum Mode** | Yes | Spectrum type | profile (continuous) / centroid (peak-picked) |
 | **Storage Mode** | Yes | imzML storage mode | continuous / processed |
-| **Solvent** | Depends | Solvent composition | Pre-filled "100% Water"; options include Water, ACN, MeOH, Ethanol, IPA, Acetone |
+| **Solvent** | Depends | Solvent composition | Pre-filled "100% Water"; each entry is "amount + unit + component". Units: `%` (composition, ≤100), `mM`, `μM`, `nM`, `M`, `mg/mL`, `μg/mL` (mass concentration requires a volume); choose `Other` to type a custom unit. Components include Water, ACN, Acetic acid, Ammonium fluoride, etc. |
 | **MALDI Matrix** | Depends | Matrix compound | CHCA, DHB, NEDC, Sinapinic acid, 9-AA, Norharmane, DAN |
 | **Matrix Application** | Depends | How matrix was applied | Spraying, Airbrush, Automated sprayer, Sublimation, Spotting |
 | **m/z** | No | Reference m/z for resolving power | Number |

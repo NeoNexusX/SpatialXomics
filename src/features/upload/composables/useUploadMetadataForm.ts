@@ -63,7 +63,7 @@ function createForm(): UploadMetadataFormState {
     tissue_modification: '',
     maldi_matrix: '',
     maldi_matrix_application: '',
-    // 预填最常用溶剂;SolventPicker 按 "N% 名称" 逗号分隔解析,可整条删除
+    // 预填最常用溶剂;SolventPicker 按 "数值 单位 组分名" 逗号分隔解析,可整条删除
     solvent: '100% Water',
     spectrum_mode: '',
     storage_mode: '',
