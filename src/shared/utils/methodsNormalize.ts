@@ -1,4 +1,5 @@
 import { t } from '@/i18n'
+import { isDirectRun } from './processRun'
 
 /**
  * Unified label map: backend key -> display name.
@@ -18,7 +19,7 @@ const METHOD_LABELS: Record<string, string> = {
 const RAW_CONVERT_LABEL = 'Direct conversion (no preprocessing)'
 
 export function parseAlgorithms(paramsJson: string): string[] {
-  if (paramsJson === '__RAW_CONVERT__') {
+  if (isDirectRun(paramsJson)) {
     return [RAW_CONVERT_LABEL]
   }
   try {

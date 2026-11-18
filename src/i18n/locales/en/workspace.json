@@ -12,7 +12,10 @@
       "deleteTitle": "Delete Result",
       "deleteMessage": "Are you sure you want to delete this result? This action cannot be undone.",
       "failedTitle": "Process Failed",
-      "errorDetails": "Error details:"
+      "errorDetails": "Error details:",
+      "analysisLimitTitle": "Unable to Create Analysis",
+      "analysisLimitMessage": "You have reached the limit of {limit} analyses. Wait for running tasks to finish and delete unnecessary analyses before creating a new one.",
+      "analysisCheckFailed": "Unable to retrieve the analysis count. Please try again."
     },
     "table": {
       "process": "Process",
