@@ -99,6 +99,8 @@ Put machine-specific overrides in the ignored `env/.env.development.local`:
 VITE_BACKEND_URL=http://localhost:8000
 ```
 
+When pointing at the test server's nginx, include `/api` (e.g. `https://sxo.neonexus.top/api`): the Vite proxy strips the browser's `/api` prefix and then prepends the target path. For a direct backend port, use the backend origin (e.g. `http://localhost:8000`).
+
 `VITE_BACKEND_URL` only affects the development proxy; in the production container nginx forwards `/api/` to the runtime `BACKEND_HOST:BACKEND_PORT`. Assistant traffic is also relayed in development: the deployment default endpoint goes through `/llm-proxy`, while user-supplied endpoints go through `/llm-relay` with the target origin in the `x-llm-target` header, which keeps local proxy interference away from SSE streams.
 
 Every `VITE_*` variable is compiled into the browser bundle: only put a restricted relay sub-key in `VITE_LLM_API_KEY`, and only a publishable Exa sub-key in `VITE_EXA_API_KEY`. Never place an official master key in either.

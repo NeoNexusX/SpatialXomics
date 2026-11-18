@@ -99,6 +99,8 @@ npm ci
 VITE_BACKEND_URL=http://localhost:8000
 ```
 
+指向测试服 nginx 时地址要带上 `/api`（例如 `https://sxo.neonexus.top/api`）：Vite 代理会先去掉浏览器的 `/api` 前缀，再把 target 路径拼上去；直连后端端口时则填后端 origin（如 `http://localhost:8000`）。
+
 `VITE_BACKEND_URL` 只影响开发环境的 Vite 代理；生产容器由 nginx 把 `/api/` 转发到运行时传入的 `BACKEND_HOST:BACKEND_PORT`。开发环境的助手请求也经 Vite 转发：部署默认端点走 `/llm-proxy`，用户自填端点走 `/llm-relay`（目标 origin 放在 `x-llm-target` 头里），避免本机代理干扰 SSE 流。
 
 所有 `VITE_*` 变量都会编译进浏览器包：`VITE_LLM_API_KEY` 只能放中转站的受限子 key，`VITE_EXA_API_KEY` 也只能放可公开的 Exa 子 key，不要放官方主 key。
