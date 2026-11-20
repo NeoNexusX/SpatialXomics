@@ -5,6 +5,13 @@
  * 第一次出结果后自动收起成一行摘要。
  */
 import { computed, inject, ref, watch } from 'vue'
+import {
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuPortal,
+  DropdownMenuRoot,
+  DropdownMenuTrigger,
+} from 'reka-ui'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 import AdductMultiSelect, { type AdductOption } from './AdductMultiSelect.vue'
 import { ANNOTATION_KEY } from '@/features/vizworkbench/composables/useAnnotation'
@@ -121,9 +128,7 @@ const platformPct = computed(() => {
 
 function pickPlatformDb(id: string): void {
   const source = platformDbs.find((s) => s.id === id)
-  // daisyUI 的 focus 下拉不随菜单项点击收起，选完手动失焦关掉。
   // label 在点击时按当前语言取，作为导入后的库名；id 用于按库记住已保存的文件句柄
-  ;(document.activeElement as HTMLElement | null)?.blur()
   if (source?.csvImport) void importPlatformDb(source.csvImport, source.label(), source.id)
 }
 
@@ -329,14 +334,11 @@ function onScoreRatioInput(key: keyof ScoreWeights, e: Event): void {
               <SvgIcon v-else type="upload" class="shrink-0" />
               <span class="min-w-0 truncate">{{ $t('vizworkbench.annotation.importDb') }}</span>
             </button>
-            <!-- 平台库导入：点开列出本站的数据库（当前 HMDB），选中即拉整库 CSV 注入。
-                 触发器必须是原生 <button>：div 上的 :disabled="false" 会被 Vue 渲染成
-                 disabled="false" 属性字符串，daisyUI 的 .btn[disabled] 只看属性存在与否，
-                 会把按钮永久置灰且 pointer-events:none（点不了）。 -->
-            <div v-if="platformDbs.length" class="dropdown shrink-0">
-              <button
-                type="button"
-                class="btn btn-outline btn-sm min-w-0 gap-1 px-2 kawaru-text-62"
+            <!-- 菜单挂到 body，避免侧栏 overflow-hidden 和滚动容器裁剪。 -->
+            <DropdownMenuRoot v-if="platformDbs.length" :modal="false">
+              <DropdownMenuTrigger
+                as="button"
+                class="btn btn-outline btn-sm min-w-0 shrink-0 gap-1 px-2 kawaru-text-62"
                 :disabled="importingDb"
                 :title="$t('vizworkbench.annotation.importFromPlatform')"
                 :aria-label="$t('vizworkbench.annotation.importFromPlatform')"
@@ -352,19 +354,29 @@ function onScoreRatioInput(key: keyof ScoreWeights, e: Event): void {
                     ? $t('vizworkbench.annotation.platformFetching', { pct: platformPct })
                     : $t('vizworkbench.annotation.importFromPlatform')
                 }}</span>
-              </button>
-              <ul
-                tabindex="0"
-                class="menu dropdown-content z-[1] mt-1 w-52 rounded-box bg-base-100 p-1 shadow-lg kawaru-text-62"
-              >
-                <li v-for="s in platformDbs" :key="s.id">
-                  <button type="button" @click="pickPlatformDb(s.id)">
+              </DropdownMenuTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuContent
+                  align="end"
+                  :side-offset="4"
+                  :collision-padding="8"
+                  hide-when-detached
+                  class="z-[1000] max-h-(--reka-dropdown-menu-content-available-height) w-60 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-box border border-base-content/20 bg-base-100 p-1 text-base-content shadow-lg outline-none kawaru-text-62"
+                >
+                  <DropdownMenuItem
+                    v-for="s in platformDbs"
+                    :key="s.id"
+                    as="button"
+                    type="button"
+                    class="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left outline-none data-[highlighted]:bg-base-200"
+                    @select="pickPlatformDb(s.id)"
+                  >
                     <SvgIcon type="circle_stack" class="h-4 w-4 shrink-0" />
-                    <span class="min-w-0 truncate" :title="s.label()">{{ s.label() }}</span>
-                  </button>
-                </li>
-              </ul>
-            </div>
+                    <span class="min-w-0 whitespace-normal break-words">{{ s.label() }}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenuPortal>
+            </DropdownMenuRoot>
           </div>
         </div>
       </div>
