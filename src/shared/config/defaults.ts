@@ -65,7 +65,7 @@ export const OSS_UPLOAD = {
    */
   maxInflightBytes: 512 * MB,
   /**
-   * 单次上传的体积上限（bytes，100GB），按 **源文件之和**（imzML + ibd）计。
+   * 单次上传的体积上限（bytes，200GB），按 **源文件之和**（imzML + ibd）计。
    *
    * 这是产品侧的策略上限。物理上限是「片长 × maxPartCount」，而片长是分档的，
    * 所以校验必须**逐档**做：每一档在它自己的大小上界处都要满足
@@ -75,7 +75,7 @@ export const OSS_UPLOAD = {
    * 之所以按源文件而不是压缩产物计：产物大小事先未知，而且 ibd 几乎压不动，
    * 产物大小和源文件基本相当。
    */
-  maxUploadBytes: 100 * GB,
+  maxUploadBytes: 200 * GB,
   /** 会话（uploadId + 已完成分片）持久化节流间隔（ms），用于跨会话断点续传 */
   checkpointSaveIntervalMs: 5000,
   /**
@@ -132,8 +132,8 @@ export function planForPartSize(partSize: number): PartPlan {
 /**
  * 按数据集总大小（源文件之和）分档给出分片计划。
  *
- * 片长随数据集放大，既为了压请求数，也为了不撞 `maxPartCount`：100GB 用 10MB
- * 片要 10000 片，超了 9999 的协议上限；128MB 片只要 800 片。
+ * 片长随数据集放大，既为了压请求数，也为了不撞 `maxPartCount`：200GB 用 10MB
+ * 片要 20480 片，超了 9999 的分片数限制；128MB 片只要 1600 片（未计 ZIP 开销）。
  * 并发上限反向收窄，由 `maxInflightBytes` 反推，三档算出来是 4 / 4 / 2。
  *
  * 顶档停在 128MB 而不是 256MB：256MB 要压到同样内存只能把并发降到 1，

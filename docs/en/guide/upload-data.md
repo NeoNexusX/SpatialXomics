@@ -72,7 +72,7 @@ Whether Solvent, MALDI Matrix, and Matrix Application are required depends on th
 
 ## What Happens During Upload
 
-The upload runs entirely in the browser and streams to Alibaba Cloud OSS. The combined size of the source files in one upload is capped at **100 GB**:
+The upload runs entirely in the browser and streams to Alibaba Cloud OSS. The combined size of the source files in one upload is capped at **200 GB**:
 
 1. A Web Worker hashes the source files with MD5 and asks the server whether the content already exists. A hit reuses the stored copy immediately.
 2. On a miss, the client fetches temporary STS credentials and initializes a multipart upload.
