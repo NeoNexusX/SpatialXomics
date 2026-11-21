@@ -76,13 +76,10 @@ function annotationRows(n: number): AnnotationRow[] {
     massScore: 0.9,
     adductFit: 0.8,
     chaos: null,
-    coloc: null,
     spatialScore: null,
     totalScore: 0.85,
     q: 0.05,
-    siblings: [],
     samePeak: [],
-    missingAdducts: [],
   }))
 }
 
@@ -784,13 +781,10 @@ describe('批量工具调用（array 参数走完整 ToolRuntime 管线；自 to
         massScore: 1,
         adductFit: 1,
         chaos: null,
-        coloc: null,
         spatialScore: null,
         totalScore: 1,
         q: 0.01,
-        siblings: [],
         samePeak: [],
-        missingAdducts: [],
       }) as AnnotationRow
     registerContextProviders({
       annotations: () => ({

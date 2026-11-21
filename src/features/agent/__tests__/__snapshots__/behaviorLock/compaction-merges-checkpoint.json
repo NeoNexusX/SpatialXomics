@@ -57,7 +57,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 1a93556a>",
+      "system": "<prompt aaa432ac>",
       "tools": "<tools 1a66bb78>",
       "maxTokens": 16000,
       "contextWindow": 64000,
@@ -162,7 +162,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 1a93556a>",
+      "system": "<prompt aaa432ac>",
       "tools": "<tools 1a66bb78>",
       "maxTokens": 16000,
       "contextWindow": 64000,
@@ -210,8 +210,8 @@
     },
     {
      "type": "compaction/end",
-     "beforeTokens": 51033,
-     "afterTokens": 31089,
+     "beforeTokens": 51047,
+     "afterTokens": 31103,
      "seq": 18
     },
     {
@@ -228,7 +228,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 1a93556a>",
+      "system": "<prompt aaa432ac>",
       "tools": "<tools 1a66bb78>",
       "maxTokens": 16000,
       "contextWindow": 64000,
@@ -337,7 +337,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 1a93556a>",
+      "system": "<prompt aaa432ac>",
       "tools": "<tools 1a66bb78>",
       "maxTokens": 16000,
       "contextWindow": 64000,
@@ -389,8 +389,8 @@
     },
     {
      "type": "compaction/end",
-     "beforeTokens": 56178,
-     "afterTokens": 27760,
+     "beforeTokens": 56192,
+     "afterTokens": 27774,
      "seq": 33
     },
     {
@@ -407,7 +407,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 1a93556a>",
+      "system": "<prompt aaa432ac>",
       "tools": "<tools 1a66bb78>",
       "maxTokens": 16000,
       "contextWindow": 64000,
@@ -461,7 +461,7 @@
  ],
  "calls": [
   {
-   "system": "<prompt 1a93556a>",
+   "system": "<prompt aaa432ac>",
    "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
@@ -471,7 +471,7 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt 1a93556a>",
+   "system": "<prompt aaa432ac>",
    "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
@@ -484,7 +484,7 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt 1a93556a>",
+   "system": "<prompt aaa432ac>",
    "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 5>",
@@ -496,7 +496,7 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt 1a93556a>",
+   "system": "<prompt aaa432ac>",
    "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 5>",
@@ -508,7 +508,7 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt 1a93556a>",
+   "system": "<prompt aaa432ac>",
    "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 8>",
@@ -612,11 +612,11 @@
   ],
   "error": null,
   "pressure": {
-   "inputTokens": 27776,
+   "inputTokens": 27790,
    "contextWindow": 64000,
    "outputReserve": 16000,
    "inputBudget": 46720,
-   "ratio": 0.5945205479452055,
+   "ratio": 0.594820205479452,
    "estimated": true
   }
  }

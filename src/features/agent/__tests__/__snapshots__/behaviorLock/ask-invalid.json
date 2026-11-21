@@ -57,7 +57,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt a16d0bf6>",
+      "system": "<prompt 4c804854>",
       "tools": "<tools b9f25a73>",
       "maxTokens": 64000,
       "contextWindow": 256000,
@@ -155,7 +155,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt a16d0bf6>",
+      "system": "<prompt 4c804854>",
       "tools": "<tools b9f25a73>",
       "maxTokens": 64000,
       "contextWindow": 256000,
@@ -209,7 +209,7 @@
  ],
  "calls": [
   {
-   "system": "<prompt a16d0bf6>",
+   "system": "<prompt 4c804854>",
    "tools": "<tools b9f25a73>",
    "messages": [
     "<message 1>",
@@ -219,7 +219,7 @@
    "maxTokens": 64000
   },
   {
-   "system": "<prompt a16d0bf6>",
+   "system": "<prompt 4c804854>",
    "tools": "<tools b9f25a73>",
    "messages": [
     "<message 1>",
@@ -286,11 +286,11 @@
   ],
   "error": null,
   "pressure": {
-   "inputTokens": 3290,
+   "inputTokens": 3304,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.0176048801369863,
+   "ratio": 0.017679794520547944,
    "estimated": true
   }
  }

@@ -337,13 +337,10 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
       massScore: 0.92,
       adductFit: 0.81,
       chaos: rank <= 2 ? 0.64 : null,
-      coloc: rank <= 2 ? 0.72 : null,
       spatialScore: rank <= 2 ? 0.7 : null,
       totalScore: 0.9 - rank * 0.02,
       q: 0.012,
-      siblings: rank === 1 ? [{ adduct: '[M+Na]+', obsMz: 766.5, r: 0.81, rank: 4 }] : [],
       samePeak: rank === 1 ? [{ name: 'Fructose', adduct: '[M+H]+', origin: 'endogenous' }] : [],
-      missingAdducts: rank === 1 ? ['[M+K]+'] : [],
     })
     const rows = [
       annotation(1, 1, 'D-Glucose', 180.0631, '[M+H]+'),

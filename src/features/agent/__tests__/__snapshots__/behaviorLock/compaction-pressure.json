@@ -57,7 +57,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 1a93556a>",
+      "system": "<prompt aaa432ac>",
       "tools": "<tools 1a66bb78>",
       "maxTokens": 16000,
       "contextWindow": 64000,
@@ -162,7 +162,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 1a93556a>",
+      "system": "<prompt aaa432ac>",
       "tools": "<tools 1a66bb78>",
       "maxTokens": 16000,
       "contextWindow": 64000,
@@ -210,8 +210,8 @@
     },
     {
      "type": "compaction/end",
-     "beforeTokens": 47704,
-     "afterTokens": 27768,
+     "beforeTokens": 47718,
+     "afterTokens": 27782,
      "seq": 18
     },
     {
@@ -228,7 +228,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 1a93556a>",
+      "system": "<prompt aaa432ac>",
       "tools": "<tools 1a66bb78>",
       "maxTokens": 16000,
       "contextWindow": 64000,
@@ -282,7 +282,7 @@
  ],
  "calls": [
   {
-   "system": "<prompt 1a93556a>",
+   "system": "<prompt aaa432ac>",
    "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
@@ -292,7 +292,7 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt 1a93556a>",
+   "system": "<prompt aaa432ac>",
    "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
@@ -305,7 +305,7 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt 1a93556a>",
+   "system": "<prompt aaa432ac>",
    "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 5>",
@@ -379,11 +379,11 @@
   ],
   "error": null,
   "pressure": {
-   "inputTokens": 27785,
+   "inputTokens": 27799,
    "contextWindow": 64000,
    "outputReserve": 16000,
    "inputBudget": 46720,
-   "ratio": 0.5947131849315068,
+   "ratio": 0.5950128424657535,
    "estimated": true
   }
  }

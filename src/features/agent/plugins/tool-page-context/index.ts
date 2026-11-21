@@ -202,15 +202,12 @@ function fitAnnotationRow(
     massScore: row.massScore,
     adductFit: row.adductFit,
     chaos: row.chaos,
-    coloc: row.coloc,
     spatialScore: row.spatialScore,
     totalScore: row.totalScore,
     q: row.q,
-    siblings: [],
     samePeak: [],
-    missingAdducts: [],
     truncated: true,
-    omitted: ['candidates', 'siblings', 'samePeak', 'missingAdducts'],
+    omitted: ['candidates', 'samePeak'],
   }
 }
 
@@ -385,24 +382,11 @@ export function renderAnnotationDetail(a: AnnotationRow): string {
       `adductFit=${a.adductFit.toFixed(2)} spatial=${spatialScore}) q=${a.q != null ? a.q.toFixed(3) : 'N/A'} rank=${a.rank}`,
   )
   if (a.chaos != null) {
-    const coloc =
-      a.coloc != null ? ` coloc=${a.coloc.toFixed(3)} (best Pearson with same-molecule ions)` : ''
-    lines.push(`spatial: chaos=${a.chaos.toFixed(3)}${coloc}`)
+    lines.push(`spatial: chaos=${a.chaos.toFixed(3)}`)
   } else {
     lines.push(
       'spatial: not scored (only the top-ranked ions and their same-molecule ions are scored)',
     )
-  }
-  if (a.siblings.length) {
-    const sibs = a.siblings.map(
-      (x) =>
-        `${x.adduct} mz=${x.obsMz.toFixed(4)} rank=${x.rank}` +
-        (x.r != null ? ` r=${x.r.toFixed(2)}` : ''),
-    )
-    lines.push(`same molecule: ${sibs.join('; ')}`)
-  }
-  if (a.missingAdducts.length) {
-    lines.push(`enabled but not detected: ${a.missingAdducts.join(', ')}`)
   }
   if (a.samePeak.length) {
     const others = a.samePeak.map((x) => `${x.name} ${x.adduct}${x.origin ? ` (${x.origin})` : ''}`)

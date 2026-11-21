@@ -14,7 +14,7 @@ For comparisons use `get_ion_image_by_mzs(mzs=[...])`: at most 4 separate images
 - Hotspots use zero-based raster x/y; explicit `get_pixel_spectrum(x=..., y=...)` uses one-based acquisition coordinates (peaks are paged by offset/limit, default rank 1-10; withImage attaches a full-spectrum stick plot per pixel with the window peaks highlighted). Do not convert without a known mapping, especially on sparse grids.
 - `mean` is the nonzero-pixel mean. Percentiles are sampled across the raster. Nonzero fraction and hotspots describe coverage/intensity; they do not determine molecule class, S/N, quantification limits, or biomarker status.
 - Look for region boundaries, gradients, edge accumulation and isolated bright pixels. Matrix spray, tissue damage, ion suppression and biology can produce similar patterns. Compare relevant control ions or an optical reference only if available; do not claim you inspected an unavailable optical image.
-- Pixel size bounds spatial claims. Clustering colors are not anatomy. `get_kmeans` provides clusters with counts and selection plus the overlay image, not masks or pixel-to-cluster membership. Hotspot overlap alone is not a Pearson correlation. Annotation `coloc` and sibling `r` provide computed correlation for those ion pairs only.
+- Pixel size bounds spatial claims. Clustering colors are not anatomy. `get_kmeans` provides clusters with counts and selection plus the overlay image, not masks or pixel-to-cluster membership. Hotspot overlap alone is not a Pearson correlation, and no computed correlation value is exposed — describe what the images show, never quote an r you did not receive.
 
 ## Identity and biology
 

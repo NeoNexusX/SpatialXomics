@@ -181,19 +181,16 @@ export interface AnnotationRow {
   adductFit: number
   /** 空间混乱度（level-set chaos，越高越成块）；null = 未参加空间评分 */
   chaos: number | null
-  /** 与同分子其他加合离子图像的最大 Pearson（截到 0..1） */
-  coloc: number | null
-  /** 空间分 = 0.2 × chaos + 0.8 × coloc；缺失共定位按 0 计 */
+  /**
+   * 空间分 0..1；null = 未参加空间评分。
+   * 等于 0.2 × chaos 时说明共定位分量不可得——那是「空间证据不可得」，不是「空间证据弱」。
+   */
   spatialScore: number | null
   totalScore: number
   /** target-decoy q 值 */
   q: number | null
-  /** 同一分子的其他加合离子（各自也是独立的行） */
-  siblings: { adduct: string; obsMz: number; r: number | null; rank: number }[]
   /** 落在同一个峰上的其他注释，先按来源等级、再按排名 */
   samePeak: { name: string; adduct: string; origin: AnnotationOrigin | null }[]
-  /** 已启用但没检出的加合物 */
-  missingAdducts: string[]
 }
 
 /** 注释总分的权重（归一化，三者之和为 1）：totalScore = mass·massScore + adduct·adductFit + spatial·spatialScore */

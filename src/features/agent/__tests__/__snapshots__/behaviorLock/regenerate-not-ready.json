@@ -57,7 +57,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 1a93556a>",
+      "system": "<prompt aaa432ac>",
       "tools": "<tools 1a66bb78>",
       "maxTokens": 64000,
       "contextWindow": 256000,
@@ -111,7 +111,7 @@
  ],
  "calls": [
   {
-   "system": "<prompt 1a93556a>",
+   "system": "<prompt aaa432ac>",
    "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
@@ -155,11 +155,11 @@
   ],
   "error": "The analysis dataset changed or is still loading. Submit the question again when ready.",
   "pressure": {
-   "inputTokens": 2631,
+   "inputTokens": 2645,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.01407855308219178,
+   "ratio": 0.014153467465753425,
    "estimated": true
   }
  }
