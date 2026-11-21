@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { ToolRuntime, TOOL_RESULT_CHARS_DEFAULT } from '../plugins/tools'
+import { ToolRuntime, TOOL_RESULT_CHARS_DEFAULT, TOOL_RESULT_CHARS_EVIDENCE } from '../plugins/tools'
 import { SystemPrompt } from '../plugins/system-prompt'
 import { SkillsRegistry } from '../plugins/skill'
 import * as skillBundled from '../plugins/skill-bundled'
@@ -52,20 +52,40 @@ describe('agent bootstrap (production wiring)', () => {
     })
     expect(result.isError).toBe(false)
     const full = await ctx.skills.load('msi-analysis')
-    expect(full.length).toBeGreaterThan(TOOL_RESULT_CHARS_DEFAULT) // 前置：该技能确实超过默认截断线
     expect(result.content).toBe(full)
     // 未被管线截断 → 不产生 fullContent（无重复存档）
     expect(result.fullContent).toBeUndefined()
+
+    // 打包技能未必超过默认截断线，用一个确实超线的技能锁住「不截断」这条行为
+    const longBody = 'x'.repeat(TOOL_RESULT_CHARS_DEFAULT + 5000)
+    ctx.skills.registerProvider('test-long', {
+      name: 'test-long',
+      list: () => [{ name: 'long-skill', description: 'oversized body' }],
+      load: async () => longBody,
+      loadResource: async () => longBody,
+    })
+    const long = await ctx.tools.execute({
+      callId: 'c2',
+      name: 'skill',
+      arguments: { name: 'long-skill' },
+      signal: new AbortController().signal,
+    })
+    expect(long.isError).toBe(false)
+    expect(long.content).toBe(longBody)
+    expect(long.fullContent).toBeUndefined()
   })
 
   it('read_archived_result pages long archives via offset continuation', async () => {
-    const longText = 'A'.repeat(20000)
+    const longText = 'A'.repeat(TOOL_RESULT_CHARS_EVIDENCE * 2 + 5000)
     const archiveSession = { storage: { getArtifact: async () => new Blob([longText]) } } as never
     const ctx = new Context()
     ctx.plugin(SystemPrompt)
     ctx.plugin(ToolRuntime)
     ctx.plugin(toolArchive)
     await new Promise((r) => setTimeout(r, 10))
+
+    const bodyOf = (text: string) =>
+      text.replace(/^\[archive continuation from char \d+\]\n/, '').split('\n[')[0]!
 
     // 第一窗口：内容 + 续读指针
     const first = await ctx.tools.execute({
@@ -77,24 +97,31 @@ describe('agent bootstrap (production wiring)', () => {
     })
     expect(first.isError).toBe(false)
     expect(first.content).toContain('A'.repeat(100))
-    const nextOffset = Number(/nextOffset=(\d+)/.exec(first.content)![1])
-    expect(nextOffset).toBeGreaterThan(11000)
-    expect(first.content.length).toBeLessThanOrEqual(12000)
+    let nextOffset = Number(/nextOffset=(\d+)/.exec(first.content)![1])
+    expect(nextOffset).toBeGreaterThan(TOOL_RESULT_CHARS_EVIDENCE - 1000)
+    expect(first.content.length).toBeLessThanOrEqual(TOOL_RESULT_CHARS_EVIDENCE)
     expect(first.content).not.toContain('end of archived result')
 
-    // 续读第二窗口直到结尾标记
-    const second = await ctx.tools.execute({
-      callId: 'c2',
-      name: 'read_archived_result',
-      arguments: { archiveId: 'call_long', offset: nextOffset },
-      session: archiveSession,
-      signal: new AbortController().signal,
-    })
-    expect(second.isError).toBe(false)
-    expect(second.content).toContain('end of archived result')
-    const firstBody = first.content.split('\n[')[0]!
-    const secondBody = second.content.split(']\n')[1]!.split('\n[')[0]!
-    expect(firstBody + secondBody).toBe(longText)
+    // 续读后续窗口直到结尾标记，拼回来必须与全文逐字相同
+    let assembled = bodyOf(first.content)
+    let last = ''
+    for (let page = 0; page < 10 && !last.includes('end of archived result'); page++) {
+      const next = await ctx.tools.execute({
+        callId: `c${page + 2}`,
+        name: 'read_archived_result',
+        arguments: { archiveId: 'call_long', offset: nextOffset },
+        session: archiveSession,
+        signal: new AbortController().signal,
+      })
+      expect(next.isError).toBe(false)
+      expect(next.content.length).toBeLessThanOrEqual(TOOL_RESULT_CHARS_EVIDENCE)
+      last = next.content
+      assembled += bodyOf(last)
+      const cursor = /nextOffset=(\d+)/.exec(last)
+      if (cursor) nextOffset = Number(cursor[1])
+    }
+    expect(last).toContain('end of archived result')
+    expect(assembled).toBe(longText)
 
     vi.unstubAllGlobals()
   })

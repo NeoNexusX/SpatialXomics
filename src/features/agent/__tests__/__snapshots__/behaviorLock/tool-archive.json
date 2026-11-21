@@ -57,8 +57,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt e22127e1>",
-      "tools": "<tools 479c7b97>",
+      "system": "<prompt 1a93556a>",
+      "tools": "<tools 1a66bb78>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -112,7 +112,7 @@
       "role": "tool",
       "toolCallId": "c1",
       "name": "long_lookup",
-      "content": "<text 3901 ab7c5895 LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLL…[truncated]\n[full result archived; call read_archived_result(\"uuid-12\")]>",
+      "content": "<text 15901 bfc06e95 LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLL…[truncated]\n[full result archived; call read_archived_result(\"uuid-12\")]>",
       "isError": false
      },
      "callKey": "7:0",
@@ -144,8 +144,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt e22127e1>",
-      "tools": "<tools 479c7b97>",
+      "system": "<prompt 1a93556a>",
+      "tools": "<tools 1a66bb78>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -201,7 +201,7 @@
       "role": "tool",
       "toolCallId": "c2",
       "name": "read_archived_result",
-      "content": "<text 5044 bd4c553b LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL\n[end of archived result (5000 chars total)]>",
+      "content": "<text 17045 1648e354 LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL\n[end of archived result (17000 chars total)]>",
       "isError": false
      },
      "callKey": "15:0",
@@ -235,8 +235,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt e22127e1>",
-      "tools": "<tools 479c7b97>",
+      "system": "<prompt 1a93556a>",
+      "tools": "<tools 1a66bb78>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -328,8 +328,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt e22127e1>",
-      "tools": "<tools 479c7b97>",
+      "system": "<prompt 1a93556a>",
+      "tools": "<tools 1a66bb78>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -382,8 +382,8 @@
  ],
  "calls": [
   {
-   "system": "<prompt e22127e1>",
-   "tools": "<tools 479c7b97>",
+   "system": "<prompt 1a93556a>",
+   "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
     "<message 2>"
@@ -392,8 +392,8 @@
    "maxTokens": 64000
   },
   {
-   "system": "<prompt e22127e1>",
-   "tools": "<tools 479c7b97>",
+   "system": "<prompt 1a93556a>",
+   "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
     "<message 2>",
@@ -404,8 +404,8 @@
    "maxTokens": 64000
   },
   {
-   "system": "<prompt e22127e1>",
-   "tools": "<tools 479c7b97>",
+   "system": "<prompt 1a93556a>",
+   "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
     "<message 2>",
@@ -418,8 +418,8 @@
    "maxTokens": 64000
   },
   {
-   "system": "<prompt e22127e1>",
-   "tools": "<tools 479c7b97>",
+   "system": "<prompt 1a93556a>",
+   "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
     "<message 2>",
@@ -506,11 +506,11 @@
   ],
   "error": null,
   "pressure": {
-   "inputTokens": 5668,
+   "inputTokens": 13777,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.030329623287671234,
+   "ratio": 0.07372110445205479,
    "estimated": true
   }
  }

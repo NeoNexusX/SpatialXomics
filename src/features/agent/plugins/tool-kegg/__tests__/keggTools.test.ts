@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { apply, keggFind, keggMassSearch } from '../index'
-import { KeggClient, parseAtext } from '../kegg'
+import { KeggClient, isPng, parseAtext, pngDataUrl, pngDimensions } from '../kegg'
 import { ToolRuntime } from '../../tools'
 import { SystemPrompt } from '../../system-prompt'
 
@@ -318,7 +318,7 @@ it('isolates one invalid pathway id in a batch instead of failing the whole call
   }
 })
 
-it('returns compound identity fields, official links and an explicit PubChem SID label', async () => {
+it('returns compound identity fields and official links without redundant mass/dblink output', async () => {
   stub({
     'get/C00162': [
       field('ENTRY', 'C00162                      Compound'),
@@ -339,20 +339,18 @@ it('returns compound identity fields, official links and an explicit PubChem SID
       ctx.tools.execute({
         callId: 'compound-detail',
         name: 'kegg_compound',
-        arguments: { id: 'cpd:C00162' },
+        arguments: { ids: ['cpd:C00162'] },
         signal: new AbortController().signal,
       }),
     )
     expect(result.isError).toBe(false)
     expect(result.content).toContain('https://www.kegg.jp/entry/C00162')
     expect(result.content).toContain('formula: CHO2R')
-    expect(result.content).toContain('exact_mass: 45')
-    expect(result.content).toContain('mol_weight: 45.02')
+    expect(result.content).not.toContain('exact_mass:')
+    expect(result.content).not.toContain('mol_weight:')
+    expect(result.content).not.toContain('dblinks:')
     expect(result.content).toContain('https://www.kegg.jp/pathway/map00062')
     expect(result.content).toContain('https://www.kegg.jp/pathway/map00071')
-    expect(result.content).toContain('PubChem SID: 3462')
-    expect(result.content).not.toContain('PubChem: 3462')
-    expect(result.content).toContain('ChEBI: 35366')
   } finally {
     await ctx.fiber.dispose()
   }
@@ -448,10 +446,10 @@ it('validates compound ids and documents identity verification', async () => {
   try {
     const tool = ctx.tools.list().find((item) => item.name === 'kegg_compound')!
     expect(tool.description).toContain('identity checking')
-    expect(tool.description).toContain('PubChem cross-references are SIDs')
+    expect(tool.description).toContain('not formula alone')
     for (const [callId, arguments_, expected] of [
-      ['missing-id', {}, 'Provide "id" or "ids"'],
-      ['invalid-id', { id: 'map00010' }, 'Invalid KEGG compound id'],
+      ['missing-id', {}, 'ids'],
+      ['invalid-id', { ids: ['map00010'] }, 'Invalid KEGG compound id'],
     ] as const) {
       const result = await complete(
         ctx.tools.execute({
@@ -527,7 +525,6 @@ it.each<[string, Record<string, unknown>]>([
   ['kegg_pathway', { id: 'map00010', membersOf: ['map00010'] }],
   ['kegg_pathway', { membersOf: [] }],
   ['kegg_pathway', { membersOf: ['hsa00010'] }],
-  ['kegg_compound', { id: 'C00031', ids: ['C00031'] }],
   ['kegg_compound', { ids: [] }],
 ])('rejects conflicting or invalid selectors for %s before dispatch', async (name, args) => {
   const fetcher = stub({})
@@ -717,4 +714,76 @@ it('cancels an in-flight fetch and preserves the caller cancellation reason', as
 it('reports a 429 from the shared proxy bucket as a query failure, not an empty miss', async () => {
   stub({ 'find/compound/glucose': new Response('rate limited', { status: 429 }) })
   await expect(complete(keggFind('glucose', 'compound', 0, 10))).rejects.toThrow('HTTP 429')
+})
+
+/** Minimal PNG: signature + IHDR carrying width/height, padded past the header. */
+function pngBytes(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(33)
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0)
+  bytes.set([0, 0, 0, 13], 8)
+  bytes.set([0x49, 0x48, 0x44, 0x52], 12) // IHDR
+  new DataView(bytes.buffer).setUint32(16, width)
+  new DataView(bytes.buffer).setUint32(20, height)
+  return bytes
+}
+
+it('reads PNG dimensions from IHDR and rejects non-PNG bytes', () => {
+  const bytes = pngBytes(910, 620)
+  expect(isPng(bytes)).toBe(true)
+  expect(pngDimensions(bytes)).toEqual({ width: 910, height: 620 })
+  expect(pngDataUrl(bytes).startsWith('data:image/png;base64,')).toBe(true)
+  const html = new TextEncoder().encode('<!doctype html><html>SPA fallback</html>')
+  expect(isPng(html)).toBe(false)
+  expect(() => pngDimensions(html)).toThrow('Invalid PNG')
+})
+
+it('attaches the official KEGG pathway map image for a single map id', async () => {
+  const fetcher = stub({
+    'get/map00010': pathwayEntry('map00010', 'Glycolysis / Gluconeogenesis'),
+    'get/map00010/image': new Response(pngBytes(910, 620).buffer as ArrayBuffer, {
+      headers: { 'content-type': 'image/png' },
+    }),
+  })
+  const result = await callTool('kegg_pathway', { ids: ['map00010'], withImage: true })
+  expect(result.isError).toBe(false)
+  expect(result.content).toContain('name: Glycolysis / Gluconeogenesis')
+  expect(result.images).toHaveLength(1)
+  expect(result.images![0]).toMatchObject({
+    mime: 'image/png',
+    width: 910,
+    height: 620,
+    label: 'KEGG pathway map map00010',
+  })
+  expect(fetcher.mock.calls.map((call) => call[0])).toContain('/kegg-rest/get/map00010/image')
+})
+
+it('keeps pathway details text-only unless withImage is requested', async () => {
+  const fetcher = stub({ 'get/map00010': pathwayEntry('map00010') })
+  const result = await callTool('kegg_pathway', { ids: ['map00010'] })
+  expect(result.isError).toBe(false)
+  expect(result.images).toBeUndefined()
+  expect(fetcher).toHaveBeenCalledTimes(1)
+})
+
+it.each<[string, Record<string, unknown>]>([
+  ['multiple maps', { ids: ['map00010', 'map00020'], withImage: true }],
+  ['membership mode', { membersOf: ['map00010'], withImage: true }],
+])('rejects withImage outside single-map detail mode: %s', async (_label, args) => {
+  stub({
+    'get/map00010+map00020': [pathwayEntry('map00010'), pathwayEntry('map00020')].join('\n'),
+  })
+  const result = await callTool('kegg_pathway', args)
+  expect(result.isError).toBe(true)
+})
+
+it('treats an HTML SPA fallback for the map image as an upstream failure', async () => {
+  stub({
+    'get/map00010': pathwayEntry('map00010'),
+    'get/map00010/image': new Response('<!doctype html><html></html>', {
+      headers: { 'content-type': 'text/html' },
+    }),
+  })
+  const result = await callTool('kegg_pathway', { ids: ['map00010'], withImage: true })
+  expect(result.isError).toBe(true)
+  expect(result.content).toContain('not a PNG')
 })

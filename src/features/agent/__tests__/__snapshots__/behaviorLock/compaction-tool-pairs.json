@@ -57,8 +57,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt e22127e1>",
-      "tools": "<tools 479c7b97>",
+      "system": "<prompt 1a93556a>",
+      "tools": "<tools 1a66bb78>",
       "maxTokens": 1500,
       "contextWindow": 6000,
       "imageMode": "image",
@@ -124,7 +124,7 @@
       "role": "tool",
       "toolCallId": "a",
       "name": "long_lookup",
-      "content": "<text 3901 ab7c5895 LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLL…[truncated]\n[full result archived; call read_archived_result(\"uuid-12\")]>",
+      "content": "<text 15901 bfc06e95 LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLL…[truncated]\n[full result archived; call read_archived_result(\"uuid-12\")]>",
       "isError": false
      },
      "callKey": "7:0",
@@ -145,7 +145,7 @@
       "role": "tool",
       "toolCallId": "b",
       "name": "long_lookup",
-      "content": "<text 3901 43289e46 LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLL…[truncated]\n[full result archived; call read_archived_result(\"uuid-15\")]>",
+      "content": "<text 15901 576cb446 LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLL…[truncated]\n[full result archived; call read_archived_result(\"uuid-15\")]>",
       "isError": false
      },
      "callKey": "7:1",
@@ -166,7 +166,7 @@
       "role": "tool",
       "toolCallId": "c",
       "name": "long_lookup",
-      "content": "<text 3901 600c1883 LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLL…[truncated]\n[full result archived; call read_archived_result(\"uuid-18\")]>",
+      "content": "<text 15901 74502e83 LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…LLLLLLL…[truncated]\n[full result archived; call read_archived_result(\"uuid-18\")]>",
       "isError": false
      },
      "callKey": "7:2",
@@ -200,8 +200,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt e22127e1>",
-      "tools": "<tools 479c7b97>",
+      "system": "<prompt 1a93556a>",
+      "tools": "<tools 1a66bb78>",
       "maxTokens": 1500,
       "contextWindow": 6000,
       "imageMode": "image",
@@ -313,8 +313,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt e22127e1>",
-      "tools": "<tools 479c7b97>",
+      "system": "<prompt 1a93556a>",
+      "tools": "<tools 1a66bb78>",
       "maxTokens": 1500,
       "contextWindow": 6000,
       "imageMode": "image",
@@ -361,8 +361,8 @@
     },
     {
      "type": "compaction/end",
-     "beforeTokens": 7091,
-     "afterTokens": 6651,
+     "beforeTokens": 19200,
+     "afterTokens": 18760,
      "seq": 30
     },
     {
@@ -383,8 +383,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt e22127e1>",
-      "tools": "<tools 479c7b97>",
+      "system": "<prompt 1a93556a>",
+      "tools": "<tools 1a66bb78>",
       "maxTokens": 1500,
       "contextWindow": 6000,
       "imageMode": "image",
@@ -437,8 +437,8 @@
  ],
  "calls": [
   {
-   "system": "<prompt e22127e1>",
-   "tools": "<tools 479c7b97>",
+   "system": "<prompt 1a93556a>",
+   "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
     "<message 2>"
@@ -447,8 +447,8 @@
    "maxTokens": 1500
   },
   {
-   "system": "<prompt e22127e1>",
-   "tools": "<tools 479c7b97>",
+   "system": "<prompt 1a93556a>",
+   "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
     "<message 2>",
@@ -461,8 +461,8 @@
    "maxTokens": 1500
   },
   {
-   "system": "<prompt e22127e1>",
-   "tools": "<tools 479c7b97>",
+   "system": "<prompt 1a93556a>",
+   "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
     "<message 2>",
@@ -474,8 +474,8 @@
    "maxTokens": 1500
   },
   {
-   "system": "<prompt e22127e1>",
-   "tools": "<tools 479c7b97>",
+   "system": "<prompt 1a93556a>",
+   "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 9>",
     "<message 3>",
@@ -582,11 +582,11 @@
   ],
   "error": null,
   "pressure": {
-   "inputTokens": 6668,
+   "inputTokens": 18777,
    "contextWindow": 6000,
    "outputReserve": 1500,
    "inputBudget": 4372,
-   "ratio": 1.52516010978957,
+   "ratio": 4.294830741079598,
    "estimated": true
   }
  }

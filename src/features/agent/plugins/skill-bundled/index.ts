@@ -52,24 +52,46 @@ function parseSkillMd(raw: string): { frontmatter: SkillFrontmatter; body: strin
   return { frontmatter: fm, body }
 }
 
+interface BundledSkillResource {
+  skill: string
+  load: () => Promise<string>
+}
+
+const REPORT_TEMPLATE_RESOURCES: Record<string, { skill: string; path: string }> = {
+  'report-template:annotation-review:en': {
+    skill: 'report-writing',
+    path: './skills/report-writing/references/report-templates/annotation-review.en.md',
+  },
+}
+
 /**
  * 应用内打包的 skills provider。
  *
- * 使用 Vite import.meta.glob 在构建时扫描 ./skills/* /SKILL.md，
- * 前端无需文件系统访问，所有技能内容随应用打包。
+ * 使用 Vite import.meta.glob 在构建时扫描 Skill 正文；报告模板等参考资源
+ * 通过独立的动态 glob 按需载入，不随正文一起进上下文。
+ *
+ * 只注册英文模板：中文译本仅供本地阅读，不入库、不注册，Skill 正文也不得引用它。
+ * 报告语言由「用用户的语言写」这条规则决定，与模板本身的语言无关。
  */
 export function createBundledSkillProvider(): SkillProvider {
-  // import.meta.glob eager 内联（文件仅几 KB）：目录在构造时同步就绪。
-  // 此前懒加载 + 无启动初始化，catalog 永远为空 —— 系统提示的
-  // "Available Skills" 段永远不渲染，模型无从得知技能名（技能系统不可达）。
   const modules = import.meta.glob<string>('./skills/*/SKILL.md', {
     query: '?raw',
     import: 'default',
     eager: true,
   })
+  const resourceModules = import.meta.glob<string>('./skills/report-writing/references/report-templates/*.md', {
+    query: '?raw',
+    import: 'default',
+  })
 
   const catalog: SkillSummary[] = []
   const bodyCache = new Map<string, string>()
+  const resources = new Map<string, BundledSkillResource>()
+
+  for (const [resourceId, definition] of Object.entries(REPORT_TEMPLATE_RESOURCES)) {
+    const load = resourceModules[definition.path]
+    if (load) resources.set(resourceId, { skill: definition.skill, load })
+  }
 
   for (const raw of Object.values(modules)) {
     const parsed = parseSkillMd(raw)
@@ -92,6 +114,13 @@ export function createBundledSkillProvider(): SkillProvider {
       const body = bodyCache.get(name)
       if (!body) throw new Error(`Skill "${name}" not found`)
       return body
+    },
+    async loadResource(name: string, resourceId: string): Promise<string> {
+      const resource = resources.get(resourceId)
+      if (!resource || resource.skill !== name) {
+        throw new Error(`Resource "${resourceId}" is not available for skill "${name}"`)
+      }
+      return (await resource.load()).trim()
     },
   }
 }

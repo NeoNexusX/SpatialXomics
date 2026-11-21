@@ -1,6 +1,7 @@
 /** 批量查询工具的公共部分：分页参数、单值和数组参数合并、逐项拼接输出 */
 
 import type { Session } from '../session'
+import { TOOL_RESULT_CHARS_DEFAULT, TOOL_RESULT_CHARS_EVIDENCE } from './limits'
 import type { ParameterSchemaSpec } from './schema'
 
 export const batchPageParameters = {
@@ -16,7 +17,10 @@ export const batchPageParameters = {
 } satisfies ParameterSchemaSpec
 
 /** 证据类批量工具的字符预算（配合 TOOL_RESULT_CHARS_EVIDENCE 的结果上限） */
-export const EVIDENCE_BATCH_BUDGET = { maxChars: 11700, maxCharsPerItem: 11000 }
+export const EVIDENCE_BATCH_BUDGET = {
+  maxChars: TOOL_RESULT_CHARS_EVIDENCE - 300,
+  maxCharsPerItem: TOOL_RESULT_CHARS_EVIDENCE - 1000,
+}
 
 /** 批量参数优先，否则把单值参数变成一项 */
 export function batchInput<T>(many: T[] | undefined, one: T | undefined): T[] {
@@ -60,8 +64,8 @@ export async function renderBatch<T>(
   const limit = paginateInputs
     ? Math.min(8, Math.max(1, Math.floor(options.limit ?? 5)))
     : items.length
-  const budget = options.maxChars ?? 3700
-  const itemBudget = options.maxCharsPerItem ?? 700
+  const budget = options.maxChars ?? TOOL_RESULT_CHARS_DEFAULT - 300
+  const itemBudget = options.maxCharsPerItem ?? 2500
   const sections: string[] = []
   let used = 0
   let next = offset

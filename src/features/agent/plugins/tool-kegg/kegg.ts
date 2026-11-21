@@ -1,5 +1,6 @@
 /** Live KEGG REST access through a fixed same-origin proxy; no downloaded index. */
 import { abortable } from '../llm'
+import { isPng } from '../tools'
 
 type Pair = [string, string]
 
@@ -158,6 +159,10 @@ function pairs(text: string): Pair[] {
     })
 }
 
+// PNG helpers are shared with the PubChem structure images; re-exported here so
+// existing `../kegg` imports (and their tests) keep resolving.
+export { isPng, pngDimensions, pngDataUrl } from '../tools'
+
 export class KeggClient {
   constructor(private readonly signal?: AbortSignal) {}
 
@@ -256,6 +261,41 @@ export class KeggClient {
     // An all-unknown get returns 404. A mixed request returns only the records KEGG found.
     const body = await this.fetchText(`get/${entryIdList(ids)}`, { allow404: true })
     return parseAtext(body)
+  }
+
+  /**
+   * Official REST `get/<map>/image` returns the pathway map as PNG. It goes through
+   * the same /kegg-rest/ proxy as the text endpoints (www.kegg.jp is NOT proxied).
+   */
+  async pathwayImage(id: string): Promise<Uint8Array> {
+    if (!/^map\d{5}$/.test(id)) throw new Error('Provide a KEGG map id for the pathway image')
+    await schedule(this.signal)
+    const timeout = AbortSignal.timeout(20_000)
+    const signal = this.signal ? AbortSignal.any([this.signal, timeout]) : timeout
+    let response: Response
+    let bytes: Uint8Array
+    try {
+      response = await fetch(`${import.meta.env.BASE_URL}kegg-rest/get/${id}/image`, {
+        signal,
+        headers: { Accept: 'image/png' },
+      })
+      bytes = new Uint8Array(await response.arrayBuffer())
+    } catch (error) {
+      this.signal?.throwIfAborted()
+      throw new Error(
+        `KEGG pathway image request failed (network/timeout): ${(error as Error).message}. Check the /kegg-rest/ proxy to https://rest.kegg.jp.`,
+      )
+    }
+    this.signal?.throwIfAborted()
+    if (!response.ok)
+      throw new Error(
+        `KEGG REST HTTP ${response.status} for get/${id}/image; the map image is unavailable, not evidence about the pathway.`,
+      )
+    if (!isPng(bytes))
+      throw new Error(
+        'KEGG pathway image response was not a PNG. Configure /kegg-rest/ to forward to https://rest.kegg.jp instead of the SPA fallback.',
+      )
+    return bytes
   }
 
   async pathwayCompounds(ids: string[]): Promise<Map<string, Set<string>>> {

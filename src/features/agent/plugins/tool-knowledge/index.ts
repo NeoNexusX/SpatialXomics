@@ -7,19 +7,27 @@
 import type { Context } from '@deepseek-ai/cordis'
 import {
   defineTool,
-  batchInput,
   renderBatch,
   batchPageParameters,
+  excerpt,
   getJson,
+  isPng,
+  pngDataUrl,
+  pngDimensions,
   take,
   MAX_BATCH_QUERIES,
   EVIDENCE_BATCH_BUDGET,
   TOOL_RESULT_CHARS_EVIDENCE,
 } from '../tools'
-import { hmdbLookupById, hmdbLookupByName } from './hmdb'
+import type { ToolImage } from '../llm'
+import { hmdbLookupById } from './hmdb'
 
 const PUBCHEM_BASE = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug'
+const PUBCHEM_VIEW_BASE = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug_view'
 const OLS4_BASE = 'https://www.ebi.ac.uk/ols4/api'
+
+/** 附件管线一次最多 4 张图，结构图每个名字一张，所以 withImage 的批量上限就是 4。 */
+const MAX_STRUCTURE_IMAGES = 4
 
 interface PubChemFormulaProperty {
   CID?: string | number
@@ -39,11 +47,50 @@ interface OlsChebiDoc {
 
 // ---- PubChem ----
 
-/** 按名称查询化合物：属性 + 同义词摘要 */
-export async function pubchemLookupCompound(name: string, signal?: AbortSignal): Promise<string> {
+/**
+ * PUG-View 的 Record Description：PubChem 唯一的叙述性生物学摘要（来源如 DrugBank、
+ * HMDB、E. coli/酵母代谢物注释）。属性端点只给分子式与标识符，答不了"这是什么、
+ * 在生物体里干什么"。递归找 TOCHeading 命中即可，不依赖固定嵌套层数。
+ */
+interface PugViewSection {
+  TOCHeading?: string
+  Section?: PugViewSection[]
+  Information?: { Name?: string; Value?: { StringWithMarkup?: { String?: string }[] } }[]
+}
+
+function recordDescription(view: unknown): string {
+  const strings: string[] = []
+  const collect = (node: PugViewSection) => {
+    for (const info of node.Information ?? []) {
+      // "See Also" 是导航项（"annotation moved to … View More"），不是描述正文
+      if (info?.Name === 'See Also') continue
+      for (const item of info?.Value?.StringWithMarkup ?? []) {
+        if (typeof item?.String === 'string') strings.push(item.String)
+      }
+    }
+    for (const section of node.Section ?? []) collect(section)
+  }
+  const find = (node: unknown) => {
+    if (!node || typeof node !== 'object') return
+    const section = node as PugViewSection
+    if (section.TOCHeading === 'Record Description') {
+      collect(section)
+      return
+    }
+    for (const value of Object.values(node)) find(value)
+  }
+  find(view)
+  return excerpt(strings.join(' '), 2000)
+}
+
+/** 按名称查询化合物：属性 + 生物学描述 + 同义词摘要。CID 一并回传，供结构图使用。 */
+async function pubchemLookupRecord(
+  name: string,
+  signal?: AbortSignal,
+): Promise<{ text: string; cid: number }> {
   if (!name.trim()) throw new Error('Provide a nonempty compound name')
   const enc = encodeURIComponent(name.trim())
-  const propsUrl = `${PUBCHEM_BASE}/compound/name/${enc}/property/MolecularFormula,MonoisotopicMass,MolecularWeight,ConnectivitySMILES,InChIKey,IUPACName/JSON`
+  const propsUrl = `${PUBCHEM_BASE}/compound/name/${enc}/property/MolecularFormula,InChIKey/JSON`
   const props = (await getJson(propsUrl, { signal }))?.PropertyTable?.Properties?.[0]
   if (!props) throw new Error(`No compound found for name "${name}"`)
 
@@ -51,14 +98,21 @@ export async function pubchemLookupCompound(name: string, signal?: AbortSignal):
     `name: ${name}`,
     `cid: ${props.CID}`,
     `formula: ${props.MolecularFormula}`,
-    `monoisotopic_mass: ${props.MonoisotopicMass}`,
-    `average_mass: ${props.MolecularWeight ?? props.AverageMass}`,
-    `iupac_name: ${props.IUPACName}`,
-    `smiles: ${props.ConnectivitySMILES ?? props.CanonicalSMILES}`,
     `inchikey: ${props.InChIKey}`,
   ]
 
-  // 同义词单独一个端点；失败不致命（属性已足够）
+  // 描述与同义词各走一个端点；失败不致命（属性已足够），但取消必须冒泡
+  try {
+    const view = await getJson(
+      `${PUBCHEM_VIEW_BASE}/data/compound/${props.CID}/JSON?heading=Record%20Description`,
+      { signal },
+    )
+    const description = recordDescription(view)
+    if (description) lines.push(`description: ${description}`)
+  } catch {
+    signal?.throwIfAborted() // Cancellation must not become a successful partial result.
+  }
+
   try {
     const syn = (
       await getJson(`${PUBCHEM_BASE}/compound/cid/${props.CID}/synonyms/JSON`, { signal })
@@ -71,7 +125,43 @@ export async function pubchemLookupCompound(name: string, signal?: AbortSignal):
 
   lines.push(`page: https://pubchem.ncbi.nlm.nih.gov/compound/${props.CID}`)
   lines.push(`source: https://pubchem.ncbi.nlm.nih.gov/compound/${props.CID}`)
-  return lines.join('\n')
+  return { text: lines.join('\n'), cid: Number(props.CID) }
+}
+
+/** 按名称查询化合物：属性 + 生物学描述 + 同义词摘要 */
+export async function pubchemLookupCompound(name: string, signal?: AbortSignal): Promise<string> {
+  return (await pubchemLookupRecord(name, signal)).text
+}
+
+/**
+ * 官方 PUG REST `compound/cid/<CID>/PNG`：该 CID 的二维结构图，与文本记录同源同 CID，
+ * 所以图与分子式/InChIKey 天然对得上。UI 的 PubChem 对话框用的是同一个端点。
+ * 显式要 500×500：默认与 `image_size=large` 都只给 300×300，键长与立体标记会看不清。
+ */
+export async function pubchemStructureImage(
+  cid: number,
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
+  if (!Number.isSafeInteger(cid) || cid <= 0) throw new Error('Provide a PubChem CID')
+  const url = `${PUBCHEM_BASE}/compound/cid/${cid}/PNG?image_size=500x500`
+  const timeout = AbortSignal.timeout(20_000)
+  const combined = signal ? AbortSignal.any([signal, timeout]) : timeout
+  let response: Response
+  let bytes: Uint8Array
+  try {
+    response = await fetch(url, { signal: combined, headers: { Accept: 'image/png' } })
+    bytes = new Uint8Array(await response.arrayBuffer())
+  } catch (error) {
+    signal?.throwIfAborted()
+    throw new Error(`structure image request failed (network/timeout): ${(error as Error).message}`)
+  }
+  signal?.throwIfAborted()
+  if (!response.ok) throw new Error(`structure image HTTP ${response.status}`)
+  if (!isPng(bytes)) throw new Error('structure image response was not a PNG')
+  // Same decoded-size ceiling the attachment pipeline enforces; fail with a readable reason.
+  if (bytes.length > 2 * 1024 * 1024)
+    throw new Error('structure image exceeds the 2 MB image limit')
+  return bytes
 }
 
 /** 按分子式检索化合物：返回公式匹配的候选列表（含精确质量） */
@@ -156,13 +246,16 @@ export function apply(ctx: Context) {
   /**
    * pubchem_compound_lookup —— 按名称查 PubChem 化合物。
    *
-   * 作用：分子式、精确（单同位素）质量、平均质量、IUPAC 名、SMILES/InChIKey、同义词
-   * 摘要（≤10，独立端点、失败不致命）与官方 PubChem 页面链接（可直接引用或交给用户）。
-   * 用于核对候选注释或获取分子事实。批量：多个名称一次传 names，单个失败不拖垮整批。
+   * 作用：分子式、InChIKey、**Record Description 生物学摘要**（PUG-View，≤2000 字符）、
+   * 同义词摘要（≤10）与官方 PubChem 页面链接。描述与同义词各走独立端点、失败不致命。
+   * 用于综合核对候选注释或获取分子事实。批量：多个名称一次传 names，单个失败不拖垮整批。
+   * 每个名字最多 3 个上游请求（属性 + 描述 + 同义词），PubChem 限 5 req/s；
+   * withImage 时再加一个结构图请求。
    *
    * 参数：
-   * - name (string, 可选)：单个名称，如 "PC(16:0/18:1)" 或 "glucose"
-   * - names (string[], 可选)：批量形式（≤25）
+   * - names (string[], 必填)：批量形式（≤25）
+   * - withImage (boolean, 可选)：附该 CID 的二维结构图 PNG；开启时 names 只能 1–4 个、
+   *   且不接受 offset/limit（附件管线一次最多 4 张图）。图取不到不影响文本。
    * - offset / limit (integer, 可选)：批量输入分页（Evidence 语义：默认 5、cap 8）
    */
   ctx.tools.register(
@@ -171,44 +264,103 @@ export function apply(ctx: Context) {
       timeoutMs: 60000,
       category: 'chemistry',
       description:
-        'Look up a named chemical compound on PubChem when molecular properties are needed or an annotation ' +
-        'candidate must be checked. Returns formula, monoisotopic and average mass, IUPAC name, SMILES, ' +
-        'InChIKey, up to 10 synonyms and the official CID page. Cross-check the returned properties against ' +
-        'the candidate; a name hit alone does not establish identity. Batch with "names"; one failed name ' +
-        'does not block the rest.',
+        'Look up named chemical compounds on PubChem when candidate identity or biological context is needed. ' +
+        'Returns the queried name, CID, formula, InChIKey, a narrative Record Description (up to 2000 characters), ' +
+        'up to 10 synonyms and the official CID page. Judge identity from the returned record as a whole: ' +
+        'whether the name/synonyms actually denote the intended candidate, formula consistency, structural ' +
+        'identifier and narrative context. Formula alone is not identity proof, and a name hit alone does not ' +
+        'establish identity. Library masses are not returned because they derive from the same formula and add ' +
+        'no independent evidence. Batch with "names"; one failed name does not block the rest. ' +
+        'Add withImage=true to attach the 2D structure of each returned CID as a PNG, so the report can show ' +
+        'the molecule instead of only linking its record page; the image comes from the same CID as the text, ' +
+        'so it depicts whatever the name actually resolved to — check the identity first. withImage accepts ' +
+        '1–4 names and no offset/limit. A missing image never invalidates the text.',
       parameters: {
         ...batchPageParameters,
         offset: {
           type: 'integer',
           description:
-            'Zero-based start into the batch name inputs (default 0); continue with nextOffset.',
+            'Zero-based start into the batch name inputs (default 0); continue with nextOffset. Not allowed with withImage.',
         },
         limit: {
           type: 'integer',
           description:
-            'Names processed per page, default 5, max 8; this pages inputs, not synonyms.',
-        },
-        name: {
-          type: 'string',
-          description:
-            'Single compound name, e.g. "PC(16:0/18:1)" or "glucose"; use "names" for several.',
+            'Names processed per page, default 5, max 8; this pages inputs, not synonyms. Not allowed with withImage.',
         },
         names: {
           type: 'array',
           items: { type: 'string' },
           maxItems: MAX_BATCH_QUERIES,
+          required: true,
           description: 'Batch compound names, each queried independently.',
+        },
+        withImage: {
+          type: 'boolean',
+          description:
+            'Attach each returned CID’s 2D structure PNG (default false). Requires 1–4 names and no offset/limit.',
         },
       },
       async execute(args, exec) {
-        const names = batchInput<string>(args.names, args.name)
-        if (names.length === 0) throw new Error('Provide "name" or "names"')
-        return renderBatch(
+        const names = args.names
+        if (names.length === 0) throw new Error('Provide "names"')
+        if (args.withImage !== true) {
+          return renderBatch(
+            names,
+            (n) => n,
+            (n) => pubchemLookupCompound(n, exec.signal),
+            { ...args, session: exec.session, signal: exec.signal },
+          )
+        }
+        if (names.length > MAX_STRUCTURE_IMAGES) {
+          throw new Error(
+            `withImage accepts 1–${MAX_STRUCTURE_IMAGES} names (one image each); look up the rest without withImage`,
+          )
+        }
+        if (args.offset !== undefined || args.limit !== undefined) {
+          throw new Error('withImage does not paginate; pass 1–4 names without offset/limit')
+        }
+        // renderBatch keeps the per-name error handling and archive behaviour; the CID
+        // of each successful lookup is captured so the image matches the returned record.
+        const cids = new Map<string, number>()
+        const text = await renderBatch(
           names,
           (n) => n,
-          (n) => pubchemLookupCompound(n, exec.signal),
-          { ...args, session: exec.session, signal: exec.signal },
+          async (n) => {
+            const record = await pubchemLookupRecord(n, exec.signal)
+            cids.set(n, record.cid)
+            return record.text
+          },
+          { session: exec.session, signal: exec.signal },
         )
+        const images: ToolImage[] = []
+        const unavailable: string[] = []
+        for (const [name, cid] of cids) {
+          exec.signal?.throwIfAborted()
+          try {
+            const bytes = await pubchemStructureImage(cid, exec.signal)
+            const { width, height } = pngDimensions(bytes)
+            images.push({
+              dataUrl: pngDataUrl(bytes),
+              mime: 'image/png',
+              width,
+              height,
+              label: `${name} (PubChem CID ${cid})`,
+            })
+          } catch (error) {
+            exec.signal?.throwIfAborted()
+            unavailable.push(
+              `- ${name} (CID ${cid}): ${error instanceof Error ? error.message : String(error)}`,
+            )
+          }
+        }
+        const body = unavailable.length
+          ? `${text}\n\nstructure images unavailable (text above is unaffected; link the CID page instead):\n${unavailable.join('\n')}`
+          : text
+        return images.length ? { text: body, images } : body
+      },
+      output: {
+        render: (_args, value) => (typeof value === 'string' ? value : value.text),
+        images: (_args, value) => (typeof value === 'string' ? undefined : value.images),
       },
     }),
   )
@@ -261,12 +413,11 @@ export function apply(ctx: Context) {
    * metabolite）：标签、同义词（≤4）、定义摘录（≤220 字符）、CHEBI 编号与官方页面
    * 链接（ID 优先取 short_form，缺失回退 IRI 末段）。结果按 OLS4 相关性排序、不是
    * 身份验证——第一条不保证是查询分子（可能是衍生物），需自行核对返回标签；身份
-   * 核验用 kegg_compound（FORMULA/EXACT_MASS）或 pubchem_compound_lookup。
+   * 核验综合 kegg_compound 或 pubchem_compound_lookup 的返回记录，不只比对分子式。
    * 批量：多个查询一次传 queries。
    *
    * 参数：
-   * - query (string, 可选)：单个名称或 CHEBI 编号片段
-   * - queries (string[], 可选)：批量形式（≤25）
+   * - queries (string[], 必填)：批量名称或 CHEBI 编号片段（≤25）
    * - maxResults (integer, 可选)：每查询返回词条数，默认 5、cap 10
    * - offset / limit (integer, 可选)：批量输入分页
    */
@@ -280,7 +431,7 @@ export function apply(ctx: Context) {
         'definition or related terms are needed. Returns relevance-ranked terms with labels, synonyms, ' +
         'definition excerpts, CHEBI ids and official page links. Review the returned labels: relevance ' +
         'ranking is not identity verification, and the first hit may be a derivative or related compound. ' +
-        'For identity checks compare formula and exact mass via kegg_compound or pubchem_compound_lookup.',
+        'For identity checks synthesize the returned record from kegg_compound or pubchem_compound_lookup, not formula alone.',
       parameters: {
         ...batchPageParameters,
         offset: {
@@ -292,15 +443,12 @@ export function apply(ctx: Context) {
           type: 'integer',
           description: 'Queries processed per page, default 5, max 8; pages inputs.',
         },
-        query: {
-          type: 'string',
-          description: 'Single compound name or CHEBI id fragment; use "queries" for several.',
-        },
         queries: {
           type: 'array',
           items: { type: 'string' },
           maxItems: MAX_BATCH_QUERIES,
-          description: 'Batch names or id fragments, each searched independently.',
+          required: true,
+          description: 'Batch names or CHEBI id fragments, each searched independently.',
         },
         maxResults: {
           type: 'integer',
@@ -308,8 +456,8 @@ export function apply(ctx: Context) {
         },
       },
       async execute(args, exec) {
-        const queries = batchInput<string>(args.queries, args.query)
-        if (queries.length === 0) throw new Error('Provide "query" or "queries"')
+        const queries = args.queries
+        if (queries.length === 0) throw new Error('Provide "queries"')
         const max = Math.min(Math.max(args.maxResults ?? 5, 1), 10)
         return renderBatch(
           queries,
@@ -328,19 +476,17 @@ export function apply(ctx: Context) {
    * IUPAC 与传统 IUPAC 名、分子式与精确/平均质量、SMILES/InChI/InChIKey、
    * description（≤1000 字符、按句界截断）、chemical taxonomy（界>超类>类>子类>直接
    * 父类、分子骨架、替代父类/取代基）、Role 树的叶子术语、组织/细胞定位/生物标本/
-   * 通路、normal concentrations（生物流体、数值、单位、年龄/性别/状态、首条文献），
+   * 通路（名称 + KEGG map id，便于接着查成员或通路图）、normal concentrations
+   * （生物流体、数值、单位、年龄/性别/状态、首条文献），
    * 以及 External Links 的全部 `*_id`；输出行统一使用 HMDB 代谢物页面的字段标签
    * （Common Name / Traditional Name / InChI Identifier / KEGG Compound ID 等），
    * 附规范 page 与快照时间；档案 XML 经同源中继
    * /hmdb-archive/<id>.xml 取回（服务端跟随 Wayback 2id_ 重定向），绕开归档站
    * 缺失的 CORS 头；网络/中继失败固定降级为链接模式（给 page+archive 链接，不脑补）。
-   * 名称模式用 Exa 发现候选 HMDB 编号（调用方核对后再按 id 查详情）。m/z 检索改用
-   * kegg_mass_search。批量：一次传 ids 或 queries。
+   * m/z 检索改用 kegg_mass_search。批量：一次传 ids。
    *
    * 参数：
-   * - id / ids (string / string[], 可选)：HMDB accession（如 "HMDB0003502"），
-   *   ids 逐个串行取（≤25）
-   * - query / queries (string / string[], 可选)：代谢物名称，走 Exa 候选编号发现
+   * - ids (string[], 必填)：HMDB accession（如 "HMDB0003502"），逐个串行取（≤25）
    * - offset / limit (integer, 可选)：批量输入分页
    */
   ctx.tools.register(
@@ -350,65 +496,45 @@ export function apply(ctx: Context) {
       maxResultChars: TOOL_RESULT_CHARS_EVIDENCE,
       category: 'biology',
       description:
-        'Look up an HMDB metabolite by accession in archived official XML via the Internet Archive ' +
-        'Wayback Machine. Returns the recorded profile — Record Information (HMDB id, update date), ' +
-        'Metabolite Identification (common name, description truncated to 1000 characters, synonyms, ' +
-        'formula and masses, IUPAC/traditional name, CAS, SMILES/InChI/InChIKey), chemical taxonomy, ' +
-        'Role terms, biological properties, normal concentrations and external links to other databases ' +
-        '— with the canonical HMDB page and archive snapshot time. Lines carry the HMDB metabolite page ' +
-        'labels (Common Name, Traditional Name, InChI Identifier, KEGG Compound ID, …) so they map ' +
-        'straight to the page. Query by accession for the full profile; when only a name is known, a ' +
-        'name query discovers candidate HMDB ids — review the candidates, then query by id. Archive XML ' +
-        'is fetched through the application same-origin relay (the archive sends no browser CORS ' +
-        'headers); on network/relay failure the tool degrades to link-only output and never invents HMDB ' +
-        'data. For m/z candidate search use kegg_mass_search instead. BATCHING: use "ids" or "queries" ' +
-        'in ONE call.',
+        'Look up HMDB metabolites by accession in archived official XML via the Internet Archive Wayback ' +
+        'Machine. Returns the recorded profile — Record Information, Metabolite Identification, chemical ' +
+        'taxonomy, Role terms, biological properties, normal concentrations and external links — with the ' +
+        'canonical HMDB page and archive snapshot time. Pathway lines carry the KEGG map id, so membership ' +
+        'can be checked with kegg_pathway(membersOf=[...]) and the map image fetched with ' +
+        'kegg_pathway(ids=[...], withImage=true) without guessing a map from its name. Lines carry the HMDB ' +
+        'metabolite page labels so they map straight to the page. Query by accession only; name-based candidate ' +
+        'discovery is not part of this tool. Archive XML is fetched through the application same-origin relay ' +
+        '(the archive sends no browser CORS headers); on network/relay failure the tool degrades to link-only ' +
+        'output and never invents HMDB data. For m/z candidate search use kegg_mass_search instead. BATCHING: ' +
+        'use "ids" in ONE call; send only 2–3 accessions per call because each archive fetch can take up to ' +
+        '20 s under a 90 s soft deadline.',
       parameters: {
         ...batchPageParameters,
         offset: {
           type: 'integer',
           description:
-            'Zero-based start into the batch id/name inputs (default 0); continue with nextOffset.',
+            'Zero-based start into the batch id inputs (default 0); continue with nextOffset.',
         },
         limit: {
           type: 'integer',
-          description:
-            'Inputs processed per page, default 5, max 8; pages the combined id+name batch.',
-        },
-        id: {
-          type: 'string',
-          description: 'Single HMDB accession, e.g. "HMDB0003502"; use "ids" for several.',
+          description: 'Inputs processed per page, default 5, max 8; pages the id batch.',
         },
         ids: {
           type: 'array',
           items: { type: 'string' },
           maxItems: MAX_BATCH_QUERIES,
-          description: 'Up to 25 accessions, fetched sequentially; combinable with name queries.',
-        },
-        query: {
-          type: 'string',
-          description:
-            'Single metabolite name for candidate-id discovery; the result is candidate ids, not confirmed identity.',
-        },
-        queries: {
-          type: 'array',
-          items: { type: 'string' },
-          maxItems: MAX_BATCH_QUERIES,
-          description: 'Up to 25 names, each resolved to candidate accessions for review.',
+          required: true,
+          description: 'Up to 25 accessions, fetched sequentially; send 2–3 per call in practice.',
         },
       },
       async execute(args, exec) {
         // Keep the raw strings: validity is enforced per item inside the render
         // callback (renderBatch isolates a bad id instead of failing the batch).
-        const ids = batchInput<string>(args.ids, args.id)
-        const queries = batchInput<string>(args.queries, args.query)
-        if (ids.length === 0 && queries.length === 0) {
-          throw new Error('Provide "id"/"ids" (HMDB accession) or "query"/"queries" (name)')
+        const ids = args.ids
+        if (ids.length === 0) {
+          throw new Error('Provide "ids" (HMDB accession)')
         }
-        const items = [
-          ...ids.map((id) => ({ kind: 'id' as const, value: id })),
-          ...queries.map((query) => ({ kind: 'name' as const, value: query })),
-        ]
+        const items = ids.map((id) => ({ kind: 'id' as const, value: id }))
         // 90s soft budget inside the 120s tool timeout via renderBatch's
         // deadline: items that would start past it are left for the next page
         // (nextOffset footer) instead of being degraded in place — a degraded
@@ -418,10 +544,7 @@ export function apply(ctx: Context) {
         return renderBatch(
           items,
           (item) => item.value,
-          (item) =>
-            item.kind === 'id'
-              ? hmdbLookupById(item.value, exec.signal)
-              : hmdbLookupByName(item.value, exec.signal),
+          (item) => hmdbLookupById(item.value, exec.signal),
           {
             ...args,
             ...EVIDENCE_BATCH_BUDGET,

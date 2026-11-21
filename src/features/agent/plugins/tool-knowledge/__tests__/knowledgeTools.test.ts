@@ -6,20 +6,9 @@ import {
   pubchemLookupCompound,
   pubchemSearchFormula,
 } from '../index'
-import {
-  hmdbLookupById,
-  hmdbLookupByName,
-  formatHmdbProfile,
-  parseHmdbXml,
-  resolveHmdbIds,
-  truncateDescription,
-} from '../hmdb'
-import { searchExaResults } from '../../tool-web-search'
+import { hmdbLookupById, formatHmdbProfile, parseHmdbXml, truncateDescription } from '../hmdb'
 import { ToolRuntime } from '../../tools'
 import { SystemPrompt } from '../../system-prompt'
-
-vi.mock('../../tool-web-search', () => ({ searchExaResults: vi.fn() }))
-const exaResultsMock = vi.mocked(searchExaResults)
 
 /** fetch mock：按 URL 前缀/包含串路由到固定响应 */
 function mockFetch(
@@ -46,7 +35,6 @@ function mockFetch(
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  exaResultsMock.mockReset()
 })
 
 // Mirrors the real archived XML structure (verified 2026-11-11 against the
@@ -156,7 +144,34 @@ async function makeKnowledgeContext(): Promise<Context> {
 }
 
 describe('pubchemLookupCompound', () => {
-  it('formats properties + synonyms + source link', async () => {
+  /** PUG-View 的真实嵌套：Record → Section → Section(Record Description) → Information */
+  const viewBody = (text: string) => ({
+    Record: {
+      Section: [
+        {
+          TOCHeading: 'Names and Identifiers',
+          Section: [
+            {
+              TOCHeading: 'Record Description',
+              Information: [
+                { ReferenceNumber: 12, Value: { StringWithMarkup: [{ String: text }] } },
+                {
+                  Name: 'See Also',
+                  Value: {
+                    StringWithMarkup: [
+                      { String: 'See also: Dextrose (annotation moved to) ... View More' },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  })
+
+  it('formats properties + description + synonyms + source link', async () => {
     const fetchMock = mockFetch([
       {
         match: '/property/',
@@ -177,6 +192,10 @@ describe('pubchemLookupCompound', () => {
         },
       },
       {
+        match: '/pug_view/',
+        body: viewBody('Glucose is a simple sugar and an important energy source.'),
+      },
+      {
         match: '/synonyms/',
         body: {
           InformationList: { Information: [{ CID: 5863, Synonym: ['glucose', 'D-glucose', ''] }] },
@@ -188,12 +207,38 @@ describe('pubchemLookupCompound', () => {
 
     expect(out).toContain('cid: 5863')
     expect(out).toContain('formula: C6H12O6')
-    expect(out).toContain('monoisotopic_mass: 180.063')
+    expect(out).not.toContain('monoisotopic_mass:')
+    expect(out).not.toContain('average_mass:')
+    expect(out).not.toContain('iupac_name:')
+    expect(out).not.toContain('smiles:')
+    expect(out).toContain('description: Glucose is a simple sugar and an important energy source.')
+    // "See Also" 是导航项，不是描述正文
+    expect(out).not.toContain('annotation moved to')
     // 空同义词被过滤
     expect(out).toContain('synonyms: glucose; D-glucose')
     expect(out).toContain('page: https://pubchem.ncbi.nlm.nih.gov/compound/5863')
     expect(out).toContain('https://pubchem.ncbi.nlm.nih.gov/compound/5863')
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(fetchMock.mock.calls[1]![0]).toContain('/pug_view/data/compound/5863/JSON')
+    expect(fetchMock.mock.calls[1]![0]).toContain('heading=Record%20Description')
+  })
+
+  it('survives a description endpoint failure (props and synonyms still returned)', async () => {
+    mockFetch([
+      {
+        match: '/property/',
+        body: { PropertyTable: { Properties: [{ CID: 7, MolecularFormula: 'C2H6O' }] } },
+      },
+      { match: '/pug_view/', ok: false, status: 503, body: 'unavailable' },
+      {
+        match: '/synonyms/',
+        body: { InformationList: { Information: [{ Synonym: ['ethanol'] }] } },
+      },
+    ])
+    const out = await pubchemLookupCompound('ethanol')
+    expect(out).toContain('cid: 7')
+    expect(out).toContain('synonyms: ethanol')
+    expect(out).not.toContain('description:')
   })
 
   it('survives synonyms endpoint failure (props still returned)', async () => {
@@ -231,7 +276,7 @@ describe('pubchemLookupCompound', () => {
     try {
       const tool = ctx.tools.list().find((item) => item.name === 'pubchem_compound_lookup')!
       expect(tool.description).toContain('official CID page')
-      expect(tool.description).toContain('Cross-check the returned properties')
+      expect(tool.description).toContain('Judge identity from the returned record as a whole')
       const result = await ctx.tools.execute({
         callId: 'pubchem-pages',
         name: 'pubchem_compound_lookup',
@@ -246,6 +291,112 @@ describe('pubchemLookupCompound', () => {
     } finally {
       await ctx.fiber.dispose()
     }
+  })
+})
+
+/** Minimal PNG: signature + IHDR carrying width/height, padded past the header. */
+function pngBytes(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(33)
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0)
+  bytes.set([0, 0, 0, 13], 8)
+  bytes.set([0x49, 0x48, 0x44, 0x52], 12) // IHDR
+  new DataView(bytes.buffer).setUint32(16, width)
+  new DataView(bytes.buffer).setUint32(20, height)
+  return bytes
+}
+
+describe('pubchem_compound_lookup withImage', () => {
+  /** alpha → CID 101, beta → CID 202; PNG requests route by CID. */
+  function stubPubChem(png: (cid: number) => Response) {
+    const fetcher = vi.fn(async (url: string) => {
+      const cid = url.includes('/name/alpha/') || url.includes('/cid/101/') ? 101 : 202
+      if (url.includes('/property/')) {
+        return Response.json({
+          PropertyTable: { Properties: [{ CID: cid, MolecularFormula: 'C6H12O6' }] },
+        })
+      }
+      if (url.includes('/PNG')) return png(cid)
+      return Response.json({ InformationList: { Information: [{ Synonym: [] }] } })
+    })
+    vi.stubGlobal('fetch', fetcher)
+    return fetcher
+  }
+
+  const pngResponse = () =>
+    new Response(pngBytes(500, 500).buffer as ArrayBuffer, {
+      headers: { 'content-type': 'image/png' },
+    })
+
+  async function call(args: Record<string, unknown>) {
+    const ctx = await makeKnowledgeContext()
+    try {
+      return await ctx.tools.execute({
+        callId: 'pubchem-image',
+        name: 'pubchem_compound_lookup',
+        arguments: args,
+        signal: new AbortController().signal,
+      })
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  }
+
+  it('attaches one structure per returned CID, labelled with the queried name', async () => {
+    const fetcher = stubPubChem(pngResponse)
+    const result = await call({ names: ['alpha', 'beta'], withImage: true })
+    expect(result.isError).toBe(false)
+    expect(result.content).toContain('cid: 101')
+    expect(result.images).toHaveLength(2)
+    expect(result.images![0]).toMatchObject({
+      mime: 'image/png',
+      width: 500,
+      height: 500,
+      label: 'alpha (PubChem CID 101)',
+    })
+    expect(result.images![1]!.label).toBe('beta (PubChem CID 202)')
+    const urls = fetcher.mock.calls.map((c) => c[0] as string)
+    expect(urls).toContain(
+      'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/101/PNG?image_size=500x500',
+    )
+    expect(urls).toContain(
+      'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/202/PNG?image_size=500x500',
+    )
+  })
+
+  it('stays text-only unless withImage is requested', async () => {
+    const fetcher = stubPubChem(pngResponse)
+    const result = await call({ names: ['alpha'] })
+    expect(result.images).toBeUndefined()
+    expect(fetcher.mock.calls.some((c) => (c[0] as string).includes('/PNG'))).toBe(false)
+  })
+
+  it('keeps the text and reports the gap when one structure image fails', async () => {
+    stubPubChem((cid) => (cid === 101 ? pngResponse() : new Response('nope', { status: 503 })))
+    const result = await call({ names: ['alpha', 'beta'], withImage: true })
+    expect(result.isError).toBe(false)
+    expect(result.content).toContain('cid: 202')
+    expect(result.content).toContain('structure images unavailable')
+    expect(result.content).toContain('beta (CID 202): structure image HTTP 503')
+    expect(result.images).toHaveLength(1)
+  })
+
+  it('returns text without images when every structure image fails', async () => {
+    stubPubChem(() => new Response('<!doctype html>', { status: 200 }))
+    const result = await call({ names: ['alpha'], withImage: true })
+    expect(result.isError).toBe(false)
+    expect(result.images).toBeUndefined()
+    expect(result.content).toContain('structure image response was not a PNG')
+  })
+
+  it.each([
+    ['more than four names', { names: ['a', 'b', 'c', 'd', 'e'], withImage: true }, '1–4 names'],
+    ['offset', { names: ['alpha'], withImage: true, offset: 1 }, 'does not paginate'],
+    ['limit', { names: ['alpha'], withImage: true, limit: 2 }, 'does not paginate'],
+  ])('rejects withImage with %s', async (_label, args, message) => {
+    stubPubChem(pngResponse)
+    const result = await call(args)
+    expect(result.isError).toBe(true)
+    expect(result.content).toContain(message)
   })
 })
 
@@ -380,6 +531,8 @@ describe('chebiLookup', () => {
       expect(tool.description).toContain('kegg_compound')
       expect(tool.description).toContain('pubchem_compound_lookup')
       expect(tool.description).toContain('official page links')
+      expect(Object.keys(tool.parameters.properties)).not.toContain('query')
+      expect(tool.parameters.required).toContain('queries')
     } finally {
       await ctx.fiber.dispose()
     }
@@ -395,13 +548,16 @@ it('uses supported PubChem property names and reads current response keys', asyn
           Properties: [
             {
               CID: 5793,
-              MolecularWeight: '180.16',
-              ConnectivitySMILES: 'C(O)C',
-              MonoisotopicMass: '180.063',
+              MolecularFormula: 'C6H12O6',
+              InChIKey: 'WQZGKKKJIJFFOK-GASJEMHNSA-N',
             },
           ],
         },
       },
+    },
+    {
+      match: '/pug_view/',
+      body: { Record: {} },
     },
     {
       match: '/synonyms/',
@@ -410,10 +566,12 @@ it('uses supported PubChem property names and reads current response keys', asyn
   ])
   const signal = new AbortController().signal
   const result = await pubchemLookupCompound('glucose', signal)
-  expect(result).toContain('average_mass: 180.16')
-  expect(result).toContain('smiles: C(O)C')
-  expect(fetcher.mock.calls[0]![0]).toContain('MolecularWeight,ConnectivitySMILES')
-  expect(fetcher.mock.calls[1]![0]).toContain('/cid/5793/synonyms/')
+  expect(result).toContain('formula: C6H12O6')
+  expect(result).toContain('inchikey: WQZGKKKJIJFFOK-GASJEMHNSA-N')
+  expect(result).not.toContain('average_mass:')
+  expect(result).not.toContain('smiles:')
+  expect(fetcher.mock.calls[0]![0]).toContain('MolecularFormula,InChIKey')
+  expect(fetcher.mock.calls[2]![0]).toContain('/cid/5793/synonyms/')
 })
 
 it('propagates cancellation during optional PubChem synonyms rather than returning partial success', async () => {
@@ -467,7 +625,8 @@ describe('hmdb_lookup archived profiles', () => {
     expect(out).toContain('Cellular Locations (1): Cytoplasm')
     expect(out).toContain('Biospecimen Locations (2): Blood; Urine')
     expect(out).not.toContain('diseases')
-    expect(out).toContain('Pathways (1): Example pathway')
+    expect(out).toContain('Pathways (1):')
+    expect(out).toContain('- Example pathway [map00010](https://www.kegg.jp/pathway/map00010)')
     expect(out).toContain('Normal Concentrations (1):')
     expect(out).toContain('- Blood: 4.5 (4.0-5.0) uM, Adult, Both, Normal')
     expect(out).toContain('PMID: 11417869')
@@ -680,78 +839,23 @@ describe('hmdb_lookup archived profiles', () => {
   })
 })
 
-describe('hmdb_lookup name resolution', () => {
-  it('extracts and deduplicates official HMDB candidates with titles and excerpts', async () => {
-    exaResultsMock.mockResolvedValue([
-      {
-        url: 'https://hmdb.ca/metabolites/HMDB0003502',
-        title: 'Example | HMDB',
-        excerpt: 'Archived example',
-      },
-      {
-        url: 'https://www.hmdb.ca/metabolites/HMDB0003502?view=1',
-        title: 'Duplicate',
-        excerpt: 'Duplicate excerpt',
-      },
-      {
-        url: 'https://example.org/HMDB0003502',
-        title: 'Unrelated',
-        excerpt: 'Not official',
-      },
-      {
-        url: 'https://hmdb.ca/metabolites/HMDB0000002',
-        title: 'Long excerpt',
-        excerpt: 'y'.repeat(450),
-      },
-    ])
-    const candidates = await resolveHmdbIds('example')
-    expect(candidates).toEqual([
-      { id: 'HMDB0003502', title: 'Example | HMDB', excerpt: 'Archived example' },
-      { id: 'HMDB0000002', title: 'Long excerpt', excerpt: 'y'.repeat(400) },
-    ])
-    expect(exaResultsMock).toHaveBeenCalledWith(
-      'example HMDB metabolite',
-      5,
-      expect.any(AbortSignal),
-      expect.any(String),
-    )
-    const out = await hmdbLookupByName('example')
-    expect(out).toContain('keyword relevance is not identity verification')
-    expect(out).toContain('HMDB0003502 | Example | HMDB')
-    expect(out).toContain('Archived example')
-    expect(out).not.toContain('Unrelated')
-  })
-
-  it.each(['Exa 401 unauthorized', 'Exa 429 rate limited', 'Cannot reach Exa search'])(
-    'degrades name-resolution failures to an Unearth link instead of erroring: %s',
-    async (message) => {
-      exaResultsMock.mockRejectedValue(new Error(message))
-      const out = await hmdbLookupByName('ethyl nitrite')
-      expect(out).toContain('Name resolution failed')
-      expect(out).toContain(message)
-      expect(out).toContain('https://hmdb.ca/unearth/q?query=ethyl%20nitrite')
-      expect(out).not.toContain('HMDB id candidates')
-    },
-  )
-
-  it('returns a manual search link when Exa has no official HMDB page candidate', async () => {
-    exaResultsMock.mockResolvedValue([
-      { url: 'https://example.org/metabolite', title: 'Other', excerpt: 'Other' },
-    ])
-    const out = await hmdbLookupByName('unknown')
-    expect(out).toContain('No official HMDB page ids found')
-    expect(out).toContain('https://hmdb.ca/unearth/q?query=unknown')
-  })
-})
-
-it('exposes only the rewritten HMDB parameters and validates empty input', async () => {
+it('exposes only accession-based HMDB parameters and validates empty input', async () => {
   const ctx = await makeKnowledgeContext()
   try {
     const tool = ctx.tools.list().find((item) => item.name === 'hmdb_lookup')!
     expect(Object.keys(tool.parameters.properties)).toEqual(
-      expect.arrayContaining(['id', 'ids', 'query', 'queries', 'offset', 'limit']),
+      expect.arrayContaining(['ids', 'offset', 'limit']),
     )
-    for (const removed of ['mz', 'mzs', 'polarity', 'ppm', 'maxResults']) {
+    for (const removed of [
+      'id',
+      'query',
+      'queries',
+      'mz',
+      'mzs',
+      'polarity',
+      'ppm',
+      'maxResults',
+    ]) {
       expect(tool.parameters.properties).not.toHaveProperty(removed)
     }
     const result = await ctx.tools.execute({
@@ -761,7 +865,7 @@ it('exposes only the rewritten HMDB parameters and validates empty input', async
       signal: new AbortController().signal,
     })
     expect(result.isError).toBe(true)
-    expect(result.content).toContain('Provide "id"/"ids"')
+    expect(result.content).toContain('ids')
   } finally {
     await ctx.fiber.dispose()
   }

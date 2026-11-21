@@ -20,7 +20,9 @@ export function apply(ctx: Context, config: Config = {}) {
    * web_search —— Exa 托管搜索的通用网络检索。
    *
    * 作用：为时事信息、官方文档与来源发现搜公网；返回来源 URL 与文本摘录；用自然
-   * 语言描述所需页面。科学摘要用 europepmc_search。不得发送私有数据集内容或凭据。
+   * 语言描述所需页面。也是文献降级链第 3 档：europepmc_search 与 pubmed_search 都
+   * 报错或零命中后才用它找证据，此时拿到的是网页摘录而非同行评议摘要，须声明。
+   * 不得发送私有数据集内容或凭据。
    *
    * 参数：
    * - query (string, 必填)：聚焦的自然语言描述，≤1000 字符
@@ -32,9 +34,12 @@ export function apply(ctx: Context, config: Config = {}) {
       category: 'web',
       description:
         'Search the public web with Exa for current facts, official documentation and source discovery. ' +
-        'Returns URLs and text excerpts; ground claims in the retrieved sources, and prefer ' +
-        'europepmc_search for scientific abstracts. Never include private dataset content, personal data ' +
-        'or credentials in the query; an excerpt is not the full page and does not support claims beyond it.',
+        'Also the last resort of the literature chain: use it for evidence only after europepmc_search and ' +
+        'pubmed_search have both errored or returned no hits, and say that the evidence is then a web ' +
+        'excerpt rather than a peer-reviewed abstract. Build the query from the claim you are checking. ' +
+        'Returns URLs and text excerpts; ground claims in the retrieved sources. Never include private ' +
+        'dataset content, personal data or credentials in the query; an excerpt is not the full page and ' +
+        'does not support claims beyond it.',
       timeoutMs: 30000,
       maxResultChars: TOOL_RESULT_CHARS_EVIDENCE,
       parameters: {

@@ -43,7 +43,7 @@ Dynamic page state (selected ion, clustering selection, annotation focus) is NOT
 for any question involving the currently selected data, first call the \`get_page\` tool to
 get the complete page snapshot (dataset + selected-ion view + annotation header with a rank
 1-10 preview), then use the specialized \`get_*\` tools for deeper detail (annotation windows
-via \`get_annotation(offset, limit)\`, re-rendered images, arbitrary-ion queries). \`get_page\`
+via \`get_annotation(rankFrom, rankTo)\`, re-rendered images, arbitrary-ion queries). \`get_page\`
 is a live snapshot at call time; the default image target is the ion captured at question
 time. Never assume data from previous turns is still current — the user may have changed the
 selected ion; when in doubt, call \`get_page\` again. Do not call an image tool twice for the

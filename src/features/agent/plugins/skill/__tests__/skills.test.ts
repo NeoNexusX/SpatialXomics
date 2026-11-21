@@ -29,6 +29,24 @@ it('routes to the advertised provider and preserves load failures', async () => 
   await expect(ctx.skills.load('missing')).rejects.toThrow('not found')
 })
 
+it('passes an optional resource ID only to the advertised skill provider', async () => {
+  const providerLoad = vi.fn(async (_name: string) => 'skill body')
+  const providerLoadResource = vi.fn(async (_name: string, resourceId: string) => resourceId)
+  ctx.skills.registerProvider('resources', {
+    name: 'resources',
+    list: () => [{ name: 'report-writing', description: 'reports' }],
+    load: providerLoad,
+    loadResource: providerLoadResource,
+  })
+
+  await expect(ctx.skills.load('report-writing')).resolves.toBe('skill body')
+  await expect(
+    ctx.skills.loadResource('report-writing', 'report-template:annotation-review:en'),
+  ).resolves.toBe('report-template:annotation-review:en')
+  expect(providerLoad).toHaveBeenCalledWith('report-writing')
+  expect(providerLoadResource).toHaveBeenCalledWith('report-writing', 'report-template:annotation-review:en')
+})
+
 it('unregisters providers on plugin disposal and rejects duplicate registrations', async () => {
   const provider = {
     name: 'p',

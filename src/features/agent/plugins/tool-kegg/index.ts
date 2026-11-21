@@ -9,6 +9,8 @@ import {
   compoundLink,
   keggSource,
   pathwayLink,
+  pngDataUrl,
+  pngDimensions,
   type KeggEntry,
 } from './kegg'
 
@@ -104,19 +106,10 @@ function formatKeggCompound(entry: KeggEntry): string {
     `names: ${entry.names.length ? entry.names.join('; ') : '(no name returned by KEGG)'}`,
   ]
   if (entry.formula) lines.push(`formula: ${entry.formula}`)
-  if (entry.exactMass != null) lines.push(`exact_mass: ${entry.exactMass}`)
-  if (entry.molecularWeight != null) lines.push(`mol_weight: ${entry.molecularWeight}`)
   if (entry.pathways.length) {
     lines.push('pathways:')
     for (const pathway of entry.pathways) {
       lines.push(`- ${pathwayLink(pathway.id, pathway.name)}`)
-    }
-  }
-  if (entry.dblinks.length) {
-    lines.push('dblinks:')
-    for (const link of entry.dblinks) {
-      const database = link.database === 'PubChem' ? 'PubChem SID' : link.database
-      lines.push(`- ${database}: ${link.values.join(', ')}`)
     }
   }
   return lines.join('\n')
@@ -268,23 +261,22 @@ export function apply(ctx: Context) {
       maxResultChars: TOOL_RESULT_CHARS_EVIDENCE,
       category: 'biology',
       description:
-        'Read official KEGG compound entries for identity checking. One get request accepts 1–10 compound ids. ' +
-        'Submit additional ids in separate calls. Returns names, FORMULA, EXACT_MASS, MOL_WEIGHT, PATHWAY links, ' +
-        'DBLINKS and official entry links. PubChem cross-references are SIDs.',
+        'Read official KEGG compound entries for identity checking. One get request accepts 1–10 compound ids ' +
+        'in "ids". Returns names, FORMULA, PATHWAY links and official entry links. Judge identity from the ' +
+        'returned record as a whole, not formula alone; library masses and cross-reference id lists are not ' +
+        'returned because they add no independent identity evidence for annotation review.',
       parameters: {
-        id: {
-          type: 'string',
-          description: 'One compound id, e.g. C00031 or cpd:C00031. Provide id or ids.',
-        },
         ids: {
           type: 'array',
           items: { type: 'string' },
           maxItems: KEGG_ENTRY_LIMIT,
+          required: true,
           description: '1–10 compound ids for one KEGG get request.',
         },
       },
       execute(args, exec) {
-        return readIds('compound', entryInput(args.id, args.ids), new KeggClient(exec.signal))
+        if (!args.ids.length) throw new Error('Provide "ids"')
+        return readIds('compound', args.ids, new KeggClient(exec.signal))
       },
     }),
   )
@@ -297,9 +289,11 @@ export function apply(ctx: Context) {
       category: 'biology',
       description:
         'Use id or ids for pathway names, classes and description excerpts (one get request, 1–10 map ids). ' +
-        'Use membersOf for member compound ids grouped by pathway (one link request for all supplied maps). ' +
-        'Use offset and limit to page each member list independently. Use kegg_compound for member names ' +
-        'or formulas. Reference map ids only.',
+        'Add withImage=true with exactly one map id to attach that KEGG pathway map as a PNG image, so you ' +
+        'can see where the compound sits in the map; the image is a diagram, not quantitative evidence. ' +
+        'Use membersOf for member compound ids grouped by pathway (one official REST link request for all ' +
+        'supplied maps). Use offset and limit to page each member list independently. Use kegg_compound for ' +
+        'member names or formulas. Reference map ids only.',
       parameters: {
         id: {
           type: 'string',
@@ -311,6 +305,11 @@ export function apply(ctx: Context) {
           maxItems: KEGG_ENTRY_LIMIT,
           description: '1–10 reference pathway ids for entry details.',
         },
+        withImage: {
+          type: 'boolean',
+          description:
+            'Attach the KEGG pathway map PNG (default false). Detail mode with exactly one map id only.',
+        },
         membersOf: {
           type: 'array',
           items: { type: 'string' },
@@ -319,12 +318,17 @@ export function apply(ctx: Context) {
         },
         ...resultWindow,
       },
-      execute(args, exec) {
+      async execute(args, exec) {
         const client = new KeggClient(exec.signal)
         if (args.membersOf !== undefined) {
-          if (!args.membersOf.length || args.id !== undefined || args.ids !== undefined) {
+          if (
+            !args.membersOf.length ||
+            args.id !== undefined ||
+            args.ids !== undefined ||
+            args.withImage !== undefined
+          ) {
             throw new Error(
-              'Provide a nonempty "membersOf" array on its own for pathway membership',
+              'Provide a nonempty "membersOf" array on its own for pathway membership (no id/ids/withImage)',
             )
           }
           return readIds(
@@ -334,7 +338,36 @@ export function apply(ctx: Context) {
             resolveRankWindow(args.offset, args.limit),
           )
         }
-        return readIds('pathway', entryInput(args.id, args.ids), client)
+        const ids = entryInput(args.id, args.ids)
+        const text = await readIds('pathway', ids, client)
+        if (args.withImage !== true) return text
+        const maps = [...new Set(ids.map((id) => id.trim().replace(/^path:/i, '').toLowerCase()))]
+        if (maps.length !== 1 || !/^map\d{5}$/.test(maps[0]!)) {
+          throw new Error('withImage requires exactly one reference map id, e.g. ids=["map00010"]')
+        }
+        const map = maps[0]!
+        const bytes = await client.pathwayImage(map)
+        // Same decoded-size ceiling the attachment pipeline enforces; fail with a readable reason.
+        if (bytes.length > 2 * 1024 * 1024) {
+          throw new Error(`KEGG pathway map ${map} exceeds the 2 MB image limit; read the entry text instead`)
+        }
+        const { width, height } = pngDimensions(bytes)
+        return {
+          text,
+          images: [
+            {
+              dataUrl: pngDataUrl(bytes),
+              mime: 'image/png' as const,
+              width,
+              height,
+              label: `KEGG pathway map ${map}`,
+            },
+          ],
+        }
+      },
+      output: {
+        render: (_args, value) => (typeof value === 'string' ? value : value.text),
+        images: (_args, value) => (typeof value === 'string' ? undefined : value.images),
       },
     }),
   )
