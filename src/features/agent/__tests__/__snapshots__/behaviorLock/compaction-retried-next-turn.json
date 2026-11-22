@@ -57,7 +57,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt aaa432ac>",
+      "system": "<prompt 9405e3ca>",
       "tools": "<tools 1a66bb78>",
       "maxTokens": 16000,
       "contextWindow": 64000,
@@ -162,7 +162,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt aaa432ac>",
+      "system": "<prompt 9405e3ca>",
       "tools": "<tools 1a66bb78>",
       "maxTokens": 16000,
       "contextWindow": 64000,
@@ -287,7 +287,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt aaa432ac>",
+      "system": "<prompt 9405e3ca>",
       "tools": "<tools 1a66bb78>",
       "maxTokens": 16000,
       "contextWindow": 64000,
@@ -394,7 +394,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt aaa432ac>",
+      "system": "<prompt 9405e3ca>",
       "tools": "<tools 1a66bb78>",
       "maxTokens": 16000,
       "contextWindow": 64000,
@@ -448,7 +448,7 @@
  ],
  "calls": [
   {
-   "system": "<prompt aaa432ac>",
+   "system": "<prompt 9405e3ca>",
    "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
@@ -458,7 +458,7 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt aaa432ac>",
+   "system": "<prompt 9405e3ca>",
    "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
@@ -471,7 +471,7 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt aaa432ac>",
+   "system": "<prompt 9405e3ca>",
    "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
@@ -484,7 +484,7 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt aaa432ac>",
+   "system": "<prompt 9405e3ca>",
    "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
@@ -494,7 +494,7 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt aaa432ac>",
+   "system": "<prompt 9405e3ca>",
    "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
@@ -510,7 +510,7 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt aaa432ac>",
+   "system": "<prompt 9405e3ca>",
    "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
@@ -634,11 +634,11 @@
   ],
   "error": null,
   "pressure": {
-   "inputTokens": 42856,
+   "inputTokens": 42863,
    "contextWindow": 64000,
    "outputReserve": 16000,
    "inputBudget": 46720,
-   "ratio": 0.9172945205479452,
+   "ratio": 0.9174443493150685,
    "estimated": true
   }
  }

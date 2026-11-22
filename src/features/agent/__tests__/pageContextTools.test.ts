@@ -79,6 +79,7 @@ function annotationRows(n: number): AnnotationRow[] {
     spatialScore: null,
     totalScore: 0.85,
     q: 0.05,
+    siblings: [],
     samePeak: [],
   }))
 }
@@ -784,6 +785,7 @@ describe('批量工具调用（array 参数走完整 ToolRuntime 管线；自 to
         spatialScore: null,
         totalScore: 1,
         q: 0.01,
+        siblings: [],
         samePeak: [],
       }) as AnnotationRow
     registerContextProviders({

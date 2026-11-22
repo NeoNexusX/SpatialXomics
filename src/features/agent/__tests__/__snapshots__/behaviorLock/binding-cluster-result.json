@@ -65,7 +65,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 64010447>",
+      "system": "<prompt 819a4635>",
       "tools": "<tools f33b6adc>",
       "maxTokens": 64000,
       "contextWindow": 256000,
@@ -134,7 +134,7 @@
  ],
  "calls": [
   {
-   "system": "<prompt 64010447>",
+   "system": "<prompt 819a4635>",
    "tools": "<tools f33b6adc>",
    "messages": [
     "<message 1>",
@@ -183,11 +183,11 @@
   ],
   "error": "The selected clusters changed. Submit the question again.",
   "pressure": {
-   "inputTokens": 12326,
+   "inputTokens": 12334,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.06595676369863014,
+   "ratio": 0.06599957191780823,
    "estimated": true
   }
  }

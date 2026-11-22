@@ -340,6 +340,7 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
       spatialScore: rank <= 2 ? 0.7 : null,
       totalScore: 0.9 - rank * 0.02,
       q: 0.012,
+      siblings: rank === 1 ? [{ adduct: '[M+Na]+', obsMz: 766.5, rank: 4 }] : [],
       samePeak: rank === 1 ? [{ name: 'Fructose', adduct: '[M+H]+', origin: 'endogenous' }] : [],
     })
     const rows = [

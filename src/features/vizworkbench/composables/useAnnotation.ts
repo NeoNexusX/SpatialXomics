@@ -46,6 +46,7 @@ import {
   buildAnnotationCsv,
   moleculeName,
   samePeakIons,
+  siblingIons,
 } from '@/features/vizworkbench/utils/annotation/format'
 import { moleculeOrigin, originRank } from '@/features/vizworkbench/utils/annotation/origin'
 import {
@@ -905,6 +906,11 @@ export function useAnnotation(opts: {
       spatialScore: ion.scores.spatial,
       totalScore: ion.scores.total,
       q: ion.q,
+      siblings: siblingIons(ion, molecules.value, ionById.value).map((s) => ({
+        adduct: adductLabel(s.adduct),
+        obsMz: s.obsMz,
+        rank: s.rank,
+      })),
       samePeak: samePeakIons(ion, ionById.value, molecules.value).map((s) => ({
         name: moleculeName(molecules.value.get(s.moleculeId)),
         adduct: adductLabel(s.adduct),

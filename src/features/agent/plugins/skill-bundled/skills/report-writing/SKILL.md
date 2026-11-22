@@ -15,7 +15,7 @@ Assemble what the conversation already holds:
 - Key ions and annotations: the rows actually discussed (m/z, adduct, candidate, engine evidence, your verdict).
 - Spatial observations: ion image patterns, KMeans/UMAP segmentation, pixel spectra — with the display settings that affected them.
 - External evidence: HMDB/KEGG/PubChem/ChEBI facts and literature retrieved with their URLs.
-- Candidate verdicts and uncertainty from the independent per-molecule analysis, using the verdict set defined by the analysis skill (`supported but putative` / `conflicting evidence` / `insufficient evidence` / `unsupported`) plus the resolution level (composition / class / isomer). Include each molecule once even if several adduct rows support it. Record the row/rank range scanned and how many distinct molecules were judged — putative molecules count toward that total; the target is ten judged molecules, not ten fully resolved ones. Unresolved isomers, low intensity and unavailable database coverage are limitations to record, not verdict downgrades.
+- Candidate verdicts and uncertainty from the independent per-molecule analysis, using the verdict set defined by the analysis skill (`supported but putative` / `conflicting evidence` / `insufficient evidence` / `unsupported`) plus the resolution level (composition / class / isomer). Include each molecule once even if several adduct rows support it. Record the row/rank range scanned and how many distinct molecules were judged — putative molecules count toward that total; the target is ten judged molecules, not ten fully resolved ones. Unresolved isomers, a single detected adduct ion, low intensity and unavailable database coverage are limitations to record, not verdict downgrades.
 
 ## Report-template catalog
 

@@ -205,9 +205,10 @@ function fitAnnotationRow(
     spatialScore: row.spatialScore,
     totalScore: row.totalScore,
     q: row.q,
+    siblings: [],
     samePeak: [],
     truncated: true,
-    omitted: ['candidates', 'samePeak'],
+    omitted: ['candidates', 'siblings', 'samePeak'],
   }
 }
 
@@ -386,6 +387,12 @@ export function renderAnnotationDetail(a: AnnotationRow): string {
   } else {
     lines.push(
       'spatial: not scored (only the top-ranked ions and their same-molecule ions are scored)',
+    )
+  }
+  if (a.siblings.length) {
+    const sibs = a.siblings.map((x) => `${x.adduct} mz=${x.obsMz.toFixed(4)} rank=${x.rank}`)
+    lines.push(
+      `same molecule, other adduct ions (${a.siblings.length}): ${sibs.join('; ')}`,
     )
   }
   if (a.samePeak.length) {

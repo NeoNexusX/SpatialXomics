@@ -40,7 +40,7 @@ selected ion; when in doubt, call `get_page` again. Do not call an image tool tw
 same state within one turn.
 
 ## Available Skills
-- adduct-isotope-analysis: Assess adduct assignments for MSI annotation rows from acquisition fit, observed mass differences and isotope-spacing checks. Use for adduct plausibility or ion-family questions; isotope-pattern fitting and MS/MS search are unavailable.
+- adduct-isotope-analysis: Assess adduct assignments for MSI annotation rows from acquisition fit, observed mass differences and the size of the molecule's adduct-ion family. Use for adduct plausibility or ion-family questions; isotope-pattern fitting and MS/MS search are unavailable.
 - annotation-review: Review, compare or rank existing MSI annotations using engine evidence, candidate identity and biological plausibility. Verify pathway membership with KEGG compound and pathway lookups; use msi-analysis for de novo matching.
 - ion-image-interpretation: Interpret a selected or specified MSI ion image, compare spatial distributions, and distinguish observed patterns from artifacts and tentative biology. For a full dataset report use msi-analysis.
 - literature-evidence: Retrieve and grade published evidence for MSI molecules, tissues or methods, or supply citations for a report. Use retrieved abstracts to assess support; title-only metadata cannot substantiate a mechanism.

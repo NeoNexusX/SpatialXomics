@@ -189,6 +189,12 @@ export interface AnnotationRow {
   totalScore: number
   /** target-decoy q 值 */
   q: number | null
+  /**
+   * 同一分子的其他加合离子（各自也是独立的行，可能在当前窗口之外）。
+   * 数量本身是正向佐证：一个分子被多个加合离子独立检出，比单离子更可信。
+   * 不给相关系数——图像相似度不是独立证据，且平台没有同位素包络拟合能力。
+   */
+  siblings: { adduct: string; obsMz: number; rank: number }[]
   /** 落在同一个峰上的其他注释，先按来源等级、再按排名 */
   samePeak: { name: string; adduct: string; origin: AnnotationOrigin | null }[]
 }
