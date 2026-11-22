@@ -17,6 +17,7 @@ export interface SkillProvider {
   name: string
   list(): SkillSummary[]
   load(name: string): Promise<string>
+  loadResource?(name: string, resourceId: string): Promise<string>
 }
 
 // ---- SkillsRegistry 服务 ----
@@ -50,10 +51,29 @@ export class SkillsRegistry extends Service {
 
   /** 按名称加载技能正文 */
   async load(name: string): Promise<string> {
+    return this.loadWith(name)
+  }
+
+  /** 按名称加载该技能显式提供的参考资源 */
+  async loadResource(name: string, resourceId: string): Promise<string> {
+    return this.loadWith(name, resourceId)
+  }
+
+  private async loadWith(name: string, resourceId?: string): Promise<string> {
     for (const p of this.providers.values()) {
       if (!p.list().some((skill) => skill.name === name)) continue
-      const body = await p.load(name)
-      if (!body.trim()) throw new Error(`Skill "${name}" is empty in provider "${p.name}"`)
+      const body = resourceId
+        ? p.loadResource
+          ? await p.loadResource(name, resourceId)
+          : undefined
+        : await p.load(name)
+      if (body === undefined) {
+        throw new Error(`Resource "${resourceId}" is not available for skill "${name}"`)
+      }
+      if (!body.trim()) {
+        const target = resourceId ? `resource "${resourceId}" for skill "${name}"` : `Skill "${name}"`
+        throw new Error(`${target} is empty in provider "${p.name}"`)
+      }
       return body
     }
     throw new Error(`Skill "${name}" not found in any provider`)

@@ -215,12 +215,12 @@ describe('AnthropicAdapter', () => {
           { role: 'user', content: 'show image' },
           {
             role: 'assistant',
-            parts: [{ type: 'tool-call', id: 'img-call', name: 'get_ion_image', arguments: '{}' }],
+            parts: [{ type: 'tool-call', id: 'img-call', name: 'get_ion_image_by_mzs', arguments: '{}' }],
           },
           {
             role: 'tool',
             toolCallId: 'img-call',
-            name: 'get_ion_image',
+            name: 'get_ion_image_by_mzs',
             content: 'heatmap',
             images: [`data:image/png;base64,${png}`],
           },

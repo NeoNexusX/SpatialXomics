@@ -20,6 +20,7 @@ import {
 } from '@/services/zarr/zarrSharedState'
 import type {
   AnnotationPanelState,
+  AnnotationRankRange,
   AnnotationRow,
   AnnotationScoreWeights,
   DatasetInfo,
@@ -32,7 +33,7 @@ import type {
   SpectrumPeak,
   UmapSummary,
 } from './analysisTypes'
-import { rankWindowMeta } from './analysisTypes'
+import { annotationRankRangeMeta, rankWindowMeta } from './analysisTypes'
 
 /** 大矩阵统计采样像素数（等距抽样后排序取分位数） */
 const STATS_SAMPLE_PIXELS = 10000
@@ -192,14 +193,12 @@ export function buildIonImageStats(ion = getSelectedIon()): IonImageStats | unde
   const total = width * height
   if (!Number.isSafeInteger(total) || total <= 0 || matrix.length !== total) return undefined
   let max = -Infinity
-  let min = Infinity
   let sum = 0
   let nonzero = 0
 
   for (let i = 0; i < total; i++) {
     const v = Number.isFinite(matrix[i]) ? matrix[i]! : 0
     if (v > max) max = v
-    if (v < min) min = v
     if (v !== 0) {
       sum += v
       nonzero++
@@ -243,10 +242,7 @@ export function buildIonImageStats(ion = getSelectedIon()): IonImageStats | unde
     tolerance: ion.tolerance,
     max,
     mean,
-    min,
     nonzeroRatio,
-    p50: pct(50),
-    p90: pct(90),
     p99: pct(99),
     hotspots,
   }
@@ -456,22 +452,22 @@ function computeAllSpectrumPeaks(
 // ---- 注释段 ----
 
 /**
- * 注释行的任意 rank 窗口（决策 2/7）：全量 ions 按 rank 升序稳定排序后按零基
- * offset/limit 切片，与表格当前筛选/排序解耦。offset 可达任意 rank；limit 只有
- * 单页安全 cap，绝不能先截前 N 再分页。
+ * 注释行的任意 rank 区间（决策 2/7）：全量 ions 按 rank 升序稳定排序后按 1 基闭区间
+ * rankFrom/rankTo 切片，与表格当前筛选/排序解耦。起点可达任意 rank；区间只有单页
+ * 安全 cap，绝不能先截前 N 再分页。
  */
 export function getAnnotationWindow(
-  offset: number,
-  limit: number,
-): { window: RankWindow; rows: AnnotationRow[] } | undefined {
+  rankFrom: number,
+  rankTo: number,
+): { window: AnnotationRankRange; rows: AnnotationRow[] } | undefined {
   const annotation = providers.annotations?.()
   if (!annotation) return undefined
   const rows = annotation.panelRows?.() ?? annotation.rows()
   const sorted = [...rows].sort((a, b) => a.rank - b.rank)
   const total = sorted.length
-  const start = Math.min(offset, total)
-  const page = sorted.slice(start, Math.min(start + limit, total))
-  return { window: rankWindowMeta(total, offset, limit, page.length), rows: page }
+  const start = Math.min(rankFrom - 1, total)
+  const page = sorted.slice(start, Math.min(rankTo, total))
+  return { window: annotationRankRangeMeta(total, rankFrom, rankTo, page.length), rows: page }
 }
 
 /** 注释面板状态头（get_annotation / get_page.annotation 用）；归一化权重并入面板头。 */

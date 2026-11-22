@@ -5,9 +5,10 @@
  * - services/zarr/zarrSharedState 的模块级共享状态（getSharedZarrContext / metadataAttrsRef）
  * - bridge/analysisContext 的实例级 provider 注册表（selectedIon / kmeans / annotations / datasetInfo）
  *
- * 排名窗口契约（决策 7）：get_annotation 与两个谱峰工具都支持零基 offset/limit 任意窗口，
- * 默认窗口 rank 1–10，offset 可达任意 rank（rank 20–30 = offset 19 + limit 11），
- * 绝不能先截前 N 再分页。get_page 固定只嵌入注释 rank 1–10 作为页面预览。
+ * 排名窗口契约（决策 7）：两个谱峰工具支持零基 offset/limit 任意窗口，默认窗口 rank 1–10，
+ * offset 可达任意 rank（rank 20–30 = offset 19 + limit 11），绝不能先截前 N 再分页。
+ * get_annotation 改用 1 基闭区间 rankFrom/rankTo——注释行自带 rank，不让模型做零基换算。
+ * get_page 固定只嵌入注释 rank 1–10 作为页面预览。
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -47,7 +48,7 @@ import {
   getAnnotationRows,
   hasAnnotationContext,
 } from '../../bridge/analysisContext'
-import { resolveRankWindow, rankWindowMeta } from '../../bridge/analysisTypes'
+import { resolveRankWindow, resolveRankRange, annotationRankRangeMeta } from '../../bridge/analysisTypes'
 import type { AnnotationRow, SpectrumPeak } from '../../bridge/analysisTypes'
 
 function renderPeaks(peaks: SpectrumPeak[]): string {
@@ -201,15 +202,13 @@ function fitAnnotationRow(
     massScore: row.massScore,
     adductFit: row.adductFit,
     chaos: row.chaos,
-    coloc: row.coloc,
     spatialScore: row.spatialScore,
     totalScore: row.totalScore,
     q: row.q,
     siblings: [],
     samePeak: [],
-    missingAdducts: [],
     truncated: true,
-    omitted: ['candidates', 'siblings', 'samePeak', 'missingAdducts'],
+    omitted: ['candidates', 'siblings', 'samePeak'],
   }
 }
 
@@ -218,15 +217,68 @@ function fitAnnotationRow(
  * 预览若占满总预算会迫使外层 budgetJson 弹掉预览行。给预览一个独立子预算，
  * 让组合结果通常无需外层截断；万一仍截断，get_page 会以实际返回行数重写分页游标。
  */
-const PAGE_PREVIEW_ANNOTATION_BUDGET = 6000
+const PAGE_PREVIEW_ANNOTATION_BUDGET = 24000
+
+/** Reverse lookup: compact identity hits, not full rows or substring noise by default. */
+function annotationMoleculeMatches(
+  rows: AnnotationRow[],
+  query: string,
+  matchMode: 'exact' | 'contains',
+): string {
+  const term = query.trim().toLocaleLowerCase()
+  const matched = rows.flatMap((row) => {
+    const candidates = row.candidates.filter((candidate) =>
+      matchMode === 'contains'
+        ? candidate.name.toLocaleLowerCase().includes(term)
+        : candidate.name.toLocaleLowerCase() === term,
+    )
+    const idHit = row.candidates.some((candidate) => candidate.id.toLocaleLowerCase() === term)
+    const formulaHit = row.formula.toLocaleLowerCase() === term
+    if (!candidates.length && !idHit && !formulaHit) return []
+    const matchTypes = [
+      candidates.length ? (matchMode === 'contains' ? 'candidate-name-contains' : 'candidate-name-exact') : null,
+      idHit ? 'library-id-exact' : null,
+      formulaHit ? 'formula-exact' : null,
+    ].filter(Boolean)
+    const matchedNames = candidates.map((candidate) => candidate.name)
+    const primary = row.candidates[0]?.name.toLocaleLowerCase() === term
+    return [{ row, matchTypes, matchedNames, primary }]
+  })
+  if (!matched.length) {
+    return JSON.stringify({
+      query,
+      matchMode,
+      totalMatches: 0,
+      matches: [],
+      note: 'No exact annotation candidate/library id/formula match in the full loaded result set. This is an annotation-result miss, not proof of biological absence. Use matchMode="contains" only for exploratory substring discovery.',
+    })
+  }
+  return JSON.stringify({
+    query,
+    matchMode,
+    totalMatches: matched.length,
+    matches: matched.sort((a, b) => a.row.rank - b.row.rank).map(({ row, matchTypes, matchedNames, primary }) => ({
+      rowId: row.id,
+      rank: row.rank,
+      primaryName: row.name,
+      matchedNames,
+      matchTypes,
+      primaryCandidateMatch: primary,
+      formula: row.formula,
+      adduct: row.adduct,
+      obsMz: row.obsMz,
+    })),
+    note: 'A candidate-name hit means the name occurs in this row, not that the named isomer was independently identified. Read full evidence with get_annotation(rowIds=[...]) before judging a newly surfaced molecule.',
+  })
+}
 
 /** Build a bounded annotation page and keep the cursor aligned with returned rows. */
 function annotationPage(
-  offset: number,
-  limit: number,
+  rankFrom: number,
+  rankTo: number,
   budget = TOOL_RESULT_CHARS_EVIDENCE - 32,
 ): { json: string } | undefined {
-  const window = getAnnotationWindow(offset, limit)
+  const window = getAnnotationWindow(rankFrom, rankTo)
   if (!window) return undefined
   const max = budget
   const originalPanel = getAnnotationPanelState()
@@ -241,7 +293,7 @@ function annotationPage(
   const rows: (AnnotationRow | (AnnotationRow & { truncated: true; omitted: string[] }))[] = []
   for (const row of window.rows) {
     const candidateRows = [...rows, row]
-    const paging = rankWindowMeta(window.window.total, offset, limit, candidateRows.length)
+    const paging = annotationRankRangeMeta(window.window.total, rankFrom, rankTo, candidateRows.length)
     const candidate = {
       panel,
       paging,
@@ -262,7 +314,7 @@ function annotationPage(
   const omittedRows = window.rows.length - rows.length
   const result = {
     panel,
-    paging: rankWindowMeta(window.window.total, offset, limit, rows.length),
+    paging: annotationRankRangeMeta(window.window.total, rankFrom, rankTo, rows.length),
     rows,
     ...(truncated || omittedRows > 0 ? { truncated: true } : {}),
     ...(omittedRows > 0 ? { omittedRows } : {}),
@@ -273,7 +325,7 @@ function annotationPage(
     const first = rows[0]
     const minimal = {
       panel: null,
-      paging: rankWindowMeta(window.window.total, offset, limit, first ? 1 : 0),
+      paging: annotationRankRangeMeta(window.window.total, rankFrom, rankTo, first ? 1 : 0),
       rows: first ? [fitAnnotationRow(first)] : [],
       truncated: true,
       omitted: [
@@ -288,14 +340,14 @@ function annotationPage(
       json.length <= max
         ? json
         : JSON.stringify({
-            paging: rankWindowMeta(window.window.total, offset, limit, 0),
+            paging: annotationRankRangeMeta(window.window.total, rankFrom, rankTo, 0),
             rows: [],
             truncated: true,
           }),
   }
 }
 
-/** 注释行文本渲染（get_annotation 精确 rowIds/mzs 模式沿用 detail 批量语义） */
+/** 注释行文本渲染（get_annotation 精确 rowIds 模式沿用 detail 批量语义） */
 export function renderAnnotationDetail(a: AnnotationRow): string {
   const lines: string[] = []
   lines.push(`rowId: ${a.id}`)
@@ -331,24 +383,17 @@ export function renderAnnotationDetail(a: AnnotationRow): string {
       `adductFit=${a.adductFit.toFixed(2)} spatial=${spatialScore}) q=${a.q != null ? a.q.toFixed(3) : 'N/A'} rank=${a.rank}`,
   )
   if (a.chaos != null) {
-    const coloc =
-      a.coloc != null ? ` coloc=${a.coloc.toFixed(3)} (best Pearson with same-molecule ions)` : ''
-    lines.push(`spatial: chaos=${a.chaos.toFixed(3)}${coloc}`)
+    lines.push(`spatial: chaos=${a.chaos.toFixed(3)}`)
   } else {
     lines.push(
       'spatial: not scored (only the top-ranked ions and their same-molecule ions are scored)',
     )
   }
   if (a.siblings.length) {
-    const sibs = a.siblings.map(
-      (x) =>
-        `${x.adduct} mz=${x.obsMz.toFixed(4)} rank=${x.rank}` +
-        (x.r != null ? ` r=${x.r.toFixed(2)}` : ''),
+    const sibs = a.siblings.map((x) => `${x.adduct} mz=${x.obsMz.toFixed(4)} rank=${x.rank}`)
+    lines.push(
+      `same molecule, other adduct ions (${a.siblings.length}): ${sibs.join('; ')}`,
     )
-    lines.push(`same molecule: ${sibs.join('; ')}`)
-  }
-  if (a.missingAdducts.length) {
-    lines.push(`enabled but not detected: ${a.missingAdducts.join(', ')}`)
   }
   if (a.samePeak.length) {
     const others = a.samePeak.map((x) => `${x.name} ${x.adduct}${x.origin ? ` (${x.origin})` : ''}`)
@@ -368,7 +413,7 @@ export function apply(ctx: Context) {
    * dataset 信息面板、选中离子视图（显示参数/谱区/通道/ROI/统计）、KMeans/UMAP 就绪
    * 状态、注释面板头 + 固定 rank 1–10 预览（预览用独立子预算 PAGE_PREVIEW_ANNOTATION_
    * BUDGET，不与 header/dataset/ion 抢总预算）。预览之外的注释行走
-   * get_annotation(offset/limit)。默认图像目标 = 提问时（turn/start 绑定）捕获的离子，
+   * get_annotation(rankFrom/rankTo)。默认图像目标 = 提问时（turn/start 绑定）捕获的离子，
    * 不受 turn 中途切换选择影响；外层预算截断弹掉预览行时会以实际返回行数重写分页游标。
    *
    * 参数：
@@ -384,7 +429,7 @@ export function apply(ctx: Context) {
         'check whether the dataset, selected ion, clustering and annotations are ready. Reads the page ' +
         'header (dataset name, processing status), dataset info panel, selected-ion view, KMeans/UMAP ' +
         'readiness, and an annotation preview covering rank 1–10 only. For more annotation rows call ' +
-        'get_annotation(offset, limit). With withImage (default true) it attaches the ion captured at ' +
+        'get_annotation(rankFrom, rankTo). With withImage (default true) it attaches the ion captured at ' +
         'question time; the snapshot reflects call time, not a live subscription.',
       parameters: {
         withImage: {
@@ -401,7 +446,7 @@ export function apply(ctx: Context) {
         const kmeans = buildKmeansState()
         const umap = buildUmapState()
         // 预览用独立子预算，不与 header/dataset/ion 抢总预算
-        const preview = annotationPage(0, 10, PAGE_PREVIEW_ANNOTATION_BUDGET)
+        const preview = annotationPage(1, 10, PAGE_PREVIEW_ANNOTATION_BUDGET)
         const overview = buildDatasetOverview()
 
         const page: Record<string, unknown> = {
@@ -477,10 +522,10 @@ export function apply(ctx: Context) {
           unknown
         >
         // 防御：外层预算截断若弹掉了预览行，分页游标必须与实际行数一致，
-        // 否则 nextOffset 会跳过被弹掉的 rank。截断发生在行尾，前缀保持连续。
+        // 否则 nextRank 会跳过被弹掉的 rank。截断发生在行尾，前缀保持连续。
         const annotation = budgeted.annotation as {
           rows?: unknown[]
-          paging?: { total: number; offset: number; limit: number; returned: number }
+          paging?: { total: number; rankFrom: number; rankTo: number; returned: number }
           truncated?: boolean
         } | null
         if (
@@ -488,10 +533,10 @@ export function apply(ctx: Context) {
           annotation.paging &&
           annotation.paging.returned !== annotation.rows.length
         ) {
-          annotation.paging = rankWindowMeta(
+          annotation.paging = annotationRankRangeMeta(
             annotation.paging.total,
-            annotation.paging.offset,
-            annotation.paging.limit,
+            annotation.paging.rankFrom,
+            annotation.paging.rankTo,
             annotation.rows.length,
           )
           annotation.truncated = true
@@ -543,7 +588,7 @@ export function apply(ctx: Context) {
    * 像素）、多离子通道列表（叠加激活时页面 colormap/范围输入置灰）、ROI 与导入 mask
    * 计数、强度统计。附图是按当前显示参数重渲染的栅格而非画布截图——ROI 高亮、通道
    * 混合、KMeans/UMAP 叠加不在图中；processed 数据 provider 为 null 时回退 TIC。
-   * 任意 m/z 查询用 get_ion_image。
+   * 任意 m/z 查询用 get_ion_image_by_mzs。
    *
    * 参数：
    * - withImage (boolean, 可选)：附带重渲染的离子图，默认 true
@@ -558,7 +603,7 @@ export function apply(ctx: Context) {
         'ROI counts, multi-ion channels or intensity statistics. With withImage (default true) attaches the ' +
         'ion raster re-rendered with the CURRENT display parameters (including range) — not a canvas ' +
         'screenshot: ROI highlights, channel blending and KMeans/UMAP overlays are absent. Processed data ' +
-        'falls back to TIC. For arbitrary m/z images use get_ion_image.',
+        'falls back to TIC. For arbitrary m/z images use get_ion_image_by_mzs.',
       parameters: {
         withImage: {
           type: 'boolean',
@@ -648,17 +693,17 @@ export function apply(ctx: Context) {
   /**
    * get_annotation —— 注释面板状态头 + 注释行读取（决策 2/7）。
    *
-   * 作用：窗口模式（默认）按稳定 rank 序对完整结果集零基 offset/limit 翻页，绝不先
-   * 截前 N 再分页；窗口忽略表格筛选/排序，面板头另行报告当前筛选与可见行数。精确
-   * 模式按 m/z（就近峰中 rank 最优行，距离阈值 0.5 Da）或 rowId 取完整行，与
-   * offset/limit 互斥。一行 = 一个加合物离子；精确模式批量走 renderBatch，单项失败
-   * 不拖垮整批。
+   * 作用：窗口模式（默认）按稳定 rank 序对完整结果集取 1 基闭区间 rankFrom/rankTo，绝不
+   * 先截前 N 再分页；窗口忽略表格筛选/排序，面板头另行报告当前筛选与可见行数。精确
+   * 模式只按 rowIds 取完整行，与 rankFrom/rankTo 互斥。一行 = 一个加合物离子；精确模式
+   * 批量走 renderBatch，单项失败不拖垮整批。反向模式按 molecule/molecules（候选名、库 id
+   * 或分子式）检索完整注释结果，用于 C1 判断某通路/文献中的分子是否已在数据集中被注释。
    *
    * 参数：
-   * - offset (integer, 可选)：窗口模式零基起点，默认 0、可达任意 rank
-   * - limit (integer, 可选)：窗口大小，默认 10、页 cap 25（字符预算可能少给）
-   * - mz / mzs (number / number[], 可选)：精确模式按观察 m/z 找行；mzs 批量（≤25）
-   * - rowId / rowIds (integer / integer[], 可选)：精确模式按行 id 找行；rowIds 批量（≤25）
+   * - rankFrom (integer, 可选)：窗口模式起点 rank（1 基，含），默认 1、可达任意 rank
+   * - rankTo (integer, 可选)：窗口模式终点 rank（1 基，含），默认 rankFrom+9、单页 cap 25
+   *   行（字符预算可能少给）
+   * - rowIds (integer[], 可选)：精确模式按行 id 找行；批量（≤25）
    */
   ctx.tools.register(
     defineTool({
@@ -666,36 +711,44 @@ export function apply(ctx: Context) {
       name: 'get_annotation',
       maxResultChars: TOOL_RESULT_CHARS_EVIDENCE,
       description:
-        'Read annotation rows from the current page. Window mode (default): offset/limit page through the ' +
-        'FULL result set in stable rank order — zero-based, default offset 0 / limit 10, any rank reachable ' +
-        "(rank 20–30 = offset 19 + limit 11); windowing ignores the panel's current filters/sorting, which " +
-        'the panel header reports separately. Exact mode: mz/mzs (nearest peak, best-ranked row within ' +
-        '0.5 Da) or rowId/rowIds fetch specific full rows; exact selectors conflict with offset/limit. One ' +
-        'row = one adduct ion. The character budget may return fewer rows than limit — follow the returned ' +
-        'paging/nextOffset.',
+        'Read annotation rows from the current page. Window mode (default): rankFrom/rankTo select an ' +
+        'INCLUSIVE 1-based rank range over the FULL result set in stable rank order — default rank 1–10, ' +
+        'any rank reachable (rank 20–30 = rankFrom 20 + rankTo 30); windowing ignores the panel\'s current ' +
+        'filters/sorting, which the panel header reports separately. Exact mode: rowIds fetch specific full ' +
+        'rows; exact selectors conflict with rankFrom/rankTo. Reverse mode: molecule/molecules search exact ' +
+        'candidate names, library ids or formulas across the FULL loaded annotation result and return compact ' +
+        'row/rank hits; matchMode="contains" is opt-in exploratory substring discovery. A candidate hit is not ' +
+        'independent isomer identification; read full rows by rowIds before judging a newly surfaced molecule. ' +
+        'One row = one adduct ion. The character budget may return fewer rows than the requested range — follow ' +
+        'the returned paging/nextRank.',
       parameters: {
-        offset: {
+        rankFrom: {
           type: 'integer',
           description:
-            'Zero-based window start into the full rank order (any rank; default 0). Window mode only.',
+            'First rank of the window, 1-based and inclusive (any rank; default 1). Window mode only.',
         },
-        limit: {
+        rankTo: {
           type: 'integer',
           description:
-            'Window size, default 10, page cap 25; the character budget may return fewer.',
+            'Last rank of the window, 1-based and inclusive; default rankFrom+9, page cap 25 rows per call. The character budget may return fewer.',
         },
-        mz: {
-          type: 'number',
-          description: 'Observed m/z to locate the row (exact mode); choose one selector form.',
+        molecule: {
+          type: 'string',
+          description:
+            'Reverse annotation lookup by exact candidate name (case-insensitive), library id or molecular formula. Returns compact row/rank hits; use rowIds for full evidence.',
         },
-        mzs: {
+        molecules: {
           type: 'array',
-          items: { type: 'number' },
+          items: { type: 'string' },
           maxItems: MAX_BATCH_QUERIES,
-          description:
-            'Batch observed m/z values (exact mode); each value independently resolves its nearest best-ranked row.',
+          description: 'Batch exact reverse annotation lookups; each reports compact matching rows and ranks.',
         },
-        rowId: { type: 'integer', description: 'Known annotation row id (exact mode).' },
+        matchMode: {
+          type: 'string',
+          enum: ['exact', 'contains'],
+          description:
+            'Reverse lookup only: exact (default) matches whole candidate names; contains is exploratory substring discovery and may return derivatives such as methylxanthine for xanthine.',
+        },
         rowIds: {
           type: 'array',
           items: { type: 'integer' },
@@ -704,57 +757,51 @@ export function apply(ctx: Context) {
         },
       },
       async execute(args, exec) {
-        const exact =
-          args.mz != null || args.mzs != null || args.rowId != null || args.rowIds != null
+        // 根 schema 是开放对象，未声明的键会静默透传。旧的 offset/limit 若被忽略，
+        // 模型以为取到了深窗口、实际拿到 rank 1–10——宁可报错也不静默取错窗。
+        const legacy = args as { offset?: unknown; limit?: unknown; mz?: unknown; mzs?: unknown; rowId?: unknown }
+        if (legacy.offset != null || legacy.limit != null) {
+          throw new Error(
+            'get_annotation no longer takes offset/limit; use the inclusive 1-based rank range ' +
+              'rankFrom/rankTo instead (rank 11–20 = rankFrom 11 + rankTo 20)',
+          )
+        }
+        if (legacy.mz != null || legacy.mzs != null || legacy.rowId != null) {
+          throw new Error(
+            'get_annotation exact lookup now takes rowIds only; mz/mzs/rowId were removed because ' +
+              'nearest-peak lookup can hide competing rows. Use a rank window to find rowIds.',
+          )
+        }
+        const reverse = args.molecule != null || args.molecules != null
+        if (args.matchMode != null && !reverse) {
+          throw new Error('matchMode is only valid with molecule/molecules reverse lookup')
+        }
+        const exact = reverse || args.rowIds != null
         const rows = exact ? getAnnotationRows() : undefined
-        const windowed = args.offset != null || args.limit != null
+        const windowed = args.rankFrom != null || args.rankTo != null
         if (exact && windowed) {
           throw new Error(
-            'offset/limit (rank window) and mz/mzs/rowId/rowIds (exact lookup) are mutually exclusive; pass one mode only',
+            'rankFrom/rankTo (rank window) and rowIds/molecule/molecules (exact/reverse lookup) are mutually exclusive; pass one mode only',
           )
         }
         if (exact && !rows) return unavailable('Annotation data')
         if (!exact && !hasAnnotationContext()) return unavailable('Annotation data')
 
-        if (exact) {
-          const rowIdList = batchInput<number>(args.rowIds, args.rowId)
-          const mzList = batchInput<number>(args.mzs, args.mz)
-          if (rowIdList.length === 0 && mzList.length === 0) {
-            throw new Error(
-              'Provide "mz"/"mzs" or "rowId"/"rowIds" to identify the annotation row(s)',
-            )
+        if (reverse) {
+          const queries = batchInput<string>(args.molecules, args.molecule)
+          if (!queries.length || queries.some((query) => !query.trim())) {
+            throw new Error('Provide nonempty "molecule"/"molecules" values')
           }
-          const findByRowId = (id: number): AnnotationRow | undefined =>
-            rows!.find((r) => r.id === id)
-          const findByMz = (mz: number): AnnotationRow | undefined => {
-            const dist = (r: AnnotationRow) => Math.abs(r.obsMz - mz)
-            const minD = rows!.reduce((m, r) => Math.min(m, dist(r)), Infinity)
-            if (minD > 0.5) return undefined
-            return rows!
-              .filter((r) => dist(r) - minD <= 1e-9)
-              .reduce((best, r) => (r.rank < best.rank ? r : best))
+          if (args.rowIds != null) {
+            throw new Error('molecule/molecules cannot be combined with rowIds')
           }
-          const renderRow = (rowId: number | undefined, mz: number | undefined) => {
-            const row = rowId != null ? findByRowId(rowId) : findByMz(mz!)
-            if (!row) {
-              return rowId != null
-                ? `No annotation row with rowId ${rowId}. Call get_annotation to list valid rows.`
-                : `No annotation row matched near m/z ${mz}. Call get_annotation to list valid rows.`
-            }
-            return renderAnnotationDetail(row)
-          }
-          const items = [
-            ...rowIdList.map((id) => ({ id, mz: undefined as number | undefined })),
-            ...(rowIdList.length
-              ? []
-              : mzList.map((mz) => ({ id: undefined as number | undefined, mz }))),
-          ]
           return renderBatch(
-            items,
-            (item) => (item.id != null ? `rowId ${item.id}` : `m/z ${item.mz}`),
-            (item) => renderRow(item.id, item.mz),
+            queries,
+            (query) => `molecule ${query}`,
+            (query) => annotationMoleculeMatches(rows!, query, args.matchMode ?? 'exact'),
             {
               ...args,
+              paginateInputs: false,
               ...EVIDENCE_BATCH_BUDGET,
               session: exec.session,
               signal: exec.signal,
@@ -762,8 +809,38 @@ export function apply(ctx: Context) {
           )
         }
 
-        const { offset, limit } = resolveRankWindow(args.offset, args.limit)
-        const page = annotationPage(offset, limit)
+        if (exact) {
+          const rowIdList = args.rowIds ?? []
+          if (rowIdList.length === 0) {
+            throw new Error('Provide "rowIds" to identify the annotation row(s)')
+          }
+          const findByRowId = (id: number): AnnotationRow | undefined =>
+            rows!.find((r) => r.id === id)
+          const renderRow = (rowId: number) => {
+            const row = findByRowId(rowId)
+            if (!row) {
+              return `No annotation row with rowId ${rowId}. Call get_annotation to list valid rows.`
+            }
+            return renderAnnotationDetail(row)
+          }
+          return renderBatch(
+            rowIdList,
+            (id) => `rowId ${id}`,
+            (id) => renderRow(id),
+            {
+              ...args,
+              // 精确选择器没有输入分页语义：传 rankFrom 会撞互斥校验，
+              // 默认的 limit 5 会把 25 个选择器截成 5 个且无法续取。
+              paginateInputs: false,
+              ...EVIDENCE_BATCH_BUDGET,
+              session: exec.session,
+              signal: exec.signal,
+            },
+          )
+        }
+
+        const { rankFrom, rankTo } = resolveRankRange(args.rankFrom, args.rankTo)
+        const page = annotationPage(rankFrom, rankTo)
         return page ? page.json : unavailable('Annotation data')
       },
     }),

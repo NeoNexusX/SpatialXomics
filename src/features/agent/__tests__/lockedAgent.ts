@@ -9,7 +9,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { fnv1a } from '@/shared/utils/fnv1a'
 import { baseBundle } from '../bundles/base'
 import { resolveRetryPolicy, type RetryPolicyConfig } from '../plugins/llm'
-import { defineTool } from '../plugins/tools'
+import { defineTool, TOOL_RESULT_CHARS_DEFAULT } from '../plugins/tools'
 import type { Agent, AgentSnapshot } from '../plugins/agent'
 import {
   createMemoryStorage,
@@ -241,7 +241,8 @@ export async function createLockedAgent(
         name: 'long_lookup',
         description: 'Look up a long listing',
         parameters: {},
-        execute: async () => 'L'.repeat(5000),
+        // 必须超过默认截断线，否则存档/续读分支根本不会被触发（预算调大时跟着长）
+        execute: async () => 'L'.repeat(TOOL_RESULT_CHARS_DEFAULT + 1000),
       }),
     )
     ctx.tools.register(

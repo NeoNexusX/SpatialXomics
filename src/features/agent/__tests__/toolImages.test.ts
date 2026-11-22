@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createLockedAgent, text, toolCall, type LockedAgent } from './lockedAgent'
-import { defineTool, renderBatch } from '../plugins/tools'
+import { defineTool, renderBatch, TOOL_RESULT_CHARS_DEFAULT } from '../plugins/tools'
 import { createMemoryStorage } from '../plugins/session-persistence'
 import { estimateMessage } from '../plugins/token-meter/estimate'
 import { setAgentDataset } from '../bridge/datasetBinding'
 import { rasterize, displayRange, legendLayout, selectPlotPeaks, isSpectrumHighlight, type RenderOptions } from '../plugins/tool-ion-image/render'
 import { readIon } from '../plugins/tool-ion-image'
 
-// jsdom 无 canvas：get_ion_image 的整链路测试只需要 renderIonImages 不抛错
+// jsdom 无 canvas：拆分后的离子热图工具整链路测试只需要 renderIonImages 不抛错
 vi.mock('../plugins/tool-ion-image/render', async (importOriginal) => {
   const original = await importOriginal<typeof import('../plugins/tool-ion-image/render')>()
   return {
@@ -197,10 +197,10 @@ it('pages long query batches and archives oversized complete evidence', async ()
     const result = await renderBatch(
       items,
       (item) => item,
-      (item) => `${item} ${'x'.repeat(1000)}`,
+      (item) => `${item} ${'x'.repeat(3000)}`,
       { offset, session: { storage } as never },
     )
-    expect(result.length).toBeLessThanOrEqual(4000)
+    expect(result.length).toBeLessThanOrEqual(TOOL_RESULT_CHARS_DEFAULT)
     seen.push(...[...result.matchAll(/### (query-\d+)/g)].map((match) => match[1]!))
     const next = /nextOffset=(\d+)/.exec(result)
     if (!next) break
@@ -210,7 +210,7 @@ it('pages long query batches and archives oversized complete evidence', async ()
   expect(seen).toEqual(items)
   const artifacts = await storage.listArtifacts()
   expect(artifacts).toHaveLength(25)
-  expect((await storage.getArtifact(artifacts[0]!)).size).toBeGreaterThan(1000)
+  expect((await storage.getArtifact(artifacts[0]!)).size).toBeGreaterThan(3000)
 })
 
 const options: RenderOptions = {
@@ -306,7 +306,7 @@ it('lets explicit mz queries through when the selection changed mid-turn', async
             height: 2,
           }),
         })
-        yield* toolCall('get_ion_image', { mzs: [100, 300] }, 'c1')
+        yield* toolCall('get_ion_image_by_mzs', { mzs: [100, 300] }, 'c1')
       },
       text('done'),
     ],
@@ -327,11 +327,9 @@ it('lets explicit mz queries through when the selection changed mid-turn', async
   expect(echoed).toContain('axis 300')
 })
 
-it('uses TIC for processed get_ion_image when the captured tolerance is zero', async () => {
+it('uses TIC for processed get_ion when the captured tolerance is zero', async () => {
   const h = await setup()
   const pageTools = await import('../plugins/tool-page-context')
-  const ionImage = await import('../plugins/tool-ion-image')
-  h.ctx.plugin(ionImage)
   h.ctx.plugin(pageTools)
   await new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -339,7 +337,7 @@ it('uses TIC for processed get_ion_image when the captured tolerance is zero', a
   ionDims.value = { width: 2, height: 2 }
   ticMatrix.value = new Float32Array([1, 2, 3, 4])
   const result = await h.ctx.tools.execute({
-    name: 'get_ion_image',
+    name: 'get_ion',
     callId: 'processed-tic',
     arguments: {},
     signal: new AbortController().signal,
@@ -349,7 +347,8 @@ it('uses TIC for processed get_ion_image when the captured tolerance is zero', a
   })
 
   expect(result.isError).toBe(false)
-  expect(result.content).toContain('TIC')
+  expect(result.content).toContain('"dataMode":"processed"')
+  expect(result.content).toContain('"mz":0')
 })
 
 it('reads explicit pixels without changing the page and filters the raw mean spectrum', async () => {
@@ -397,21 +396,26 @@ it('reads explicit pixels without changing the page and filters the raw mean spe
   expect(batch.content.indexOf('pixel #1')).toBeLessThan(batch.content.indexOf('pixel #0'))
 })
 
-it('rejects concurrent selectors in get_ion_image', async () => {
+it('keeps only split ion-image tools and ignores removed display parameters', async () => {
   const h = await setup()
   const pageTools = await import('../plugins/tool-page-context')
   const ionImage = await import('../plugins/tool-ion-image')
   h.ctx.plugin(ionImage)
   h.ctx.plugin(pageTools)
   await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(h.ctx.tools.list().some((tool) => tool.name === 'get_ion_image')).toBe(false)
+  dataModeRef.value = 'continuous'
+  mzAxisRef.value = new Float64Array([200])
+  ionDims.value = { width: 1, height: 1 }
+  setZarrStore({ getSummedIonImageByMzIndices: async () => new Float32Array([1]) } as unknown as ZarrOssStore)
   const result = await h.ctx.tools.execute({
-    name: 'get_ion_image',
+    name: 'get_ion_image_by_mzs',
     callId: 's',
-    arguments: { mz: 100, mzs: [200] },
+    arguments: { mz: 100, mzs: [200], display: 'max' },
     signal: new AbortController().signal,
   })
-  expect(result.isError).toBe(true)
-  expect(result.content).toMatch(/mutually exclusive/i)
+  expect(result.isError).toBe(false)
+  expect(result.content).toContain('axis 200')
 })
 
 it('removes new image artifacts when result middleware fails before commit', async () => {

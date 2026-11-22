@@ -33,11 +33,8 @@ export interface IonImageStats {
   tolerance: number
   max: number
   mean: number
-  min: number
   /** 非零像素占比 0-1 */
   nonzeroRatio: number
-  p50: number
-  p90: number
   p99: number
   /** 强度最高的若干热点（最多 3 个） */
   hotspots: { x: number; y: number; intensity: number }[]
@@ -66,9 +63,9 @@ export interface UmapSummary {
 // ---- 排名窗口元数据（决策 7：offset/limit 任意窗口的统一形状） ----
 
 /**
- * 排名列表的分页窗口。所有「按排序取列表」的工具（get_annotation、谱峰工具）
- * 都用同一形状：零基 offset（可为任意 rank）、单页 limit 有安全 cap、
- * 返回 total 与 nextOffset 供继续翻页。默认窗口 rank 1–10。
+ * 排名列表的分页窗口。谱峰工具与 KEGG 检索用这一形状：零基 offset（可为任意 rank）、
+ * 单页 limit 有安全 cap、返回 total 与 nextOffset 供继续翻页。默认窗口 rank 1–10。
+ * 注释行改用 {@link AnnotationRankRange}（行自带 1 基 rank，直接说起终点）。
  */
 export interface RankWindow {
   /** 完整排序结果的总条数 */
@@ -107,6 +104,50 @@ export function rankWindowMeta(
   return { total, offset, limit, returned, nextOffset: next < total ? next : null }
 }
 
+/**
+ * 注释行的 rank 区间窗口。注释行自带 1 基 `rank`，用户也按 rank 指名道姓，所以
+ * get_annotation 直接说起终点，不让模型在 rank 与零基 offset 之间换算。
+ * 其余分页工具仍用 {@link RankWindow}：它们分页的是输入批次、搜索结果或字符偏移，
+ * 没有 1 基的域索引可对齐。
+ */
+export interface AnnotationRankRange {
+  /** 完整排名结果的总行数 */
+  total: number
+  /** 本次窗口的起点 rank（1 基，含） */
+  rankFrom: number
+  /** 本次窗口的终点 rank（1 基，含；已按单页 cap 裁剪） */
+  rankTo: number
+  /** 实际返回行数（字符预算可能少于请求区间） */
+  returned: number
+  /** 还有剩余时为下一窗口的起点 rank，否则 null */
+  nextRank: number | null
+}
+
+/** 解析 rankFrom/rankTo 为受单页 cap 约束的闭区间（默认 rank 1–10）。 */
+export function resolveRankRange(
+  rankFrom: number | undefined,
+  rankTo: number | undefined,
+  defaultSize = 10,
+  maxSize = 25,
+): { rankFrom: number; rankTo: number } {
+  const from = Number.isFinite(rankFrom) && rankFrom! > 1 ? Math.floor(rankFrom!) : 1
+  const to =
+    Number.isFinite(rankTo) && rankTo! > 0 ? Math.floor(rankTo!) : from + defaultSize - 1
+  if (to < from) throw new Error(`rankTo (${to}) must be greater than or equal to rankFrom (${from})`)
+  return { rankFrom: from, rankTo: Math.min(to, from + maxSize - 1) }
+}
+
+/** 由 rank 区间与总数构造 AnnotationRankRange 元数据。 */
+export function annotationRankRangeMeta(
+  total: number,
+  rankFrom: number,
+  rankTo: number,
+  returned: number,
+): AnnotationRankRange {
+  const next = rankFrom + returned
+  return { total, rankFrom, rankTo, returned, nextRank: next <= total ? next : null }
+}
+
 /** 注释行（一行 = 一个加合离子）：注释面板注册给助手的扁平视图，字段与面板的 IonAnnotation 对应 */
 /**
  * 化合物来源等级（注释库的 Origin 列）：内源 / 预期内源 / 未定 / 外源。来自库的来源信息，
@@ -140,19 +181,22 @@ export interface AnnotationRow {
   adductFit: number
   /** 空间混乱度（level-set chaos，越高越成块）；null = 未参加空间评分 */
   chaos: number | null
-  /** 与同分子其他加合离子图像的最大 Pearson（截到 0..1） */
-  coloc: number | null
-  /** 空间分 = 0.2 × chaos + 0.8 × coloc；缺失共定位按 0 计 */
+  /**
+   * 空间分 0..1；null = 未参加空间评分。
+   * 等于 0.2 × chaos 时说明共定位分量不可得——那是「空间证据不可得」，不是「空间证据弱」。
+   */
   spatialScore: number | null
   totalScore: number
   /** target-decoy q 值 */
   q: number | null
-  /** 同一分子的其他加合离子（各自也是独立的行） */
-  siblings: { adduct: string; obsMz: number; r: number | null; rank: number }[]
+  /**
+   * 同一分子的其他加合离子（各自也是独立的行，可能在当前窗口之外）。
+   * 数量本身是正向佐证：一个分子被多个加合离子独立检出，比单离子更可信。
+   * 不给相关系数——图像相似度不是独立证据，且平台没有同位素包络拟合能力。
+   */
+  siblings: { adduct: string; obsMz: number; rank: number }[]
   /** 落在同一个峰上的其他注释，先按来源等级、再按排名 */
   samePeak: { name: string; adduct: string; origin: AnnotationOrigin | null }[]
-  /** 已启用但没检出的加合物 */
-  missingAdducts: string[]
 }
 
 /** 注释总分的权重（归一化，三者之和为 1）：totalScore = mass·massScore + adduct·adductFit + spatial·spatialScore */

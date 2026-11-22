@@ -49,6 +49,10 @@ public/AI Agent 架构总结.md
 public/AI-Agent-BYOK配置方案.md
 public/AI-Agent代码目录结构说明.md
 
+# Skill 与报告模板的中文译本（只供本地阅读，不入库、不注册为资源）
+src/features/agent/plugins/skill-bundled/skills/**/SKILL.zh-CN.md
+src/features/agent/plugins/skill-bundled/skills/**/*.zh-CN.md
+
 # 本地数据目录（不入库，避免误提交本地数据文件）
 public/data/
 

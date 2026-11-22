@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { europepmcSearch, openalexSearch, pubmedSearch } from '../index'
+import { europepmcSearch, pubmedSearch } from '../index'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -59,8 +59,19 @@ describe('Europe PMC response contract', () => {
 })
 
 describe('PubMed', () => {
-  it('searches then summarises, and takes the total from the search rather than the page', async () => {
-    const fetcher = vi
+  const efetchXml = `<?xml version="1.0"?>
+<PubmedArticleSet>
+  <PubmedArticle><MedlineCitation><PMID>111</PMID><Article><Abstract>
+    <AbstractText Label="BACKGROUND">Lipids vary by region.</AbstractText>
+    <AbstractText Label="RESULTS">Taurine concentrates in the medulla.</AbstractText>
+  </Abstract></Article></MedlineCitation></PubmedArticle>
+  <PubmedArticle><MedlineCitation><PMID>222</PMID><Article><Abstract>
+    <AbstractText>A broad MSI review.</AbstractText>
+  </Abstract></Article></MedlineCitation></PubmedArticle>
+</PubmedArticleSet>`
+
+  const searchAndSummary = () =>
+    vi
       .fn()
       .mockResolvedValueOnce(
         Response.json({ esearchresult: { count: '1024', idlist: ['111', '222'] } }),
@@ -78,16 +89,35 @@ describe('PubMed', () => {
           },
         }),
       )
+
+  it('searches, summarises, then fetches abstracts, taking the total from the search', async () => {
+    const fetcher = searchAndSummary().mockResolvedValueOnce(new Response(efetchXml))
     vi.stubGlobal('fetch', fetcher)
     const signal = new AbortController().signal
     const out = await pubmedSearch('lipid imaging', 2, signal)
-    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(fetcher).toHaveBeenCalledTimes(3)
     expect(fetcher.mock.calls[0]![0]).toContain('term=lipid%20imaging')
+    expect(fetcher.mock.calls[2]![0]).toContain('efetch.fcgi')
+    expect(fetcher.mock.calls[2]![0]).toContain('id=111,222')
     for (const call of fetcher.mock.calls) expect(call[1].signal).toBe(signal)
     expect(out).toContain('total_hits: 1024')
     expect(out).toContain('- Lipid imaging in brain')
     expect(out).toContain('J Mass Spectrom 2020 | PMID 111 | https://pubmed.ncbi.nlm.nih.gov/111/')
     expect(out).toContain('Anal Chem 2021 | PMID 222')
+    // 结构化摘要保留 Label；每条摘要跟在自己的条目下
+    expect(out).toContain(
+      'abstract: BACKGROUND: Lipids vary by region. RESULTS: Taurine concentrates in the medulla.',
+    )
+    expect(out).toContain('abstract: A broad MSI review.')
+  })
+
+  it('keeps the citation list when the abstract fetch fails', async () => {
+    const fetcher = searchAndSummary().mockRejectedValueOnce(new Error('efetch down'))
+    vi.stubGlobal('fetch', fetcher)
+    const out = await pubmedSearch('lipid imaging', 2)
+    expect(out).toContain('PMID 111')
+    expect(out).toContain('PMID 222')
+    expect(out).not.toContain('abstract:')
   })
 
   it('reports no hits without asking for a summary', async () => {
@@ -97,33 +127,9 @@ describe('PubMed', () => {
   })
 })
 
-it('formats OpenAlex metadata and propagates the caller signal', async () => {
-  const fetcher = respond({
-    meta: { count: 10 },
-    results: [
-      {
-        display_name: 'Review',
-        publication_year: 2024,
-        type: 'review',
-        cited_by_count: 7,
-        doi: 'https://doi.org/10.1234/review',
-        open_access: { oa_url: 'https://example.org/paper' },
-      },
-    ],
-  })
-  const signal = new AbortController().signal
-  expect(await openalexSearch('MSI', 2, signal)).toContain(
-    'review | doi:10.1234/review | cited by 7',
-  )
-  expect(fetcher).toHaveBeenCalledWith(
-    expect.stringContaining('per-page=2'),
-    expect.objectContaining({ signal }),
-  )
-})
-
 it('rejects empty searches without making requests', async () => {
   const fetcher = respond({})
-  for (const search of [pubmedSearch, europepmcSearch, openalexSearch])
+  for (const search of [pubmedSearch, europepmcSearch])
     await expect(search('  ', 3)).rejects.toThrow('nonempty')
   expect(fetcher).not.toHaveBeenCalled()
 })

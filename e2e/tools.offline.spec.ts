@@ -92,10 +92,12 @@ const GROUPS = [
 /** 每张附图「画的是什么」——按工具归类，便于读者不打开文件也能理解 */
 const IMAGE_CONTENT: Partial<Record<string, string>> = {
   get_ion: '重渲染的离子栅格：颜色=强度（当前 colormap，默认 viridis），黑=0；含 24px 标签条。不含 ROI 高亮/通道混合/KMeans 叠加。',
-  get_ion_image: '单目标离子热图：颜色=强度，标签烧在图下方；多目标时各图共享色阶。',
+  get_ion_image_by_rowIds: '按注释 rowIds 取离子热图：同 obsMz 行合并为带标签目标；固定 p99/shared 色阶。',
+  get_ion_image_by_mzs: '按显式 m/z 取离子热图：颜色=强度，标签烧在图下方；固定 p99/shared 色阶。',
   get_kmeans: 'KMeans 叠加图：透明背景，只画选中的簇；底部色图例给出簇 id 与像素数（>12 簇截断为 +N more）。',
   get_umap: 'UMAP 叠加图：透明背景，前景由嵌入坐标的占用掩膜决定；最近邻放大。',
   get_pixel_spectrum: '全谱棒图：灰=全谱其余峰，橙=当前窗口的峰；上沿标 m/z 范围与最大强度；>2000 峰按强度截断但保留高亮峰。',
+  kegg_pathway: 'KEGG 官方通路图 PNG（get/<map>/image，经 /kegg-rest/ 代理）：人工整理的代谢示意图，不是本样本数据。',
 }
 
 /**
@@ -145,14 +147,14 @@ function buildDocument(captures: Capture[], pageState: Record<string, unknown>) 
       '所有以 __ 开头的键都是本文件的注释；不带 __ 的 model.text / args / error 是工具输出的真实内容。',
     ],
     __howTheseOutputsWereProduced: [
-      '真实前端（vite dev server）+ Chromium，装配助手的真实插件组合 baseBundle（28 个工具），对每个工具调用真实的 ctx.tools.execute 管线。',
+      '真实前端（vite dev server）+ Chromium，装配助手的真实插件组合 baseBundle（29 个工具），对每个工具调用真实的 ctx.tools.execute 管线。',
       '管线顺序：validateArgs → tools/pre-execute 闸门 → 超时包裹 → execute → output.render → 字符上限截断 → agent/tool-result waterfall（tool-archive 写全文存档、必要时替换为截断桩）→ 工具消息 → 发请求前附件还原。',
       '页面类工具：数据由一份确定性示例数据集注入 vizworkbench 的 zarr 共享状态与实例 provider 注册表；工具代码、注册表、canvas 渲染、字符预算与截断链路都是真实的。',
-      '外部工具：真实网络（PubChem / ChEBI-OLS4 / KEGG 经 /kegg-rest 代理 / HMDB 经 /hmdb-archive 代理 / PubMed / Europe PMC / OpenAlex / Exa）；后端与 LLM 用 e2e 离线夹具，不发真实模型请求。',
+      '外部工具：真实网络（PubChem / ChEBI-OLS4 / KEGG 经 /kegg-rest 代理（含通路图 PNG）/ HMDB 经 /hmdb-archive 代理 / PubMed / Europe PMC / Exa）；后端与 LLM 用 e2e 离线夹具，不发真实模型请求。',
       '失败与超时只在真实发生时记录（本轮 Europe PMC 有一次真实 15s 超时），不人为构造。',
     ],
     __whyImages: [
-      '有 7 个工具会返回图片：get_page（旧版行为）、get_ion、get_ion_image、get_kmeans、get_umap、get_pixel_spectrum。图片不是文本，而是作为图片附件随 tool_result 一起进入上下文。',
+      '有 9 个工具会返回图片：get_page（旧版行为）、get_ion、get_ion_image_by_rowIds、get_ion_image_by_mzs、get_kmeans、get_umap、get_pixel_spectrum、kegg_pathway（withImage）、pubchem_compound_lookup（withImage）。图片不是文本，而是作为图片附件随 tool_result 一起进入上下文。',
       '工具返回 1–4 张 PNG/JPEG（解码后单张 ≤2MB，尺寸为正整数）；ToolRuntime 校验后交给 agent-loop。',
       'agent-loop 用 attachments.saveTools 把图片写进会话存储，历史里只留附件引用（不持久化 base64）。',
       '下次请求前 attachments.hydrate 把引用还原成 data URL；llm-anthropic 的 toModelMessages 把正文与图片一起包进同一个 tool_result：output = { type: "content", value: [ {type:"text"}, {type:"file", mediaType, data:{type:"data", data:"<base64>"}} ] }。',
@@ -166,13 +168,13 @@ function buildDocument(captures: Capture[], pageState: Record<string, unknown>) 
       '__argsNote': '这次抓取用的页面/数据上下文',
       'args': '实际传给工具的 JSON 参数',
       'model.text': '模型收到的正文，原样（含错误正文；错误时另有 __error 给出原始错误消息）',
-      'model.truncated / maxResultChars': '正文被单工具上限截断过时为 true；上限是 4000（默认）或 12000（证据类，见 tools/limits.ts）',
+      'model.truncated / maxResultChars': '正文被单工具上限截断过时为 true；上限是 16000（默认）或 48000（证据类，见 tools/limits.ts）',
       'model.images': '同一 tool_result 里附带的图片：文件、MIME、尺寸、字节数、画的是什么、模型请求里的块形态',
       'wire.messages': '历史里的助手 tool-call 消息与工具消息（图片是附件引用）',
       'wire.toolResult': '协议层 llm-anthropic 的 tool_result 块（真正发给模型的形态）',
     },
     __coverage: {
-      registeredTools: 28,
+      registeredTools: 29,
       capturedTools: registered,
       groups: GROUPS.map((group) => ({
         group: group.title,
@@ -335,13 +337,11 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
       massScore: 0.92,
       adductFit: 0.81,
       chaos: rank <= 2 ? 0.64 : null,
-      coloc: rank <= 2 ? 0.72 : null,
       spatialScore: rank <= 2 ? 0.7 : null,
       totalScore: 0.9 - rank * 0.02,
       q: 0.012,
-      siblings: rank === 1 ? [{ adduct: '[M+Na]+', obsMz: 766.5, r: 0.81, rank: 4 }] : [],
+      siblings: rank === 1 ? [{ adduct: '[M+Na]+', obsMz: 766.5, rank: 4 }] : [],
       samePeak: rank === 1 ? [{ name: 'Fructose', adduct: '[M+H]+', origin: 'endogenous' }] : [],
-      missingAdducts: rank === 1 ? ['[M+K]+'] : [],
     })
     const rows = [
       annotation(1, 1, 'D-Glucose', 180.0631, '[M+H]+'),
@@ -760,7 +760,7 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
       'selected ion 744.5252 @ ±0.01 Da; 12 annotation rows; k=5 KMeans; UMAP ready',
     note: '这些页面类是经 page.evaluate 注入的确定性问题实例：工具代码、注册表、渲染与截断链路都是真实的，只有数据是注入的。',
   }
-  // 提问时绑定：turn/start 事件里的捕获离子 —— get_page / get_ion_image 的默认目标依赖它
+  // 提问时绑定：turn/start 事件里的捕获离子 —— get_page / get_ion 与离子图容差默认值依赖它
   await page.evaluate(() => {
     const cap = (globalThis as unknown as { __cap: { session: { events: unknown[] } } }).__cap
     cap.session.events.push({
@@ -776,7 +776,6 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
     get_ion: '选中离子视图 + 按当前显示参数重渲染的离子栅格（非画布截图）。',
     get_annotation: '默认窗口 rank 1–10 + 注释面板状态头；一行 = 一个加合离子。',
     get_mean_spectrum_top_peaks: '均值谱按强度降序的默认窗口（仅 continuous 模式）。',
-    get_ion_image: '无参数：绘制提问时捕获的离子 + 每目标定量统计。',
   }
   for (const tool of Object.keys(pageNotes)) {
     await capture({ id: tool, group: 'page', tool, note: pageNotes[tool], args: {} })
@@ -798,28 +797,28 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
     args: { x: pixel.x, y: pixel.y },
   })
 
-  // 多目标：3 个 m/z（数据集离子轴上的真实值）→ 各自独立图、共享色阶便于对比
+  // 多目标：3 个 m/z（数据集离子轴上的真实值）→ 各自独立图、固定 p99/shared 色阶
   await capture({
-    id: 'get_ion_image-mzs',
+    id: 'get_ion_image_by_mzs',
     group: 'page',
-    tool: 'get_ion_image',
+    tool: 'get_ion_image_by_mzs',
     note: [
-      '显式传 3 个 m/z（mzs）：每个目标一张独立 PNG，共用同一色阶（normalize=shared），便于横向比较。',
+      '显式传 3 个 m/z（mzs）：每个目标一张独立 PNG，固定 p99 显示范围与 shared 色阶，便于横向比较。',
       '每张图上都烧了标签「#n m/z …」，正文里的 summaries 与图一一对应。',
-      '超过 4 个目标会拼成 montage；选择器 mz/mzs/rowIds 互斥。',
+      '超过 4 个目标会拼成两列 montage；推荐每次取 6 个目标（4 个用满分图上限，6 个填满拼图）；显示/排版参数不再开放。',
     ],
     args: { mzs: ['180.0634', '744.5252', '796.5854'].map(Number) },
   })
 
   await capture({
-    id: 'get_ion_image-turn-start',
+    id: 'get_ion_image_by_rowIds',
     group: 'page',
-    tool: 'get_ion_image',
+    tool: 'get_ion_image_by_rowIds',
     note: [
-      '不带选择器：目标是提问时（turn/start 绑定）捕获的离子，而不是此刻页面选中的离子。',
-      '本轮里页面中途换过离子也仍用捕获值——这是「提问时快照」语义。',
+      '按注释 rowIds 取图：同 obsMz 的行合并为一个带标签目标。',
+      '固定 p99/shared 色阶；无效目标单独列为 unavailable，不拖垮成功图。',
     ],
-    args: {},
+    args: { rowIds: [1, 2] },
   })
 
   // 叠加类：页面没算 KMeans/UMAP 时，输出就是「不可用」提示，照原样记
@@ -844,10 +843,16 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
 
   // ---- 化学/生物/文献/文件：真实网络 ----
   const external: (Omit<Capture, 'model'> & { args: Record<string, unknown> })[] = [
-    { id: 'pubchem-compound', group: 'chemistry', tool: 'pubchem_compound_lookup', args: { name: 'glucose' },
+    { id: 'pubchem-compound', group: 'chemistry', tool: 'pubchem_compound_lookup', args: { names: ['glucose'] },
       note: [
       '按名称查 PubChem 属性，返回紧凑的 key: value 行（不是 JSON）。',
       '末尾的 page/source 是可直接引用的官方 CID 链接；名称命中 ≠ 身份确认。',
+    ] },
+    { id: 'pubchem-structure', group: 'chemistry', tool: 'pubchem_compound_lookup', args: { names: ['glucose'], withImage: true },
+      note: [
+      'withImage：文本之外附该 CID 的二维结构图 PNG（REST compound/cid/<CID>/PNG?image_size=500x500）。',
+      '一次 1–4 个名字、不接受 offset/limit（附件管线最多 4 张图）；图与文本同源同 CID。',
+      '图画的是名字实际解析到的分子，不构成身份证明；取不到图不影响文本，失败项单列在 structure images unavailable 段。',
     ] },
     { id: 'pubchem-formula', group: 'chemistry', tool: 'pubchem_formula_search', args: { formula: 'C6H12O6', maxResults: 3 },
       note: [
@@ -864,42 +869,42 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
       'KEGG 在一次检索中按 AND 匹配多个关键词，返回一组 {query, window, entries:[{id,name}]} 和实时来源。',
       'window 是完整结果集的零基分页窗口；limit 只是页大小，不是总量上限。',
     ] },
-    { id: 'kegg-compound', group: 'biology', tool: 'kegg_compound', args: { id: 'C00031' },
+    { id: 'kegg-compound', group: 'biology', tool: 'kegg_compound', args: { ids: ['C00031'] },
       note: [
-      '按 C 编号取官方条目：names / formula / exact_mass / mol_weight / pathways / dblinks，全用 Markdown 链接。',
-      '这是身份核验的首选：对照 formula 与 exact_mass，而不是信关键词排名。',
+      '按 C 编号取官方条目：names / formula / pathways，全用 Markdown 链接。',
+      '身份核验综合返回记录，不只对照 formula；冗余质量与 dblinks 不再返回。',
     ] },
     { id: 'kegg-pathway', group: 'biology', tool: 'kegg_pathway', args: { id: 'map00010' },
       note: [
       '一次 get 返回通路的 NAME、CLASS 和 DESCRIPTION 摘录。',
       '只接受 map 编号；hsa 等 organism 编号会被拒。',
     ] },
+    { id: 'kegg-pathway-image', group: 'biology', tool: 'kegg_pathway', args: { ids: ['map00230'], withImage: true },
+      note: [
+      '详情模式 + withImage：取回该通路的官方 PNG 示意图（REST get/map00230/image）。',
+      '每次只允许一个 map；图是人工整理的示意图，不是本样本的证据。',
+    ] },
     { id: 'kegg-members', group: 'biology', tool: 'kegg_pathway', args: { membersOf: ['map00010', 'map00020'], limit: 3 },
-      note: ['一次 link 查询两个通路的成员化合物编号，各通路独立分页。'] },
+      note: ['一次官方 link 查询两个通路的成员化合物编号，各通路独立分页。'] },
     { id: 'kegg-mass', group: 'biology', tool: 'kegg_mass_search', args: { mz: 181.0707, adduct: '[M+H]+', ppm: 10, limit: 3 },
       note: [
       '使用指定加合物换算观测 m/z，一次查询一个中性精确质量区间。',
       'matches 按 |Δppm| 排序，包含候选 C 编号、加合物、KEGG 返回的精确质量及有符号质量误差。',
     ] },
-    { id: 'hmdb', group: 'biology', tool: 'hmdb_lookup', args: { id: 'HMDB0000122' },
+    { id: 'hmdb', group: 'biology', tool: 'hmdb_lookup', args: { ids: ['HMDB0000122'] },
       note: [
       'HMDB 归档 XML 档案，输出按 HMDB 页面的分区标签逐行给出（Record Information / Metabolite Identification / Taxonomy / Role / Biological Properties / Concentrations / External Links）。',
       'description 按句界截断到 1000 字符；最后四行 page/snapshot/archive/source 是工具自己的出处标注。',
     ] },
     { id: 'pubmed', group: 'literature', tool: 'pubmed_search', args: { query: 'mass spectrometry imaging lipidomics', maxResults: 2 },
       note: [
-      'PubMed：total_hits + 每条「标题 / 期刊 年份 | PMID | 链接」，没有摘要正文。',
-      '需要摘要时改用 europepmc_search。',
+      '降级链第 2 档：total_hits + 每条「标题 / 期刊 年份 | PMID | 链接」+ efetch 摘要摘录。',
+      'efetch 失败时退化为仅元数据；再不行才降级到 web_search。',
     ] },
     { id: 'europepmc', group: 'literature', tool: 'europepmc_search', args: { query: 'mass spectrometry imaging lipidomics', maxResults: 2 },
       note: [
-      'Europe PMC：每条 title / journal year / 标识符 + abstract 摘录（≤600 字符），OA 且有 PMCID 时附全文链接。',
-      '这一轮出现了真实超时（工具默认 15s）：正文只有一行 "Error: tool call timed out after 15000ms"，没有部分结果。',
-    ] },
-    { id: 'openalex', group: 'literature', tool: 'openalex_search', args: { query: 'mass spectrometry imaging lipidomics', maxResults: 2 },
-      note: [
-      'OpenAlex：每条「标题 / 来源 年份 | 类型 | doi | cited by N」+ OA 链接。',
-      '被引数是发现线索，不是质量结论。',
+      '降级链第 1 档：每条 title / journal year / 标识符 + abstract 摘录（≤600 字符），OA 且有 PMCID 时附全文链接。',
+      '关键词应按待验证论断自拟，而不是泛搜分子名。',
     ] },
     { id: 'web-search', group: 'web', tool: 'web_search', args: { query: 'KEGG REST API documentation find compound', maxResults: 2 },
       note: [
@@ -942,7 +947,7 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
     note: [
       '批量 id（ids）：两项各取一次归档 XML，按输入顺序用「### id」分节拼接；整个批次一个 tool_result。',
       'HMDB0000123 在归档里没有快照，那一项就如实写 "No archived snapshot"，不会变成整批失败。',
-      '批量预算见 EVIDENCE_BATCH_BUDGET；单批超过 11.7k 字符才会触发行内预览 + 存档指针。',
+      '批量预算见 EVIDENCE_BATCH_BUDGET；单批超过 47.7k 字符才会触发行内预览 + 存档指针。',
     ],
   })
   // agent/tool-result 中间件为每次成功结果都写一份存档；read_archived_result 读的就是它

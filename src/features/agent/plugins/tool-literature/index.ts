@@ -1,22 +1,28 @@
 /**
- * 文献检索工具集：PubMed / Europe PMC / OpenAlex（全部只读、CORS 友好）。
+ * 文献检索工具集：Europe PMC / PubMed（全部只读、CORS 友好）。
  *
- * - PubMed E-utilities https://eutils.ncbi.nlm.nih.gov/entrez/eutils/
- *   （无鉴权，CORS 友好；仅标题/期刊/PMID，无摘要正文）
+ * 检索目的：为**当前的状况或论断**找可引用的支撑/反驳文本，而不是泛搜分子名。
+ * 关键词由调用方按待验证的论断自行设定（分子 + 组织 + 模态 + 结局等限定词）。
+ *
+ * 固定降级链（也写给模型）：europepmc_search → pubmed_search → web_search。
+ * 上一档报错或零命中才走下一档；两档文献工具都零命中 = 没找到文献，都报错 = 覆盖缺口，
+ * 两者都不等于"该论断没有文献支持"。两档都返回摘要正文；再降级到 web_search 时拿到的是
+ * 网页摘录而非同行评议摘要，必须声明证据类型下降。
+ *
  * - Europe PMC REST https://www.ebi.ac.uk/europepmc/webservices/rest/
  *   （PubMed 超集：resultType=core 直接带回摘要正文，CORS ✓）
- * - OpenAlex https://api.openalex.org/works（综述/DOI 元数据/被引，CORS ✓）
+ * - PubMed E-utilities https://eutils.ncbi.nlm.nih.gov/entrez/eutils/
+ *   （无鉴权，CORS 友好；esearch + esummary + efetch 三跳，efetch 取摘要正文）
  *
  * 设计约束（同 tool-knowledge）：结果摘要化紧凑文本；E-utilities 无 key
- * 限 ~3 req/s，每次调用只发 1-2 个请求。
+ * 限 ~3 req/s，每次调用只发 2-3 个请求。
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { defineTool, getJson, excerpt, TOOL_RESULT_CHARS_EVIDENCE } from '../tools'
+import { defineTool, getJson, getText, excerpt, TOOL_RESULT_CHARS_EVIDENCE } from '../tools'
 
 const EUTILS_BASE = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
 const EPMC_BASE = 'https://www.ebi.ac.uk/europepmc/webservices/rest/search'
-const OPENALEX_BASE = 'https://api.openalex.org/works'
 
 /** 校验查询词，返回限制后的结果数 */
 function resultCount(query: string, maxResults: number): number {
@@ -28,7 +34,33 @@ const cleanTitle = (title: unknown) => String(title ?? '').replace(/\s*\.\s*$/, 
 
 // ---- PubMed ----
 
-/** PubMed 文献检索：esearch + esummary 两跳，返回标题/期刊/年份/PMID/链接 */
+/**
+ * efetch 取摘要正文（第三跳）。结构化摘要的 AbstractText 带 Label，拼成
+ * "BACKGROUND: … METHODS: …"。失败不致命——标题/PMID 仍可用于"有没有文献"。
+ */
+async function pubmedAbstracts(
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<Map<string, string>> {
+  const url = `${EUTILS_BASE}/efetch.fcgi?db=pubmed&retmode=xml&id=${ids.join(',')}`
+  const doc = new DOMParser().parseFromString(await getText(url, { signal }), 'application/xml')
+  const out = new Map<string, string>()
+  for (const article of Array.from(doc.getElementsByTagName('PubmedArticle'))) {
+    const pmid = article.getElementsByTagName('PMID')[0]?.textContent?.trim()
+    if (!pmid) continue
+    const parts = Array.from(article.getElementsByTagName('AbstractText'))
+      .map((node) => {
+        const text = (node.textContent ?? '').trim()
+        const label = node.getAttribute('Label')
+        return label && text ? `${label}: ${text}` : text
+      })
+      .filter(Boolean)
+    if (parts.length) out.set(pmid, excerpt(parts.join(' '), 600))
+  }
+  return out
+}
+
+/** PubMed 文献检索：esearch + esummary + efetch 三跳，返回标题/期刊/年份/PMID/摘要 */
 export async function pubmedSearch(
   query: string,
   maxResults: number,
@@ -47,6 +79,13 @@ export async function pubmedSearch(
   const result = (await getJson(sumUrl, { signal }))?.result
   if (!result) throw new Error('Invalid PubMed summary response')
 
+  let abstracts = new Map<string, string>()
+  try {
+    abstracts = await pubmedAbstracts(ids, signal)
+  } catch {
+    signal?.throwIfAborted() // Cancellation must not become a successful partial result.
+  }
+
   const lines = [`total_hits: ${search.count ?? ids.length}`]
   for (const uid of (result?.uids ?? ids) as string[]) {
     const r = result[uid]
@@ -57,6 +96,8 @@ export async function pubmedSearch(
     lines.push(
       `- ${title}\n  ${journal} ${date} | PMID ${uid} | https://pubmed.ncbi.nlm.nih.gov/${uid}/`,
     )
+    const abs = abstracts.get(uid)
+    if (abs) lines.push(`  abstract: ${abs}`)
   }
   return lines.join('\n')
 }
@@ -100,76 +141,50 @@ export async function europepmcSearch(
   return lines.join('\n')
 }
 
-// ---- OpenAlex（综述检索 / DOI 元数据 / 被引） ----
-
-/** OpenAlex 检索：标题/年份/期刊/DOI/被引次数/OA 链接 */
-export async function openalexSearch(
-  query: string,
-  maxResults: number,
-  signal?: AbortSignal,
-): Promise<string> {
-  const n = resultCount(query, maxResults)
-  const url = `${OPENALEX_BASE}?search=${encodeURIComponent(query)}&per-page=${n}`
-  const data = await getJson(url, { signal })
-  if (!Array.isArray(data?.results)) throw new Error('Invalid OpenAlex search response')
-  const works: any[] = data.results
-  if (works.length === 0) return `No OpenAlex results for "${query}".`
-
-  const lines = [`total_hits: ${data.meta?.count ?? works.length}`]
-  for (const w of works) {
-    const title = cleanTitle(w.display_name)
-    const venue = w.primary_location?.source?.display_name ?? ''
-    const year = w.publication_year ?? ''
-    const cited = w.cited_by_count ?? 0
-    const doi = typeof w.doi === 'string' ? w.doi.replace('https://doi.org/', '') : ''
-    const type = w.type ?? ''
-    lines.push(
-      `- ${title}\n  ${venue} ${year} | ${type}${doi ? ` | doi:${doi}` : ''} | cited by ${cited}`,
-    )
-    const oa = w.open_access?.oa_url ?? w.primary_location?.landing_page_url
-    if (oa) lines.push(`  link: ${oa}`)
-  }
-  return lines.join('\n')
-}
-
 // ---- 插件 ----
 
 /**
- * 选型指引（也写给模型）：
- * - 只要 PubMed 索引内命中（快速核对"有没有文献"）→ pubmed_search
- * - 需要摘要正文支撑结论 → europepmc_search（首选）
- * - 找综述/看影响力/要 DOI → openalex_search
+ * 选型指引（也写给模型）：固定降级链 europepmc → pubmed → web_search。
+ * 上一档报错或零命中才走下一档，并在结论里说明实际用了哪一档、前面为什么没用上。
+ * 两档文献工具都零命中 = 没找到文献；都报错 = 覆盖缺口。两者都不是"该论断无文献支持"。
+ * 关键词由模型按当前待验证的状况/论断自行设定，不是固定模板。
  */
 export const name = 'tool-literature'
 export const inject = ['tools']
 
 export function apply(ctx: Context) {
   /**
-   * pubmed_search —— PubMed 文献检索（E-utilities esearch + esummary 两跳）。
+   * pubmed_search —— PubMed 文献检索（E-utilities esearch + esummary + efetch 三跳）。
    *
-   * 作用：返回 total_hits 与标题/期刊/年份/PMID/链接（无摘要正文——需要摘要用
-   * europepmc_search）。用于给生物学解读找已发表证据（如 "{molecule} mass
-   * spectrometry imaging {tissue}"）。
+   * 作用：降级链第 2 档，仅在 europepmc_search 报错或零命中时使用。返回 total_hits
+   * 与标题/期刊/年份/PMID/链接 + 摘要正文摘录（efetch，≤600 字符；结构化摘要保留
+   * Label）。efetch 失败不致命，此时退化为仅元数据，必须声明不能据此下结论。
+   * 再失败或零命中才降到 web_search（网页摘录，证据类型下降）。
    *
    * 参数：
-   * - query (string, 必填)：检索词（英文效果最好）
+   * - query (string, 必填)：按待验证论断自拟的检索词（英文效果最好）
    * - maxResults (integer, 可选)：返回篇数，默认 5、cap 10
    */
   ctx.tools.register(
     defineTool({
       name: 'pubmed_search',
+      timeoutMs: 30000,
       category: 'literature',
       description:
-        'Search PubMed for published papers when you need to check whether a scientific topic has ' +
-        'literature or want quick citations. Returns the total hit count plus title, journal, date, PMID ' +
-        'and PubMed link per paper — no abstract text; switch to europepmc_search when the abstract is ' +
-        "needed. English queries work best; do not infer a paper's conclusions from title/metadata alone.",
+        'LITERATURE TIER 2 — use only after europepmc_search has errored or returned no hits. Searches ' +
+        'PubMed for evidence about the specific claim or observation you are checking; choose the keywords ' +
+        'yourself from that claim (molecule, tissue, modality, outcome). Returns the total hit count plus ' +
+        'title, journal, date, PMID, PubMed link and an abstract excerpt of up to 600 characters ' +
+        '(structured abstracts keep their section labels). If the abstract fetch fails you get metadata ' +
+        'only — say so and do not infer conclusions from a title. If this tier also fails or returns ' +
+        'nothing, fall back to web_search and state that the evidence is then a web excerpt, not a ' +
+        'peer-reviewed abstract. English queries work best.',
       parameters: {
         query: {
           type: 'string',
           required: true,
           description:
-            'PubMed search expression; English keywords/phrases work best; must be non-empty.',
+            'PubMed search expression built from the claim being checked; English keywords/phrases work best; must be non-empty.',
         },
         maxResults: {
           type: 'integer',
@@ -186,29 +201,35 @@ export function apply(ctx: Context) {
   /**
    * europepmc_search —— Europe PMC 检索（PubMed 超集，含预印本与 PMC 全文）。
    *
-   * 作用：返回标题/期刊/年份/DOI/PMID/PMCID + 摘要正文摘录（resultType=core，≤600
-   * 字符）；OA 且有 PMCID 的条目附 europepmc 全文链接。需要已发表证据支撑或质疑
-   * 一个解读时的首选文献工具。
+   * 作用：降级链第 1 档（首选）。返回标题/期刊/年份/DOI/PMID/PMCID + 摘要正文摘录
+   * （resultType=core，≤600 字符）；OA 且有 PMCID 的条目附 europepmc 全文链接。
+   * 报错或零命中才降到 pubmed_search，再不行才 web_search。
    *
    * 参数：
-   * - query (string, 必填)：检索词（英文效果最好）
+   * - query (string, 必填)：按待验证论断自拟的检索词（英文效果最好）
    * - maxResults (integer, 可选)：返回篇数，默认 5、cap 10
    */
   ctx.tools.register(
     defineTool({
       name: 'europepmc_search',
+      timeoutMs: 30000,
       category: 'literature',
       description:
-        'Search Europe PMC (a PubMed superset including preprints and PMC full texts) — the first choice ' +
-        'when abstract text is needed to support or challenge an interpretation. Returns title, journal, ' +
-        'year, available identifiers (PMID/PMCID/DOI), an abstract excerpt of up to 600 characters, and a ' +
-        'full-text link for open-access entries with a PMCID. Verify the excerpt actually supports any ' +
-        'claim you cite; abstracts may be truncated.',
+        'LITERATURE TIER 1 (first choice) — search Europe PMC, a PubMed superset including preprints and ' +
+        'PMC full texts, for retrievable evidence that supports or challenges the specific claim or ' +
+        'observation you are assessing. You choose the keywords from that claim (molecule, tissue, modality, ' +
+        'outcome, method) rather than searching a bare molecule name. Returns title, journal, year, ' +
+        'identifiers (PMID/PMCID/DOI), an abstract excerpt of up to 600 characters, and a full-text link for ' +
+        'open-access entries with a PMCID. If this call errors or returns no hits, fall back to ' +
+        'pubmed_search, then web_search. Both literature tiers returning nothing means no literature was ' +
+        'found; both erroring is a coverage gap — neither means the claim is wrong. Verify the excerpt ' +
+        'actually supports any claim you cite; abstracts may be truncated.',
       parameters: {
         query: {
           type: 'string',
           required: true,
-          description: 'Europe PMC search expression; English works best; must be non-empty.',
+          description:
+            'Europe PMC search expression built from the claim being checked; English works best; must be non-empty.',
         },
         maxResults: {
           type: 'integer',
@@ -218,45 +239,6 @@ export function apply(ctx: Context) {
       maxResultChars: TOOL_RESULT_CHARS_EVIDENCE,
       async execute(args, exec) {
         return europepmcSearch(args.query!, args.maxResults ?? 5, exec.signal)
-      },
-    }),
-  )
-
-  /**
-   * openalex_search —— OpenAlex 学术作品检索（全学科，含综述/预印本）。
-   *
-   * 作用：返回标题/期刊/年份/DOI/被引次数/OA 链接。用于找综述文章或衡量一个主题
-   * 有多少已发表工作支撑（影响力）。
-   *
-   * 参数：
-   * - query (string, 必填)：检索词
-   * - maxResults (integer, 可选)：返回篇数，默认 5、cap 10
-   */
-  ctx.tools.register(
-    defineTool({
-      name: 'openalex_search',
-      category: 'literature',
-      description:
-        'Search OpenAlex scholarly works across all disciplines (including reviews and preprints) to find ' +
-        'survey articles or gauge how much published work supports a topic. Returns title, venue, year, ' +
-        'type, DOI, citation count and an open-access link when available. Citation counts and links are ' +
-        'discovery signals, not a quality verdict; read the paper or abstract before drawing scientific ' +
-        'conclusions.',
-      parameters: {
-        query: {
-          type: 'string',
-          required: true,
-          description:
-            'OpenAlex search query; combine topic, molecule, method or study context; must be non-empty.',
-        },
-        maxResults: {
-          type: 'integer',
-          description: 'Max works returned, default 5, clamped 1–10.',
-        },
-      },
-      maxResultChars: TOOL_RESULT_CHARS_EVIDENCE,
-      async execute(args, exec) {
-        return openalexSearch(args.query!, args.maxResults ?? 5, exec.signal)
       },
     }),
   )

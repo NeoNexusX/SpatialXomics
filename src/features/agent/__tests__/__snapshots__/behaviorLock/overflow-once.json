@@ -57,8 +57,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt e22127e1>",
-      "tools": "<tools 479c7b97>",
+      "system": "<prompt 9405e3ca>",
+      "tools": "<tools 1a66bb78>",
       "maxTokens": 16000,
       "contextWindow": 64000,
       "imageMode": "image",
@@ -162,8 +162,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt e22127e1>",
-      "tools": "<tools 479c7b97>",
+      "system": "<prompt 9405e3ca>",
+      "tools": "<tools 1a66bb78>",
       "maxTokens": 16000,
       "contextWindow": 64000,
       "imageMode": "image",
@@ -227,8 +227,8 @@
     },
     {
      "type": "compaction/end",
-     "beforeTokens": 27595,
-     "afterTokens": 2642,
+     "beforeTokens": 27725,
+     "afterTokens": 2772,
      "seq": 20
     },
     {
@@ -245,8 +245,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt e22127e1>",
-      "tools": "<tools 479c7b97>",
+      "system": "<prompt 9405e3ca>",
+      "tools": "<tools 1a66bb78>",
       "maxTokens": 16000,
       "contextWindow": 64000,
       "imageMode": "image",
@@ -286,8 +286,8 @@
  ],
  "calls": [
   {
-   "system": "<prompt e22127e1>",
-   "tools": "<tools 479c7b97>",
+   "system": "<prompt 9405e3ca>",
+   "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
     "<message 2>"
@@ -296,8 +296,8 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt e22127e1>",
-   "tools": "<tools 479c7b97>",
+   "system": "<prompt 9405e3ca>",
+   "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
     "<message 2>",
@@ -309,8 +309,8 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt e22127e1>",
-   "tools": "<tools 479c7b97>",
+   "system": "<prompt 9405e3ca>",
+   "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
     "<message 2>",
@@ -323,8 +323,8 @@
    "maxTokens": 16000
   },
   {
-   "system": "<prompt e22127e1>",
-   "tools": "<tools 479c7b97>",
+   "system": "<prompt 9405e3ca>",
+   "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 5>",
     "<message 4>",
@@ -392,11 +392,11 @@
   ],
   "error": "common.agent.errors.contextWindow: still too long",
   "pressure": {
-   "inputTokens": 2642,
+   "inputTokens": 2772,
    "contextWindow": 64000,
    "outputReserve": 16000,
    "inputBudget": 46720,
-   "ratio": 0.056549657534246574,
+   "ratio": 0.05933219178082192,
    "estimated": true
   }
  }

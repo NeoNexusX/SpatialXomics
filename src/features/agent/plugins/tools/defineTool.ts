@@ -25,7 +25,7 @@ export interface ToolRunContext {
  * - files       后端文件/任务/配额
  * - chemistry   化学信息（PubChem / 离线库 / ChEBI）
  * - biology     生物信息（HMDB / KEGG：代谢物→组织/疾病/通路）
- * - literature  文献检索（PubMed / Europe PMC / OpenAlex）
+ * - literature  文献检索（Europe PMC / PubMed）
  * - web         通用网络搜索和来源发现
  * - interaction 向用户提问
  * - system      助手自身（存档读取等）
@@ -56,7 +56,7 @@ export interface ToolDefinition {
   }
   /** 执行超时（ms），缺省 15000 */
   timeoutMs?: number
-  /** 模型可见结果的字符上限，缺省 4000 */
+  /** 模型可见结果的字符上限，缺省 TOOL_RESULT_CHARS_DEFAULT */
   maxResultChars?: number
   execute(args: unknown, exec: ToolRunContext): Promise<unknown>
 }
@@ -85,7 +85,7 @@ export interface DefineToolOptions<S extends ParameterSchemaSpec, V> {
   /** 执行超时（ms），缺省 15000 */
   timeoutMs?: number
   /**
-   * 模型可见结果的字符上限，缺省 4000。只给内容本身就该完整的工具调高
+   * 模型可见结果的字符上限，缺省 TOOL_RESULT_CHARS_DEFAULT。只给内容本身就该完整的工具调高
    * （如技能文档全文），被截断会让模型读不到后半段。
    */
   maxResultChars?: number

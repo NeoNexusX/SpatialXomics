@@ -101,8 +101,8 @@ You can also chat on pages without a dataset context, such as Home. In that case
 | --- | --- |
 | Page and data | Read the current page state and selection, dataset overview, one or many ion images (up to 9 m/z values, returned separately or as a montage), ion images for annotation rows, ion-intensity statistics, top mean-spectrum peaks, a pixel spectrum, KMeans/UMAP summaries, and the annotation list or details |
 | Files and account | List public/personal files, read file metadata, list processing tasks, and check user quota |
-| Compounds and pathways | PubChem compound and formula lookup, ChEBI, HMDB, KEGG pathway details and member compounds; read lipid candidates generated in the annotation panel |
-| Literature and web | PubMed, Europe PMC, OpenAlex, and Exa web search |
+| Compounds and pathways | PubChem compound and formula lookup, ChEBI, HMDB, KEGG pathway details and member compounds, plus the KEGG pathway map image; read lipid candidates generated in the annotation panel |
+| Literature and web | Europe PMC and PubMed search with keywords built from the claim being checked, falling back to Exa web search when both are unavailable |
 | Conversation | Read archived tool results that were shortened, and load skill instructions on demand |
 
 Web search uses Exa's hosted MCP and the anonymous allowance by default; a deployment can set `VITE_EXA_API_KEY` for a higher allowance. Search results contain URLs and excerpts, not full-text reads.

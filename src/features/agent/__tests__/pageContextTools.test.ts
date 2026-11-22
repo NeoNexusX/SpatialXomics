@@ -4,10 +4,10 @@
  * - get_dataset：排除表（imagePath/hashMd5/publicId 不出现，organism 等样本字段出现），
  *   raw 未知键透传，'--' 占位转 null
  * - get_ion：通道列表与 ROI/掩膜段；withImage:false 省略 images 字段（不返回 []）
- * - get_annotation：默认窗口 rank 1–10；offset:19/limit:11 返回 rank 20–30；
- *   窗口与筛选解耦；精确 rowIds/mzs 与 offset/limit 互斥
+ * - get_annotation：默认窗口 rank 1–10；rankFrom:20/rankTo:30 返回 rank 20–30；
+ *   窗口与筛选解耦；精确 rowIds 与 rankFrom/rankTo 互斥；旧 offset/limit 与 mz/mzs/rowId 报错
  * - get_mean_spectrum_top_peaks / get_pixel_spectrum：任意 rank 窗口（先完整排序再切片）
- * - get_ion_image：mz/mzs/rowIds 选择器互斥
+ * - get_ion_image_by_rowIds / get_ion_image_by_mzs：拆分入口，固定 p99/shared
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -15,7 +15,7 @@ import { apply } from '../plugins/tool-page-context'
 import * as toolPageContextPlugin from '../plugins/tool-page-context'
 import { apply as applyIonImage } from '../plugins/tool-ion-image'
 import { SystemPrompt } from '../plugins/system-prompt'
-import { ToolRuntime } from '../plugins/tools'
+import { ToolRuntime, TOOL_RESULT_CHARS_EVIDENCE } from '../plugins/tools'
 import { SkillsRegistry } from '../plugins/skill'
 import type { ToolDefinition, ToolRunContext } from '../plugins/tools'
 import { registerContextProviders, unregisterContextProviders } from '../bridge/analysisContext'
@@ -76,13 +76,11 @@ function annotationRows(n: number): AnnotationRow[] {
     massScore: 0.9,
     adductFit: 0.8,
     chaos: null,
-    coloc: null,
     spatialScore: null,
     totalScore: 0.85,
     q: 0.05,
     siblings: [],
     samePeak: [],
-    missingAdducts: [],
   }))
 }
 
@@ -146,31 +144,56 @@ describe('get_annotation rank window', () => {
     expect(out.rows).toHaveLength(10)
     expect(out.rows[0].rank).toBe(1)
     expect(out.rows[9].rank).toBe(10)
-    expect(out.paging).toMatchObject({ total: 30, offset: 0, returned: 10, nextOffset: 10 })
+    expect(out.paging).toMatchObject({ total: 30, rankFrom: 1, rankTo: 10, returned: 10, nextRank: 11 })
     // 面板头带归一化权重（与 conditions.scoreRatio 的输入比例对应）
     expect(out.panel.weights).toEqual({ mass: 0.6, adduct: 0.1, spatial: 0.3 })
   })
 
-  it('offset 19 + limit 11 returns rank 20-30 regardless of table filters', async () => {
+  it('rankFrom 20 + rankTo 30 returns rank 20-30 regardless of table filters', async () => {
     registerAnnotations(30, 5) // 表格筛选后只剩 5 行可见：窗口仍读全量
-    const out = JSON.parse(String(await runTool('get_annotation', { offset: 19, limit: 11 })))
+    const out = JSON.parse(String(await runTool('get_annotation', { rankFrom: 20, rankTo: 30 })))
     expect(out.rows.map((r: AnnotationRow) => r.rank)).toEqual([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30])
-    expect(out.paging).toMatchObject({ total: 30, offset: 19, returned: 11, nextOffset: null })
+    expect(out.paging).toMatchObject({ total: 30, rankFrom: 20, rankTo: 30, returned: 11, nextRank: null })
     // 面板头报告筛选态与可见行数，窗口口径不受影响
     expect(out.panel.filters.searchQuery).toBe('filtered!')
     expect(out.panel.visibleRows).toBe(5)
   })
 
-  it('beyond-total offset returns an empty page with valid paging metadata', async () => {
+  it('rankTo defaults to rankFrom+9 and the range is capped at 25 rows', async () => {
+    registerAnnotations(60)
+    const out = JSON.parse(String(await runTool('get_annotation', { rankFrom: 11 })))
+    expect(out.rows.map((r: AnnotationRow) => r.rank)).toEqual([11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
+    expect(out.paging).toMatchObject({ rankFrom: 11, rankTo: 20, nextRank: 21 })
+
+    const wide = JSON.parse(String(await runTool('get_annotation', { rankFrom: 1, rankTo: 60 })))
+    expect(wide.rows).toHaveLength(25)
+    expect(wide.paging).toMatchObject({ rankFrom: 1, rankTo: 25, returned: 25, nextRank: 26 })
+  })
+
+  it('rejects an inverted range instead of silently returning the wrong window', async () => {
+    registerAnnotations(30)
+    await expect(runTool('get_annotation', { rankFrom: 20, rankTo: 10 })).rejects.toThrow(
+      /rankTo \(10\) must be greater than or equal to rankFrom \(20\)/,
+    )
+  })
+
+  it('rejects the removed offset/limit rather than silently serving rank 1-10', async () => {
+    registerAnnotations(30)
+    await expect(runTool('get_annotation', { offset: 19, limit: 11 })).rejects.toThrow(
+      /no longer takes offset\/limit/,
+    )
+  })
+
+  it('beyond-total rankFrom returns an empty page with valid paging metadata', async () => {
     registerAnnotations(12)
-    const out = JSON.parse(String(await runTool('get_annotation', { offset: 50, limit: 10 })))
+    const out = JSON.parse(String(await runTool('get_annotation', { rankFrom: 51, rankTo: 60 })))
     expect(out.rows).toEqual([])
-    expect(out.paging).toMatchObject({ total: 12, offset: 50, returned: 0, nextOffset: null })
+    expect(out.paging).toMatchObject({ total: 12, rankFrom: 51, rankTo: 60, returned: 0, nextRank: null })
   })
 
   it('exact rowIds conflict with the rank window', async () => {
     registerAnnotations(30)
-    await expect(runTool('get_annotation', { rowIds: [3], offset: 5 })).rejects.toThrow(
+    await expect(runTool('get_annotation', { rowIds: [3], rankFrom: 6 })).rejects.toThrow(
       /mutually exclusive/i,
     )
   })
@@ -180,6 +203,16 @@ describe('get_annotation rank window', () => {
     const out = String(await runTool('get_annotation', { rowIds: [4, 2] }))
     expect(out).toContain('rowId: 4')
     expect(out).toContain('rowId: 2')
+  })
+
+  it('exact rowIds renders every selector without an unreachable pagination footer', async () => {
+    // 精确模式禁 rankFrom/rankTo，若沿用 renderBatch 的输入分页（默认 limit 5），
+    // 第 6 个之后的选择器永远取不到——脚注让传 offset=5 会撞互斥校验。
+    registerAnnotations(30)
+    const ids = Array.from({ length: 10 }, (_, i) => i + 1)
+    const out = String(await runTool('get_annotation', { rowIds: ids }))
+    for (const id of ids) expect(out).toContain(`### rowId ${id}`)
+    expect(out).not.toContain('nextOffset')
   })
 
   it('returns a zero-row page when annotation context exists but has no matches', async () => {
@@ -197,7 +230,7 @@ describe('get_annotation rank window', () => {
     })
     const out = JSON.parse(String(await runTool('get_annotation')))
     expect(out.rows).toEqual([])
-    expect(out.paging).toMatchObject({ total: 0, returned: 0, nextOffset: null })
+    expect(out.paging).toMatchObject({ total: 0, returned: 0, nextRank: null })
     expect(out.panel.runState).toBe('done')
   })
 
@@ -217,9 +250,43 @@ describe('get_annotation rank window', () => {
     })
     const raw = String(await runTool('get_annotation'))
     const out = JSON.parse(raw)
-    expect(raw.length).toBeLessThan(12000)
+    expect(raw.length).toBeLessThan(TOOL_RESULT_CHARS_EVIDENCE)
     expect(out.rows[0]).toMatchObject({ id: 1, rank: 1, truncated: true })
-    expect(out.paging).toMatchObject({ returned: 1, nextOffset: 1 })
+    expect(out.paging).toMatchObject({ returned: 1, nextRank: 2 })
+  })
+
+  it('reverse-finds molecules across all loaded annotations, not only the current rank window', async () => {
+    registerAnnotations(30)
+    const rows = annotationRows(30)
+    rows[24]!.candidates = [{ id: 'HMDB00001', name: 'D-Sorbitol', origin: 'endogenous' }]
+    rows[24]!.name = 'D-Sorbitol'
+    rows[25]!.candidates = [{ id: 'C00794', name: 'Sorbitol', origin: 'endogenous' }]
+    rows[25]!.formula = 'C6H14O6'
+    registerContextProviders({
+      annotations: () => ({
+        count: 30,
+        rows: () => rows,
+        panelRows: () => rows.slice(0, 10),
+        panel: () => ({ summary: null, conditions: null, filters: null, visibleRows: 10,
+          runState: 'done', dbInfo: null, peakStats: null }),
+      }),
+    })
+    const out = JSON.parse(String(await runTool('get_annotation', { molecule: 'Sorbitol' })))
+    expect(out.matches).toHaveLength(1)
+    expect(out.matches[0]).toMatchObject({ rowId: 26, rank: 26, primaryCandidateMatch: true })
+    expect(out.matches[0].matchTypes).toContain('candidate-name-exact')
+    expect(out.note).toContain('not that the named isomer was independently identified')
+    const formula = JSON.parse(String(await runTool('get_annotation', { molecule: 'C6H14O6' })))
+    expect(formula.matches.map((m: { rowId: number }) => m.rowId)).toEqual([26])
+    const substring = JSON.parse(String(await runTool('get_annotation', { molecule: 'sorbitol', matchMode: 'contains' })))
+    expect(substring.matches.map((m: { rowId: number }) => m.rowId)).toEqual([25, 26])
+  })
+
+  it('reverse lookup distinguishes an annotation miss from biological absence', async () => {
+    registerAnnotations(10)
+    const out = String(await runTool('get_annotation', { molecule: 'not-annotated' }))
+    expect(out).toContain('No exact annotation candidate/library id/formula match')
+    expect(out).toContain('not proof of biological absence')
   })
 
   it('unregistered annotations page degrades to an unavailable hint', async () => {
@@ -338,28 +405,28 @@ describe('get_page combined snapshot', () => {
   it('budgets combined page and dataset JSON without breaking syntax', async () => {
     registerContextProviders({
       datasetInfo: () => ({
-        attrs: { huge: 'x'.repeat(20000) }, acquisition: {}, sourceFile: null, methods: [],
+        attrs: { huge: 'x'.repeat(TOOL_RESULT_CHARS_EVIDENCE * 2) }, acquisition: {}, sourceFile: null, methods: [],
         displayRange: null, imageInfo: { pixels: null, nonZero: null, totalIon: null, pixelSize: null },
       }),
       pageHeader: () => ({ datasetName: 'x', status: '' }),
     })
     const dataset = String(await runTool('get_dataset'))
-    expect(dataset.length).toBeLessThan(12000)
+    expect(dataset.length).toBeLessThan(TOOL_RESULT_CHARS_EVIDENCE)
     expect(() => JSON.parse(dataset)).not.toThrow()
     const page = await runTool('get_page', { withImage: false }) as { page: unknown }
     const rendered = JSON.stringify(page.page)
-    expect(rendered.length).toBeLessThan(12000)
+    expect(rendered.length).toBeLessThan(TOOL_RESULT_CHARS_EVIDENCE)
     expect(() => JSON.parse(rendered)).not.toThrow()
     expect(rendered).toContain('truncated')
   })
 
   it('keeps the annotation preview cursor honest under the combined page budget', async () => {
     // 行膨胀到超过预览子预算：get_page 的注释段必须截断，且游标与实际行数一致
-    const fatRows = annotationRows(30).map((r) => ({ ...r, name: 'x'.repeat(600) }))
+    const fatRows = annotationRows(30).map((r) => ({ ...r, name: 'x'.repeat(3000) }))
     registerContextProviders({
       pageHeader: () => ({ datasetName: 'liver section', status: 'completed' }),
       datasetInfo: () => ({
-        attrs: { huge: 'x'.repeat(20000) }, acquisition: {}, sourceFile: null, methods: [],
+        attrs: { huge: 'x'.repeat(TOOL_RESULT_CHARS_EVIDENCE * 2) }, acquisition: {}, sourceFile: null, methods: [],
         displayRange: null, imageInfo: { pixels: null, nonZero: null, totalIon: null, pixelSize: null },
       }),
       annotations: () => ({
@@ -378,18 +445,18 @@ describe('get_page combined snapshot', () => {
         annotation: {
           rows: unknown[]
           truncated?: boolean
-          paging: { total: number; offset: number; returned: number; nextOffset: number | null }
+          paging: { total: number; rankFrom: number; returned: number; nextRank: number | null }
         }
       }
     }
     const rendered = JSON.stringify(value.page)
-    expect(rendered.length).toBeLessThan(12000)
+    expect(rendered.length).toBeLessThan(TOOL_RESULT_CHARS_EVIDENCE)
     expect(value.page.annotation.rows.length).toBeLessThan(10)
     expect(value.page.annotation.truncated).toBe(true)
     // 不变量：无论内层子预算还是外层组合预算截断，游标永远与实际行数一致
     const { rows, paging } = value.page.annotation
     expect(paging.returned).toBe(rows.length)
-    expect(paging.nextOffset).toBe(rows.length < paging.total ? rows.length : null)
+    expect(paging.nextRank).toBe(rows.length < paging.total ? paging.rankFrom + rows.length : null)
   })
 })
 
@@ -456,7 +523,7 @@ describe('get_dataset source file projection', () => {
       }),
     })
     const out = String(await runTool('get_dataset'))
-    expect(out.length).toBeLessThanOrEqual(12_000)
+    expect(out.length).toBeLessThanOrEqual(TOOL_RESULT_CHARS_EVIDENCE)
     expect(() => JSON.parse(out)).not.toThrow()
     expect(out).toContain('"truncated":true')
     expect(out).toContain('hugeTrace')
@@ -633,14 +700,38 @@ describe('spectrum rank windows', () => {
   })
 })
 
-describe('get_ion_image selector exclusivity', () => {
-  it('rejects concurrent selectors without silent precedence', async () => {
-    await expect(runTool('get_ion_image', { mz: 100, mzs: [200] })).rejects.toThrow(
-      /mutually exclusive/i,
-    )
-    await expect(runTool('get_ion_image', { mzs: [200], rowIds: [3] })).rejects.toThrow(
-      /mutually exclusive/i,
-    )
+describe('split ion-image tools', () => {
+  it('retains successful images when another batch target is unavailable', async () => {
+    dataModeRef.value = 'continuous'
+    mzAxisRef.value = Float64Array.from([135.0307])
+    ionDims.value = { width: 1, height: 1 }
+    setZarrStore({ getSummedIonImageByMzIndices: async () => new Float32Array([1]) } as unknown as ZarrOssStore)
+    const value = await runTool('get_ion_image_by_mzs', { mzs: [135.0307, 137.0343], tolerance: 0.01 }) as {
+      images: unknown[]; summaries: string[]; failures: string[]
+    }
+    expect(value.images).toHaveLength(1)
+    expect(value.summaries[0]).toContain('135.0307')
+    expect(value.failures[0]).toContain('137.0343')
+    expect(value.failures[0]).toContain('unavailable')
+  })
+
+  it('fixes p99 display and shared normalization', async () => {
+    dataModeRef.value = 'continuous'
+    mzAxisRef.value = Float64Array.from([100])
+    ionDims.value = { width: 1, height: 1 }
+    setZarrStore({ getSummedIonImageByMzIndices: async () => new Float32Array([1]) } as unknown as ZarrOssStore)
+    const renderer = await import('../plugins/tool-ion-image/render')
+    await runTool('get_ion_image_by_mzs', { mzs: [100], tolerance: 0.01 })
+    const calls = vi.mocked(renderer.renderIonImages).mock.calls
+    const options = calls[calls.length - 1]![1]
+    expect(options).toMatchObject({ display: 'p99', normalize: 'shared', scale: 'linear', gamma: 1 })
+  })
+
+  it('rejects removed selectors and missing required inputs', async () => {
+    await expect(runTool('get_ion_image_by_mzs', { mz: 100 })).rejects.toThrow(/mzs/)
+    await expect(runTool('get_ion_image_by_rowIds', { mzs: [200] })).rejects.toThrow(/rowIds/)
+    await expect(runTool('get_ion_image_by_mzs', {})).rejects.toThrow(/mzs/)
+    await expect(runTool('get_ion_image_by_rowIds', {})).rejects.toThrow(/rowIds/)
   })
 })
 
@@ -664,7 +755,7 @@ describe('批量工具调用（array 参数走完整 ToolRuntime 管线；自 to
       const r = await ctx.tools.execute({
         callId: 'c1',
         name: 'get_annotation',
-        arguments: { mz: 760.58 },
+        arguments: { rowIds: [1] },
         signal: new AbortController().signal,
       })
       expect(r.isError).toBe(false)
@@ -674,7 +765,7 @@ describe('批量工具调用（array 参数走完整 ToolRuntime 管线；自 to
     }
   })
 
-  it('get_annotation 批量 mzs：一次调用返回逐行分节结果', async () => {
+  it('get_annotation 批量 rowIds：一次调用返回逐行分节结果', async () => {
     const mkRow = (id: number, name: string, obsMz: number): AnnotationRow =>
       ({
         id,
@@ -691,13 +782,11 @@ describe('批量工具调用（array 参数走完整 ToolRuntime 管线；自 to
         massScore: 1,
         adductFit: 1,
         chaos: null,
-        coloc: null,
         spatialScore: null,
         totalScore: 1,
         q: 0.01,
         siblings: [],
         samePeak: [],
-        missingAdducts: [],
       }) as AnnotationRow
     registerContextProviders({
       annotations: () => ({
@@ -711,17 +800,24 @@ describe('批量工具调用（array 参数走完整 ToolRuntime 管线；自 to
       const r = await ctx.tools.execute({
         callId: 'c2',
         name: 'get_annotation',
-        arguments: { mzs: [760.5856, 806.5696, 999.9] },
+        arguments: { rowIds: [1, 2, 999] },
         signal: new AbortController().signal,
       })
       expect(r.isError).toBe(false)
-      // 逐行分节：命中的两行 + 未命中的 m/z 行
-      expect(r.content).toContain('### m/z 760.5856')
+      expect(r.content).toContain('### rowId 1')
       expect(r.content).toContain('PC 34:1')
-      expect(r.content).toContain('### m/z 806.5696')
+      expect(r.content).toContain('### rowId 2')
       expect(r.content).toContain('PC 36:4')
-      expect(r.content).toContain('### m/z 999.9')
-      expect(r.content).toContain('No annotation row matched near m/z 999.9')
+      expect(r.content).toContain('### rowId 999')
+      expect(r.content).toContain('No annotation row with rowId 999')
+      const removed = await ctx.tools.execute({
+        callId: 'c3',
+        name: 'get_annotation',
+        arguments: { mzs: [760.5856] },
+        signal: new AbortController().signal,
+      })
+      expect(removed.isError).toBe(true)
+      expect(removed.content).toContain('rowIds only')
     } finally {
       await ctx.fiber.dispose()
     }

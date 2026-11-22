@@ -1,6 +1,4 @@
-/** Archived HMDB metabolite profiles and Exa-assisted name-to-id resolution. */
-import { ENV } from '@/shared/config/env'
-import { searchExaResults } from '../tool-web-search'
+/** Archived HMDB metabolite profiles fetched by accession. */
 
 /** Chemical taxonomy as recorded under <taxonomy>. */
 export interface HmdbTaxonomy {
@@ -54,16 +52,17 @@ export interface HmdbProfile {
   tissues: string[]
   cellLocations: string[]
   biospecimens: string[]
-  pathways: string[]
+  /** HMDB pathway names with their KEGG map id when the archive records one. */
+  pathways: HmdbPathway[]
   normalConcentrations: HmdbConcentration[]
   /** Non-empty external database ids, in HMDB External Links order. */
   externalLinks: HmdbExternalLink[]
 }
 
-export interface HmdbCandidate {
-  id: string
-  title: string
-  excerpt: string
+/** One HMDB pathway entry; keggMapId is present when the archive records a KEGG map. */
+export interface HmdbPathway {
+  name: string
+  keggMapId?: string
 }
 
 export function normalizeHmdbId(value: string): string {
@@ -86,10 +85,6 @@ export function hmdbArchive(id: string): string {
 export function hmdbArchiveRequest(id: string): string {
   // Mirror kegg.ts: respect a non-root deployment base instead of assuming "/".
   return `${import.meta.env.BASE_URL}hmdb-archive/${normalizeHmdbId(id)}.xml`
-}
-
-function hmdbUnearth(name: string): string {
-  return `https://hmdb.ca/unearth/q?query=${encodeURIComponent(name)}`
 }
 
 function child(parent: Element, tag: string): Element | undefined {
@@ -201,9 +196,14 @@ export function parseHmdbXml(source: string): HmdbProfile {
   const biospecimens = Array.from(section(biology, 'biospecimen_locations')?.children ?? [])
     .filter((element) => element.tagName === 'biospecimen')
     .map((element) => element.textContent?.trim())
-  const pathways = Array.from(section(biology, 'pathways')?.children ?? [])
+  const pathways: HmdbPathway[] = Array.from(section(biology, 'pathways')?.children ?? [])
     .filter((element) => element.tagName === 'pathway')
-    .map((element) => text(element, 'name'))
+    .flatMap((element) => {
+      const name = text(element, 'name')
+      if (!name) return []
+      const map = /^map\d{5}$/i.exec(text(element, 'kegg_map_id') ?? '')?.[0]?.toLowerCase()
+      return [{ name, ...(map ? { keggMapId: map } : {}) }]
+    })
 
   const taxonomyEl = section(root, 'taxonomy')
   const taxonomy: HmdbTaxonomy | undefined = taxonomyEl
@@ -290,10 +290,40 @@ export function parseHmdbXml(source: string): HmdbProfile {
     tissues: unique(tissues),
     cellLocations: unique(cellLocations),
     biospecimens: unique(biospecimens),
-    pathways: unique(pathways),
+    pathways: uniquePathways(pathways),
     normalConcentrations,
     externalLinks,
   }
+}
+
+/** Deduplicate pathways by map id (or name when the archive has no map id). */
+function uniquePathways(pathways: HmdbPathway[]): HmdbPathway[] {
+  const seen = new Set<string>()
+  return pathways.filter((pathway) => {
+    const key = pathway.keggMapId ?? pathway.name.toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/**
+ * Pathways carry the KEGG map id so the caller can query members
+ * (kegg_pathway membersOf) or the map image (kegg_pathway ids + withImage)
+ * without guessing the map from a name.
+ */
+function formatPathways(pathways: HmdbPathway[], limit: number): string[] {
+  if (!pathways.length) return []
+  const lines = [`Pathways (${pathways.length}):`]
+  for (const pathway of pathways.slice(0, limit)) {
+    lines.push(
+      pathway.keggMapId
+        ? `- ${pathway.name} [${pathway.keggMapId}](https://www.kegg.jp/pathway/${pathway.keggMapId})`
+        : `- ${pathway.name} (no KEGG map id recorded)`,
+    )
+  }
+  if (pathways.length > limit) lines.push(`  … +${pathways.length - limit} more`)
+  return lines
 }
 
 function limitedLines(label: string, values: string[], limit: number): string | undefined {
@@ -369,8 +399,8 @@ export function formatHmdbProfile(profile: HmdbProfile, archiveUrl: string): str
     limitedLines('Tissue Locations', profile.tissues, 12),
     limitedLines('Cellular Locations', profile.cellLocations, 8),
     limitedLines('Biospecimen Locations', profile.biospecimens, 8),
-    limitedLines('Pathways', profile.pathways, 12),
   )
+  lines.push(...formatPathways(profile.pathways, 12))
   if (profile.normalConcentrations.length) {
     lines.push(
       `Normal Concentrations (${profile.normalConcentrations.length}):`,
@@ -470,68 +500,4 @@ export async function hmdbLookupById(value: string, signal?: AbortSignal): Promi
       `the relay answered HTTP ${response.status} but the body was not readable HMDB XML (${error instanceof Error ? error.message : String(error)}); no HMDB data has been retrieved`,
     )
   }
-}
-
-/** Resolve official HMDB ids from Exa's structured results (url/title/excerpt rows). */
-export async function resolveHmdbIds(name: string, signal?: AbortSignal): Promise<HmdbCandidate[]> {
-  // Same 20s per-item cap as the id mode: a hung Exa SSE stream must degrade
-  // THIS item (Unearth link), not burn the 120s tool timeout and discard the
-  // whole already-rendered batch.
-  const timeout = AbortSignal.timeout(20_000)
-  const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout
-  const results = await searchExaResults(
-    `${name} HMDB metabolite`,
-    5,
-    requestSignal,
-    // Same key source as the web_search tool so name resolution is not stuck
-    // on the anonymous endpoint when a deployment key is configured.
-    ENV.exaApiKey,
-  )
-  const candidates: HmdbCandidate[] = []
-  const seen = new Set<string>()
-  for (const result of results) {
-    const id = /^https?:\/\/(?:www\.)?hmdb\.ca\/metabolites\/(HMDB\d{5,})(?:[/?#]|$)/i.exec(
-      result.url,
-    )?.[1]
-    if (!id) continue
-    const normalized = normalizeHmdbId(id)
-    if (seen.has(normalized)) continue
-    seen.add(normalized)
-    candidates.push({
-      id: normalized,
-      title: result.title || normalized,
-      excerpt: result.excerpt.slice(0, 400),
-    })
-  }
-  return candidates
-}
-
-export async function hmdbLookupByName(name: string, signal?: AbortSignal): Promise<string> {
-  if (!name.trim()) throw new Error('Provide a nonempty HMDB metabolite name')
-  let candidates: HmdbCandidate[]
-  try {
-    candidates = await resolveHmdbIds(name, signal)
-  } catch (error) {
-    signal?.throwIfAborted()
-    // A slow/hung Exa stream (or rate limit) degrades to the manual-search
-    // link like the id mode's relay fallback — it must not error out the item
-    // and, in a single-item call, lose the whole invocation.
-    return [
-      `query: ${name}`,
-      `Name resolution failed: ${error instanceof Error ? error.message : String(error)}. No HMDB ids have been resolved.`,
-      `Search manually: ${hmdbUnearth(name)}`,
-    ].join('\n')
-  }
-  const lines = [
-    `query: ${name}`,
-    'HMDB id candidates from name search; keyword relevance is not identity verification. Review the candidates, then call hmdb_lookup again with an id for archived details.',
-  ]
-  if (!candidates.length) {
-    lines.push(`No official HMDB page ids found. Search manually: ${hmdbUnearth(name)}`)
-  }
-  for (const candidate of candidates) {
-    lines.push(`- ${candidate.id} | ${candidate.title} | ${hmdbPage(candidate.id)}`)
-    if (candidate.excerpt) lines.push(`  ${candidate.excerpt}`)
-  }
-  return lines.join('\n')
 }
