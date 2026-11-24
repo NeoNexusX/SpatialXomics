@@ -40,7 +40,7 @@ interface Capture {
   id: string
   group: 'page' | 'chemistry' | 'biology' | 'literature' | 'files' | 'system' | 'web'
   tool: string
-    /** 给人看的注释（一段一条）：为什么用这个参数、这段输出代表什么。模型看不到。 */
+  /** 给人看的注释（一段一条）：为什么用这个参数、这段输出代表什么。模型看不到。 */
   note?: string | string[]
   args: Record<string, unknown>
   /** 抓取时的页面/数据上下文，帮助判断输出是否典型 */
@@ -65,14 +65,15 @@ interface Capture {
 const captures: Capture[] = []
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-
 /** 等页面请求队列静下来，给 zarr 分块加载一个稳定的读数窗口 */
 async function settle(page: import('@playwright/test').Page) {
   let inFlight = -1
   let stable = 0
   for (let i = 0; i < 90 && stable < 5; i++) {
     await sleep(1000)
-    const next = await page.evaluate(() => (globalThis as { __capInFlight?: number }).__capInFlight ?? -1)
+    const next = await page.evaluate(
+      () => (globalThis as { __capInFlight?: number }).__capInFlight ?? -1,
+    )
     if (next === inFlight) stable++
     else stable = 0
     inFlight = next
@@ -91,13 +92,19 @@ const GROUPS = [
 
 /** 每张附图「画的是什么」——按工具归类，便于读者不打开文件也能理解 */
 const IMAGE_CONTENT: Partial<Record<string, string>> = {
-  get_ion: '重渲染的离子栅格：颜色=强度（当前 colormap，默认 viridis），黑=0；含 24px 标签条。不含 ROI 高亮/通道混合/KMeans 叠加。',
-  get_ion_image_by_rowIds: '按注释 rowIds 取离子热图：同 obsMz 行合并为带标签目标；固定 p99/shared 色阶。',
-  get_ion_image_by_mzs: '按显式 m/z 取离子热图：颜色=强度，标签烧在图下方；固定 p99/shared 色阶。',
-  get_kmeans: 'KMeans 叠加图：透明背景，只画选中的簇；底部色图例给出簇 id 与像素数（>12 簇截断为 +N more）。',
+  get_ion:
+    '重渲染的离子栅格：颜色=强度（当前 colormap，默认 viridis），黑=0；标题由报告 figcaption 承载。不含 ROI 高亮/通道混合/KMeans 叠加。',
+  get_ion_image_by_ranks:
+    '按注释面板 rank 取离子热图：同 obsMz 行合并为带标签目标；固定 p99/shared 色阶。',
+  get_ion_image_by_mzs:
+    '按显式 m/z 取离子热图：颜色=强度；单图标题由 figcaption 承载，拼图保留短序号；固定 p99/shared 色阶。',
+  get_kmeans:
+    'KMeans 叠加图：透明背景，只画选中的簇；底部色图例给出簇 id 与像素数（>12 簇截断为 +N more）。',
   get_umap: 'UMAP 叠加图：透明背景，前景由嵌入坐标的占用掩膜决定；最近邻放大。',
-  get_pixel_spectrum: '全谱棒图：灰=全谱其余峰，橙=当前窗口的峰；上沿标 m/z 范围与最大强度；>2000 峰按强度截断但保留高亮峰。',
-  kegg_pathway: 'KEGG 官方通路图 PNG（get/<map>/image，经 /kegg-rest/ 代理）：人工整理的代谢示意图，不是本样本数据。',
+  get_pixel_spectrum:
+    '全谱棒图：灰=全谱其余峰，橙=当前窗口的峰；上沿标 m/z 范围与最大强度；>2000 峰按强度截断但保留高亮峰。',
+  kegg_pathway:
+    'KEGG 官方通路图 PNG（get/<map>/image，经 /kegg-rest/ 代理）：人工整理的代谢示意图，不是本样本数据。',
 }
 
 /**
@@ -126,9 +133,7 @@ function buildDocument(captures: Capture[], pageState: Record<string, unknown>) 
         text: capture.model?.text ?? '',
         textChars: capture.model?.textChars ?? 0,
         ...(capture.model?.truncated ? { truncated: true } : {}),
-        ...(capture.model?.maxResultChars
-          ? { maxResultChars: capture.model.maxResultChars }
-          : {}),
+        ...(capture.model?.maxResultChars ? { maxResultChars: capture.model.maxResultChars } : {}),
         ...(images.length ? { images } : {}),
       },
       wire: {
@@ -147,14 +152,14 @@ function buildDocument(captures: Capture[], pageState: Record<string, unknown>) 
       '所有以 __ 开头的键都是本文件的注释；不带 __ 的 model.text / args / error 是工具输出的真实内容。',
     ],
     __howTheseOutputsWereProduced: [
-      '真实前端（vite dev server）+ Chromium，装配助手的真实插件组合 baseBundle（29 个工具），对每个工具调用真实的 ctx.tools.execute 管线。',
+      '真实前端（vite dev server）+ Chromium，装配助手的真实插件组合 baseBundle（30 个工具），对每个工具调用真实的 ctx.tools.execute 管线。',
       '管线顺序：validateArgs → tools/pre-execute 闸门 → 超时包裹 → execute → output.render → 字符上限截断 → agent/tool-result waterfall（tool-archive 写全文存档、必要时替换为截断桩）→ 工具消息 → 发请求前附件还原。',
       '页面类工具：数据由一份确定性示例数据集注入 vizworkbench 的 zarr 共享状态与实例 provider 注册表；工具代码、注册表、canvas 渲染、字符预算与截断链路都是真实的。',
       '外部工具：真实网络（PubChem / ChEBI-OLS4 / KEGG 经 /kegg-rest 代理（含通路图 PNG）/ HMDB 经 /hmdb-archive 代理 / PubMed / Europe PMC / Exa）；后端与 LLM 用 e2e 离线夹具，不发真实模型请求。',
       '失败与超时只在真实发生时记录（本轮 Europe PMC 有一次真实 15s 超时），不人为构造。',
     ],
     __whyImages: [
-      '有 9 个工具会返回图片：get_page（旧版行为）、get_ion、get_ion_image_by_rowIds、get_ion_image_by_mzs、get_kmeans、get_umap、get_pixel_spectrum、kegg_pathway（withImage）、pubchem_compound_lookup（withImage）。图片不是文本，而是作为图片附件随 tool_result 一起进入上下文。',
+      '有 9 个工具会返回图片：get_page（旧版行为）、get_ion、get_ion_image_by_ranks、get_ion_image_by_mzs、get_kmeans、get_umap、get_pixel_spectrum、kegg_pathway（withImage）、pubchem_compound_lookup（withImage）。图片不是文本，而是作为图片附件随 tool_result 一起进入上下文。',
       '工具返回 1–4 张 PNG/JPEG（解码后单张 ≤2MB，尺寸为正整数）；ToolRuntime 校验后交给 agent-loop。',
       'agent-loop 用 attachments.saveTools 把图片写进会话存储，历史里只留附件引用（不持久化 base64）。',
       '下次请求前 attachments.hydrate 把引用还原成 data URL；llm-anthropic 的 toModelMessages 把正文与图片一起包进同一个 tool_result：output = { type: "content", value: [ {type:"text"}, {type:"file", mediaType, data:{type:"data", data:"<base64>"}} ] }。',
@@ -164,17 +169,19 @@ function buildDocument(captures: Capture[], pageState: Record<string, unknown>) 
     ],
     __fieldGuide: {
       '__tool / __instance': '工具名 / 这一次抓取实例的 id（同一工具有多组参数时用来区分）',
-      '__whatThisIs': '给人看的解释：为什么用这组参数、这段输出代表什么（模型看不到）',
-      '__argsNote': '这次抓取用的页面/数据上下文',
-      'args': '实际传给工具的 JSON 参数',
+      __whatThisIs: '给人看的解释：为什么用这组参数、这段输出代表什么（模型看不到）',
+      __argsNote: '这次抓取用的页面/数据上下文',
+      args: '实际传给工具的 JSON 参数',
       'model.text': '模型收到的正文，原样（含错误正文；错误时另有 __error 给出原始错误消息）',
-      'model.truncated / maxResultChars': '正文被单工具上限截断过时为 true；上限是 16000（默认）或 48000（证据类，见 tools/limits.ts）',
-      'model.images': '同一 tool_result 里附带的图片：文件、MIME、尺寸、字节数、画的是什么、模型请求里的块形态',
+      'model.truncated / maxResultChars':
+        '正文被单工具上限截断过时为 true；上限是 16000（默认）或 48000（证据类，见 tools/limits.ts）',
+      'model.images':
+        '同一 tool_result 里附带的图片：文件、MIME、尺寸、字节数、画的是什么、模型请求里的块形态',
       'wire.messages': '历史里的助手 tool-call 消息与工具消息（图片是附件引用）',
       'wire.toolResult': '协议层 llm-anthropic 的 tool_result 块（真正发给模型的形态）',
     },
     __coverage: {
-      registeredTools: 29,
+      registeredTools: 30,
       capturedTools: registered,
       groups: GROUPS.map((group) => ({
         group: group.title,
@@ -273,7 +280,8 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
     zarr.setZarrStore({
       getSummedIonImageByMzIndices: async (indices: number[]) => {
         const sum = new Float32Array(width * height)
-        for (const index of indices) for (let i = 0; i < sum.length; i++) sum[i]! += ions[index]![i]!
+        for (const index of indices)
+          for (let i = 0; i < sum.length; i++) sum[i]! += ions[index]![i]!
         return sum
       },
       getPixelSpectrum: async (pixelIndex: number) => ({
@@ -281,7 +289,11 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
         x: (pixelIndex % width) + 1,
         y: Math.floor(pixelIndex / width) + 1,
         mz: mzAxis,
-        intensity: new Float32Array([ions[0]![pixelIndex]!, ions[1]![pixelIndex]!, 12 + (pixelIndex % 5)]),
+        intensity: new Float32Array([
+          ions[0]![pixelIndex]!,
+          ions[1]![pixelIndex]!,
+          12 + (pixelIndex % 5),
+        ]),
       }),
       loadCoordinates: async () => {
         const coords = new Uint32Array(width * height * 3)
@@ -311,12 +323,13 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
       spectrum_mode: 'centroid',
       storage_mode: 'continuous',
     } as never
-    ;(zarr as unknown as { ticMatrix: { value: Float32Array | null } }).ticMatrix.value = (
-      await zarr.getSharedZarrContext().store!.getSummedIonImageByMzIndices([0, 1, 2])
-    )
+    ;(zarr as unknown as { ticMatrix: { value: Float32Array | null } }).ticMatrix.value = await zarr
+      .getSharedZarrContext()
+      .store!.getSummedIonImageByMzIndices([0, 1, 2])
 
     const matrixFor = (mz: number, tolerance: number) => {
-      const index = Math.abs(mz - mzAxis[0]!) <= tolerance ? 0 : Math.abs(mz - mzAxis[1]!) <= tolerance ? 1 : 2
+      const index =
+        Math.abs(mz - mzAxis[0]!) <= tolerance ? 0 : Math.abs(mz - mzAxis[1]!) <= tolerance ? 1 : 2
       return { ...zarr.ionDims.value!, matrix: ions[index]!, mz, tolerance }
     }
     const annotation = (id: number, rank: number, name: string, obsMz: number, adduct: string) => ({
@@ -374,13 +387,21 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
           spectrum_mode: 'centroid',
           storage_mode: 'continuous',
         },
-        acquisition: { analyzer: 'timsTOF fleX', ionisation_source: 'MALDI-2', polarity: 'Positive' },
+        acquisition: {
+          analyzer: 'timsTOF fleX',
+          ionisation_source: 'MALDI-2',
+          polarity: 'Positive',
+        },
         sourceFile: {
           filename: 'mouse-brain-example.imzML',
           organism: 'Mouse (Mus musculus)',
           organism_part: 'Brain',
           condition: 'Control',
-          raw: { filename: 'mouse-brain-example.imzML', organism: 'Mouse (Mus musculus)', organism_part: 'Brain' },
+          raw: {
+            filename: 'mouse-brain-example.imzML',
+            organism: 'Mouse (Mus musculus)',
+            organism_part: 'Brain',
+          },
         },
         methods: ['baseline removal', 'peak picking (centroid)'],
         displayRange: { globalMin: 0, globalMax: 1620, displayMin: 0, displayMax: 900 },
@@ -462,8 +483,10 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
           labelsAvailable: true,
           computing: false,
           visible: true,
-          labels: () => new Int32Array(Array.from({ length: width * height }, (_, i) => (i * 5) % 5)),
-          rgb: () => new Uint8Array(Array.from({ length: width * height * 3 }, (_, i) => (i * 37) % 256)),
+          labels: () =>
+            new Int32Array(Array.from({ length: width * height }, (_, i) => (i * 5) % 5)),
+          rgb: () =>
+            new Uint8Array(Array.from({ length: width * height * 3 }, (_, i) => (i * 37) % 256)),
           dims: () => ({ width, height }),
         },
       }),
@@ -489,9 +512,12 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
     // 平均谱的真实形态：meanChartData 是全轴的 [mz, intensity]（谱图区的原始数据），
     // meanSpectrumRef 是平均谱强度——两者同索引、共享离子图的 m/z 轴。
     const meanIntensity = new Float32Array([2400.5, 1500, 640.25])
-    ;(zarr as unknown as { meanSpectrumRef: { value: Float32Array | null } }).meanSpectrumRef.value =
-      meanIntensity
-    zarr.meanChartData.value = [...mzAxis].map((mz, i) => [mz, meanIntensity[i]!] as [number, number])
+    ;(
+      zarr as unknown as { meanSpectrumRef: { value: Float32Array | null } }
+    ).meanSpectrumRef.value = meanIntensity
+    zarr.meanChartData.value = [...mzAxis].map(
+      (mz, i) => [mz, meanIntensity[i]!] as [number, number],
+    )
   })
 
   await settle(page)
@@ -513,7 +539,14 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
             images: unknown[],
             signal: AbortSignal,
           ): Promise<
-            { id: string; mime: string; bytes: number; width: number; height: number; label?: string }[]
+            {
+              id: string
+              mime: string
+              bytes: number
+              width: number
+              height: number
+              label?: string
+            }[]
           >
           hydrate(storage: unknown, messages: unknown[]): Promise<unknown[]>
         }
@@ -557,9 +590,7 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
         const transcript = [
           {
             role: 'assistant',
-            parts: [
-              { type: 'tool-call', id, name: tool, arguments: JSON.stringify(args) },
-            ],
+            parts: [{ type: 'tool-call', id, name: tool, arguments: JSON.stringify(args) }],
           },
           {
             role: 'tool',
@@ -570,7 +601,10 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
             ...(stored.attachments?.length ? { attachments: stored.attachments } : {}),
           },
         ]
-        const hydrated = await state.__cap.attachments.hydrate(state.__cap.session.storage, transcript)
+        const hydrated = await state.__cap.attachments.hydrate(
+          state.__cap.session.storage,
+          transcript,
+        )
         return {
           messages: hydrated,
           shape: llmAnthropic.toModelMessages(hydrated as never, 'verbatim'),
@@ -592,9 +626,13 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
       const mean = zarr.meanSpectrumRef.value
       const d1 = zarr.meanChartData.value
       // 均值谱可能有自己的 m/z 轴（meanChartData），与离子轴不是一回事
-      const peaks = mean && d1.length === mean.length
-        ? [...d1].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([mz]) => mz)
-        : []
+      const peaks =
+        mean && d1.length === mean.length
+          ? [...d1]
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 5)
+              .map(([mz]) => mz)
+          : []
       return {
         dataMode: shared.dataMode,
         ionShape: shared.ionShape,
@@ -628,12 +666,21 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
                   images: unknown[],
                   signal: AbortSignal,
                 ): Promise<
-                  { id: string; mime: string; bytes: number; width: number; height: number; label?: string }[]
+                  {
+                    id: string
+                    mime: string
+                    bytes: number
+                    width: number
+                    height: number
+                    label?: string
+                  }[]
                 >
               }
               storage: unknown
               session: unknown
-              chat: (input: unknown) => Promise<{ messages: unknown[]; shape: unknown; archiveId?: string }>
+              chat: (
+                input: unknown,
+              ) => Promise<{ messages: unknown[]; shape: unknown; archiveId?: string }>
             }
           }
         ).__cap
@@ -771,7 +818,8 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
   })
 
   const pageNotes: Record<string, string> = {
-    get_page: '页面整体快照：header/dataset/ion/kmeans/umap/annotation 预览，附图 = 提问时捕获的离子。',
+    get_page:
+      '页面整体快照：header/dataset/ion/kmeans/umap/annotation 预览，附图 = 提问时捕获的离子。',
     get_dataset: '数据集信息面板整体（zarr attrs 全量透传 + 采集/源文件/方法/显示范围/图像统计）。',
     get_ion: '选中离子视图 + 按当前显示参数重渲染的离子栅格（非画布截图）。',
     get_annotation: '默认窗口 rank 1–10 + 注释面板状态头；一行 = 一个加合离子。',
@@ -804,21 +852,21 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
     tool: 'get_ion_image_by_mzs',
     note: [
       '显式传 3 个 m/z（mzs）：每个目标一张独立 PNG，固定 p99 显示范围与 shared 色阶，便于横向比较。',
-      '每张图上都烧了标签「#n m/z …」，正文里的 summaries 与图一一对应。',
-      '超过 4 个目标会拼成两列 montage；推荐每次取 6 个目标（4 个用满分图上限，6 个填满拼图）；显示/排版参数不再开放。',
+      '单图不再烧长标题；正文 summaries 与图一一对应，报告用 figcaption 承载标题。超过 4 个目标拼成两列 montage，保留短序号。',
+      '推荐每次取 6 个目标（4 个用满分图上限，6 个填满拼图）；显示/排版参数不再开放。',
     ],
     args: { mzs: ['180.0634', '744.5252', '796.5854'].map(Number) },
   })
 
   await capture({
-    id: 'get_ion_image_by_rowIds',
+    id: 'get_ion_image_by_ranks',
     group: 'page',
-    tool: 'get_ion_image_by_rowIds',
+    tool: 'get_ion_image_by_ranks',
     note: [
-      '按注释 rowIds 取图：同 obsMz 的行合并为一个带标签目标。',
+      '按注释面板 rank 取图：同 obsMz 的行合并为一个带标签目标。',
       '固定 p99/shared 色阶；无效目标单独列为 unavailable，不拖垮成功图。',
     ],
-    args: { rowIds: [1, 2] },
+    args: { ranks: [1, 2] },
   })
 
   // 叠加类：页面没算 KMeans/UMAP 时，输出就是「不可用」提示，照原样记
@@ -843,98 +891,191 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
 
   // ---- 化学/生物/文献/文件：真实网络 ----
   const external: (Omit<Capture, 'model'> & { args: Record<string, unknown> })[] = [
-    { id: 'pubchem-compound', group: 'chemistry', tool: 'pubchem_compound_lookup', args: { names: ['glucose'] },
+    {
+      id: 'pubchem-compound',
+      group: 'chemistry',
+      tool: 'pubchem_compound_lookup',
+      args: { names: ['glucose'] },
       note: [
-      '按名称查 PubChem 属性，返回紧凑的 key: value 行（不是 JSON）。',
-      '末尾的 page/source 是可直接引用的官方 CID 链接；名称命中 ≠ 身份确认。',
-    ] },
-    { id: 'pubchem-structure', group: 'chemistry', tool: 'pubchem_compound_lookup', args: { names: ['glucose'], withImage: true },
+        '按名称查 PubChem 属性，返回紧凑的 key: value 行（不是 JSON）。',
+        '末尾的 page/source 是可直接引用的官方 CID 链接；名称命中 ≠ 身份确认。',
+      ],
+    },
+    {
+      id: 'pubchem-structure',
+      group: 'chemistry',
+      tool: 'pubchem_compound_lookup',
+      args: { names: ['glucose'], withImage: true },
       note: [
-      'withImage：文本之外附该 CID 的二维结构图 PNG（REST compound/cid/<CID>/PNG?image_size=500x500）。',
-      '一次 1–4 个名字、不接受 offset/limit（附件管线最多 4 张图）；图与文本同源同 CID。',
-      '图画的是名字实际解析到的分子，不构成身份证明；取不到图不影响文本，失败项单列在 structure images unavailable 段。',
-    ] },
-    { id: 'pubchem-formula', group: 'chemistry', tool: 'pubchem_formula_search', args: { formula: 'C6H12O6', maxResults: 3 },
+        'withImage：文本之外附该 CID 的二维结构图 PNG（REST compound/cid/<CID>/PNG?image_size=500x500）。',
+        '一次 1–4 个名字、不接受 offset/limit（附件管线最多 4 张图）；图与文本同源同 CID。',
+        '图画的是名字实际解析到的分子，不构成身份证明；取不到图不影响文本，失败项单列在 structure images unavailable 段。',
+      ],
+    },
+    {
+      id: 'pubchem-formula',
+      group: 'chemistry',
+      tool: 'pubchem_formula_search',
+      args: { formula: 'C6H12O6', maxResults: 3 },
       note: [
-      '按分子式检索候选：先报 total_matches，再列 ≤maxResults 条（cid | formula | 质量 | InChIKey | 官方页）。',
-      '候选列表只枚举，不做加合物判断；无命中会抛错而不是返回空表。',
-    ] },
-    { id: 'chebi', group: 'chemistry', tool: 'chebi_lookup', args: { query: 'glucose', maxResults: 3 },
+        '按分子式检索候选：先报 total_matches，再列 ≤maxResults 条（cid | formula | 质量 | InChIKey | 官方页）。',
+        '候选列表只枚举，不做加合物判断；无命中会抛错而不是返回空表。',
+      ],
+    },
+    {
+      id: 'chebi',
+      group: 'chemistry',
+      tool: 'chebi_lookup',
+      args: { query: 'glucose', maxResults: 3 },
       note: [
-      'ChEBI 本体检索（EBI OLS4）：每条是「标签 (CHEBI:id) | page | syn: …」加上定义摘录。',
-      '结果按 OLS4 相关性排序，第一条不保证是查询分子本身。',
-    ] },
-    { id: 'kegg-find', group: 'biology', tool: 'kegg_find', args: { query: 'glucose phosphate', db: 'compound', limit: 3 },
+        'ChEBI 本体检索（EBI OLS4）：每条是「标签 (CHEBI:id) | page | syn: …」加上定义摘录。',
+        '结果按 OLS4 相关性排序，第一条不保证是查询分子本身。',
+      ],
+    },
+    {
+      id: 'kegg-find',
+      group: 'biology',
+      tool: 'kegg_find',
+      args: { query: 'glucose phosphate', db: 'compound', limit: 3 },
       note: [
-      'KEGG 在一次检索中按 AND 匹配多个关键词，返回一组 {query, window, entries:[{id,name}]} 和实时来源。',
-      'window 是完整结果集的零基分页窗口；limit 只是页大小，不是总量上限。',
-    ] },
-    { id: 'kegg-compound', group: 'biology', tool: 'kegg_compound', args: { ids: ['C00031'] },
+        'KEGG 在一次检索中按 AND 匹配多个关键词，返回一组 {query, window, entries:[{id,name}]} 和实时来源。',
+        'window 是完整结果集的零基分页窗口；limit 只是页大小，不是总量上限。',
+      ],
+    },
+    {
+      id: 'kegg-compound',
+      group: 'biology',
+      tool: 'kegg_compound',
+      args: { ids: ['C00031'] },
       note: [
-      '按 C 编号取官方条目：names / formula / pathways，全用 Markdown 链接。',
-      '身份核验综合返回记录，不只对照 formula；冗余质量与 dblinks 不再返回。',
-    ] },
-    { id: 'kegg-pathway', group: 'biology', tool: 'kegg_pathway', args: { id: 'map00010' },
+        '按 C 编号取官方条目：names / formula / pathways，全用 Markdown 链接。',
+        '身份核验综合返回记录，不只对照 formula；冗余质量与 dblinks 不再返回。',
+      ],
+    },
+    {
+      id: 'kegg-pathway',
+      group: 'biology',
+      tool: 'kegg_pathway',
+      args: { id: 'map00010' },
       note: [
-      '一次 get 返回通路的 NAME、CLASS 和 DESCRIPTION 摘录。',
-      '只接受 map 编号；hsa 等 organism 编号会被拒。',
-    ] },
-    { id: 'kegg-pathway-image', group: 'biology', tool: 'kegg_pathway', args: { ids: ['map00230'], withImage: true },
+        '一次 get 返回通路的 NAME、CLASS 和 DESCRIPTION 摘录。',
+        '只接受 map 编号；hsa 等 organism 编号会被拒。',
+      ],
+    },
+    {
+      id: 'kegg-pathway-image',
+      group: 'biology',
+      tool: 'kegg_pathway',
+      args: { ids: ['map00230'], withImage: true },
       note: [
-      '详情模式 + withImage：取回该通路的官方 PNG 示意图（REST get/map00230/image）。',
-      '每次只允许一个 map；图是人工整理的示意图，不是本样本的证据。',
-    ] },
-    { id: 'kegg-members', group: 'biology', tool: 'kegg_pathway', args: { membersOf: ['map00010', 'map00020'], limit: 3 },
-      note: ['一次官方 link 查询两个通路的成员化合物编号，各通路独立分页。'] },
-    { id: 'kegg-mass', group: 'biology', tool: 'kegg_mass_search', args: { mz: 181.0707, adduct: '[M+H]+', ppm: 10, limit: 3 },
+        '详情模式 + withImage：取回该通路的官方 PNG 示意图（REST get/map00230/image）。',
+        '每次只允许一个 map；图是人工整理的示意图，不是本样本的证据。',
+      ],
+    },
+    {
+      id: 'kegg-members',
+      group: 'biology',
+      tool: 'kegg_pathway',
+      args: { membersOf: ['map00010', 'map00020'], limit: 3 },
+      note: ['一次官方 link 查询两个通路的成员化合物编号，各通路独立分页。'],
+    },
+    {
+      id: 'kegg-mass',
+      group: 'biology',
+      tool: 'kegg_mass_search',
+      args: { mz: 181.0707, adduct: '[M+H]+', ppm: 10, limit: 3 },
       note: [
-      '使用指定加合物换算观测 m/z，一次查询一个中性精确质量区间。',
-      'matches 按 |Δppm| 排序，包含候选 C 编号、加合物、KEGG 返回的精确质量及有符号质量误差。',
-    ] },
-    { id: 'hmdb', group: 'biology', tool: 'hmdb_lookup', args: { ids: ['HMDB0000122'] },
+        '使用指定加合物换算观测 m/z，一次查询一个中性精确质量区间。',
+        'matches 按 |Δppm| 排序，包含候选 C 编号、加合物、KEGG 返回的精确质量及有符号质量误差。',
+      ],
+    },
+    {
+      id: 'hmdb',
+      group: 'biology',
+      tool: 'hmdb_lookup',
+      args: { ids: ['HMDB0000122'] },
       note: [
-      'HMDB 归档 XML 档案，输出按 HMDB 页面的分区标签逐行给出（Record Information / Metabolite Identification / Taxonomy / Role / Biological Properties / Concentrations / External Links）。',
-      'description 按句界截断到 1000 字符；最后四行 page/snapshot/archive/source 是工具自己的出处标注。',
-    ] },
-    { id: 'pubmed', group: 'literature', tool: 'pubmed_search', args: { query: 'mass spectrometry imaging lipidomics', maxResults: 2 },
+        'HMDB 归档 XML 档案，输出按 HMDB 页面的分区标签逐行给出（Record Information / Metabolite Identification / Taxonomy / Role / Biological Properties / Concentrations / External Links）。',
+        'description 按句界截断到 1000 字符；最后四行 page/snapshot/archive/source 是工具自己的出处标注。',
+      ],
+    },
+    {
+      id: 'pubmed',
+      group: 'literature',
+      tool: 'pubmed_search',
+      args: { query: 'mass spectrometry imaging lipidomics', maxResults: 2 },
       note: [
-      '降级链第 2 档：total_hits + 每条「标题 / 期刊 年份 | PMID | 链接」+ efetch 摘要摘录。',
-      'efetch 失败时退化为仅元数据；再不行才降级到 web_search。',
-    ] },
-    { id: 'europepmc', group: 'literature', tool: 'europepmc_search', args: { query: 'mass spectrometry imaging lipidomics', maxResults: 2 },
+        '降级链第 1 档（首选）：total_hits + 每条「标题 / 期刊 年份 | PMID | 链接」+ efetch 摘要摘录。',
+        'efetch 失败时退化为仅元数据；报错或零命中才降到 europepmc_search，再不行才 web_search。',
+      ],
+    },
+    {
+      id: 'europepmc',
+      group: 'literature',
+      tool: 'europepmc_search',
+      args: { query: 'mass spectrometry imaging lipidomics', maxResults: 2 },
       note: [
-      '降级链第 1 档：每条 title / journal year / 标识符 + abstract 摘录（≤600 字符），OA 且有 PMCID 时附全文链接。',
-      '关键词应按待验证论断自拟，而不是泛搜分子名。',
-    ] },
-    { id: 'web-search', group: 'web', tool: 'web_search', args: { query: 'KEGG REST API documentation find compound', maxResults: 2 },
+        '降级链第 2 档（仅在 pubmed_search 报错或零命中后）：每条 title / journal year / 标识符 + abstract 摘录（≤600 字符），OA 且有 PMCID 时附全文链接。',
+        '关键词应按待验证论断自拟，而不是泛搜分子名。',
+      ],
+    },
+    {
+      id: 'web-search',
+      group: 'web',
+      tool: 'web_search',
+      args: { query: 'KEGG REST API documentation find compound', maxResults: 2 },
       note: [
-      'Exa 公网检索：若干「Title / URL / Published / Excerpt」块，末尾附一段给模型的引用格式提醒与「摘录不是整页」的警告。',
-      '这段提醒是工具输出的一部分（模型能看到），不是本文件的注释。',
-    ] },
-    { id: 'list-files', group: 'files', tool: 'list_files', args: { page: 1, size: 2 },
+        'Exa 公网检索：若干「Title / URL / Published / Excerpt」块，末尾附一段给模型的引用格式提醒与「摘录不是整页」的警告。',
+        '这段提醒是工具输出的一部分（模型能看到），不是本文件的注释。',
+      ],
+    },
+    {
+      id: 'list-files',
+      group: 'files',
+      tool: 'list_files',
+      args: { page: 1, size: 2 },
       note: [
-      '公开数据集列表：一行表头 total | page + 每行「public_id | 文件名 | 大小 | 日期 | 状态」。',
-      '离线夹具里没有数据集，所以这里是 total: 0 / (empty)；格式与真实部署一致。',
-    ] },
-    { id: 'list-my-files', group: 'files', tool: 'list_my_files', args: { page: 1, size: 2 },
+        '公开数据集列表：一行表头 total | page + 每行「public_id | 文件名 | 大小 | 日期 | 状态」。',
+        '离线夹具里没有数据集，所以这里是 total: 0 / (empty)；格式与真实部署一致。',
+      ],
+    },
+    {
+      id: 'list-my-files',
+      group: 'files',
+      tool: 'list_my_files',
+      args: { page: 1, size: 2 },
       note: [
-      '当前用户上传的数据集列表（需登录），格式同 list_files。',
-      '离线夹具里该用户暂无文件，因此显示 (empty)。',
-    ] },
-    { id: 'file-metadata', group: 'files', tool: 'get_file_metadata', args: { fileId: 'E2eDataset0000001' },
+        '当前用户上传的数据集列表（需登录），格式同 list_files。',
+        '离线夹具里该用户暂无文件，因此显示 (empty)。',
+      ],
+    },
+    {
+      id: 'file-metadata',
+      group: 'files',
+      tool: 'get_file_metadata',
+      args: { fileId: 'E2eDataset0000001' },
+      note: ['按 public_id 取数据集元数据：一层 key: value 摘要（≤30 字段、单值 ≤120 字符）。'],
+    },
+    {
+      id: 'list-my-processes',
+      group: 'files',
+      tool: 'list_my_processes',
+      args: { page: 1, size: 2 },
       note: [
-      '按 public_id 取数据集元数据：一层 key: value 摘要（≤30 字段、单值 ≤120 字符）。',
-    ] },
-    { id: 'list-my-processes', group: 'files', tool: 'list_my_processes', args: { page: 1, size: 2 },
+        '当前用户的分析任务：#id | 类型/算法 | 状态 | 创建时间，分页。',
+        '离线夹具里没有任务，因此 (empty)。',
+      ],
+    },
+    {
+      id: 'user-quota',
+      group: 'files',
+      tool: 'get_user_quota',
+      args: {},
       note: [
-      '当前用户的分析任务：#id | 类型/算法 | 状态 | 创建时间，分页。',
-      '离线夹具里没有任务，因此 (empty)。',
-    ] },
-    { id: 'user-quota', group: 'files', tool: 'get_user_quota', args: {},
-      note: [
-      '存储/处理配额的一层字段摘要（≤20 字段）。',
-      '离线夹具配额对象为空，所以模型收到的是空字符串——这也是真实可能的输出形态。',
-    ] },
+        '存储/处理配额的一层字段摘要（≤20 字段）。',
+        '离线夹具配额对象为空，所以模型收到的是空字符串——这也是真实可能的输出形态。',
+      ],
+    },
   ]
   for (const entry of external) await capture(entry)
 
@@ -986,6 +1127,9 @@ test('capture every agent tool’s model-visible output', async ({ page }) => {
     if (entry.error || /is not available|unavailable/i.test(entry.model?.text ?? ''))
       throw new Error(`${entry.id} captured an unavailable-data placeholder: ${entry.model?.text}`)
 
-  await writeFile(join(OUT, 'tool-outputs.json'), JSON.stringify(buildDocument(committed, pageContext), null, 2))
+  await writeFile(
+    join(OUT, 'tool-outputs.json'),
+    JSON.stringify(buildDocument(committed, pageContext), null, 2),
+  )
   console.log(`captured ${committed.length} tool outputs -> ${join(OUT, 'tool-outputs.json')}`)
 })

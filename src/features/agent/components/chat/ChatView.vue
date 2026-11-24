@@ -33,6 +33,7 @@ const {
   pressure,
   tokenUsage,
   questions,
+  figures,
   compact,
   retrySave,
   streaming,
@@ -113,6 +114,7 @@ function ask(text: string, images?: string[], acknowledge?: (accepted: boolean) 
                 :message="message"
                 :can-retry="message.id === retryTargetId && !streaming"
                 :questions="questions"
+                :figures="figures"
                 @retry="retry"
               />
             </MessageScrollerItem>

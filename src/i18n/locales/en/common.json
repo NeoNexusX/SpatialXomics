@@ -161,10 +161,16 @@
         "annotationReview": "Annotation review",
         "msiAnalysis": "MSI analysis"
       },
+      "skillPrompts": {
+        "annotationReview": "Load the \"annotation-review\" skill with the skill tool first, then follow its workflow and output template to analyze the current data with explicit judgment criteria. Respond in English.",
+        "msiAnalysis": "Load the \"msi-analysis\" skill with the skill tool first, then follow its workflow and output template to analyze the current data with explicit judgment criteria. Respond in English."
+      },
       "placeholder": "Message SXO Harness Agent",
       "attachImage": "Add images",
       "removeImage": "Remove image",
       "imageAlt": "Image",
+      "figureLoading": "Loading figure…",
+      "figureUnavailable": "Figure unavailable in this conversation.",
       "send": "Send",
       "stop": "Stop",
       "contextOn": "Current dataset connected",

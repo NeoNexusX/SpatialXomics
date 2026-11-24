@@ -166,6 +166,7 @@
    }
   ],
   "error": "This conversation is open in another tab",
+  "figures": [],
   "pressure": {
    "inputTokens": 128,
    "contextWindow": 256000,

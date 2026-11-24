@@ -18,6 +18,7 @@
   "phase": "idle",
   "mode": "temporary",
   "messages": [],
-  "error": null
+  "error": null,
+  "figures": []
  }
 }

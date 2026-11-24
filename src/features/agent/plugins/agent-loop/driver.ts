@@ -10,6 +10,7 @@ import type {
   TurnPlan,
 } from '../agent'
 import { newId } from '../session-persistence'
+import { figureHandle, sessionFigures } from '../session'
 import {
   BlockAssembler,
   DEFAULT_CONTEXT_WINDOW,
@@ -22,6 +23,45 @@ import {
 } from '../llm'
 import type { LiveAttempt } from '../session-transcript'
 import { t } from '@/i18n'
+
+/**
+ * 把会话里工具附过的图整理成模型可直接复制的 Markdown 引用清单。
+ *
+ * 引用用短句柄 `fig-N`，不暴露存储 id：模型照抄 36 位 UUID 不可靠——实测 35 个引用
+ * 全被截成了前 8 位，一个都渲染不出来。序号来自 session/figures 的同一份顺序，
+ * 界面按它解析回去。
+ *
+ * 每一步的 system 都要重新拼：上一步刚取的图，这一步写报告时就要能用。
+ */
+export function withFigureManifest(system: string, session: Session): string {
+  const figures = sessionFigures(session)
+  if (!figures.length) return system
+  // 句柄是会话内的全局序号；超过 80 张时只列最后 80 张，但句柄保持全局编号，
+  // 这样界面上早先写下的引用不会因为新图加入而错位。
+  const lines = figures.map((ref, index) => ({ ref, index })).slice(-80).map(
+    ({ ref, index }) => `- ![${(ref.label ?? 'Tool image').replace(/[\[\]]/g, '')}](session-artifact:${figureHandle(index)})`,
+  )
+  const header = `\n\n## Session figures
+Retrieved images are NOT visible to the user on their own. To show one in your answer, copy its reference below verbatim as a Markdown image, on its own line, with a caption; the app renders the reference into the image. Referring to a figure only in prose (e.g. "montage 1, panel 3") shows the reader nothing. Every image an evidence statement relies on must be embedded this way, and no image may be embedded any other way: never invent a reference, write an external image URL, or alter a handle.
+`
+  // 只截清单，绝不截 system：system 里含用户指令（可达 64 KiB）和排在后面的
+  // 数据集上下文 / 技能目录 / 工具清单，一刀切到 12000 字符会把它们整段丢掉。
+  // 而且必须按整行截断——切在句柄中间会把 fig-23 变成 fig-2，一个合法但指向
+  // 另一张图的句柄，正是最危险的错图。
+  const budget = 12_000 - header.length
+  const kept: string[] = []
+  let used = 0
+  // 从最新的图往回收：预算不够时先丢更早的引用，而不是丢掉刚取到的图。
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]!
+    if (used + line.length + 1 > budget) break
+    kept.unshift(line)
+    used += line.length + 1
+  }
+  const dropped = lines.length - kept.length
+  const footer = dropped ? `\n[${dropped} earlier figure references omitted; their handles are still valid.]` : ''
+  return `${system}${header}${kept.join('\n')}${footer}`
+}
 
 /**
  * 循环驱动器：一个任务负责一轮的全部过程，包括取消后的收尾。
@@ -145,14 +185,22 @@ export class LoopDriver implements AgentDriver {
         while (true) {
           signal.throwIfAborted()
           const attemptId = newId()
-          let request = this.requestSnapshot(plan.system, tools, call, contextWindow, turnId)
+          // 存档快照、pre-request 上下文和真正发出的请求必须用同一份 system：
+          // 图片清单只存在于这里，发给模型的不带它，模型就无从引用任何图。
+          let request = this.requestSnapshot(
+            withFigureManifest(plan.system, this.session),
+            tools,
+            call,
+            contextWindow,
+            turnId,
+          )
           await this.session.commit([{ type: 'request/context', turnId, attemptId, request }])
           const attempt: AttemptContext = {
             session: this.session,
             turnId,
             step,
             attemptId,
-            system: plan.system,
+            system: request.system,
             tools,
             connection,
             contextWindow,
@@ -161,7 +209,14 @@ export class LoopDriver implements AgentDriver {
             setPhase: (phase) => this.status(phase),
             notify: () => this.notify(),
             recordRequest: async () => {
-              request = this.requestSnapshot(plan.system, tools, call, contextWindow, turnId)
+              request = this.requestSnapshot(
+                withFigureManifest(plan.system, this.session),
+                tools,
+                call,
+                contextWindow,
+                turnId,
+              )
+              attempt.system = request.system
               await this.session.commit([{ type: 'request/context', turnId, attemptId, request }])
             },
           }
@@ -176,7 +231,7 @@ export class LoopDriver implements AgentDriver {
           try {
             for await (const chunk of call.stream(
               {
-                system: plan.system,
+                system: attempt.system,
                 tools,
                 messages,
                 turnStart: request.turnStart,
@@ -408,7 +463,7 @@ export class LoopDriver implements AgentDriver {
     call: PreparedLlmCall,
     contextWindow: number,
     turnId: string,
-  ): RequestSnapshot {
+  ): RequestSnapshot & { system: string } {
     const nodes = this.session.nodes
     const turnStart = nodes.findIndex((seq) => {
       const event = this.session.events[seq]!

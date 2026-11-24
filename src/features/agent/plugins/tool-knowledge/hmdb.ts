@@ -456,38 +456,75 @@ function hmdbLinkFallback(id: string, detail: string): string {
 // bucket and healthy ids start seeing 429 → silent link degradation.
 // One shared chain: parallel hmdb_lookup invocations space out together.
 let hmdbQueue: Promise<void> = Promise.resolve()
-function paceHmdbRequests(): Promise<void> {
-  const ready = hmdbQueue.then(() => new Promise<void>((resolve) => setTimeout(resolve, 500)))
+function waitFor(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted()
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(done, milliseconds)
+    function cleanup(): void {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+    }
+    function done(): void {
+      cleanup()
+      resolve()
+    }
+    function onAbort(): void {
+      cleanup()
+      reject(signal?.reason)
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+function paceHmdbRequests(signal?: AbortSignal): Promise<void> {
+  const ready = hmdbQueue.then(() => waitFor(500, signal))
   hmdbQueue = ready.catch(() => {})
   return ready
 }
 
+const HMDB_TIMEOUT_MS = 20_000
+const HMDB_RETRYABLE_STATUSES = new Set([429, 503, 504])
+
 export async function hmdbLookupById(value: string, signal?: AbortSignal): Promise<string> {
   const id = normalizeHmdbId(value)
-  // 20s per item keeps a full 8-item batch inside the 120s tool timeout even
-  // before the batch-level time-budget guard kicks in.
-  const timeout = AbortSignal.timeout(20_000)
-  const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout
-  await paceHmdbRequests()
-  signal?.throwIfAborted()
-  let response: Response
-  let body: string
-  try {
-    response = await fetch(hmdbArchiveRequest(id), {
-      signal: requestSignal,
-      headers: { Accept: 'application/xml, text/xml' },
-    })
-    body = await response.text()
-  } catch (error) {
+  let response: Response | undefined
+  let body = ''
+  let lastError: unknown
+
+  // Queue time must not consume the upstream request timeout. Retry only
+  // explicit transient gateway/rate-limit statuses, not redirect-contract 502s.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await paceHmdbRequests(signal)
     signal?.throwIfAborted()
-    return hmdbLinkFallback(id, error instanceof Error ? error.message : String(error))
+    const timeout = AbortSignal.timeout(HMDB_TIMEOUT_MS)
+    const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout
+    try {
+      response = await fetch(hmdbArchiveRequest(id), {
+        signal: requestSignal,
+        headers: { Accept: 'application/xml, text/xml' },
+      })
+      body = await response.text()
+    } catch (error) {
+      signal?.throwIfAborted()
+      lastError = error
+      break
+    }
+    signal?.throwIfAborted()
+    if (!HMDB_RETRYABLE_STATUSES.has(response.status) || attempt === 1) break
+    await waitFor(response.status === 429 ? 1000 : 250, signal)
+    signal?.throwIfAborted()
   }
-  signal?.throwIfAborted()
+
+  if (!response) {
+    return hmdbLinkFallback(
+      id,
+      `network/timeout error: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
+    )
+  }
   if (response.status === 404) return `No archived snapshot for ${id}`
-  // Any other non-ok (rate limit, relay misconfig, 5xx) degrades to links —
-  // never a hard error that loses the page/archive links entirely.
   if (!response.ok) {
-    return hmdbLinkFallback(id, `HTTP ${response.status} from the HMDB Wayback relay`)
+    const category = response.status === 429 ? 'rate limited' : `HTTP ${response.status}`
+    return hmdbLinkFallback(id, `${category} from the HMDB Wayback relay after bounded retry`)
   }
   try {
     return formatHmdbProfile(parseHmdbXml(body), archiveUrlFromResponse(id, response))
@@ -497,7 +534,7 @@ export async function hmdbLookupById(value: string, signal?: AbortSignal): Promi
     // captive portal) is a relay failure, not a profile: degrade honestly.
     return hmdbLinkFallback(
       id,
-      `the relay answered HTTP ${response.status} but the body was not readable HMDB XML (${error instanceof Error ? error.message : String(error)}); no HMDB data has been retrieved`,
+      `not readable HMDB XML from the relay (HTTP ${response.status}): ${error instanceof Error ? error.message : String(error)}; no HMDB data has been retrieved`,
     )
   }
 }

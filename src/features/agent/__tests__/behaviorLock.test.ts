@@ -132,7 +132,7 @@ describe('system prompt and tool catalog', () => {
     await expect(
       h.calls[0]!.tools!.map((tool) => JSON.stringify(tool)).join('\n') + '\n',
     ).toMatchFileSnapshot('./__snapshots__/behaviorLock/tool-schemas.txt')
-    expect(h.calls[0]!.tools).toHaveLength(29)
+    expect(h.calls[0]!.tools).toHaveLength(30)
   })
 })
 
@@ -249,14 +249,23 @@ describe('turns', () => {
   })
 
   it('keeps going until the model stops calling tools', async () => {
-    const h = await setup([...Array.from({ length: 60 }, (_, i) => toolCall('lookup', {}, `c${i}`)), text('done')])
+    const h = await setup([
+      ...Array.from({ length: 60 }, (_, i) => toolCall('lookup', {}, `c${i}`)),
+      text('done'),
+    ])
     expect(await turn(h)).toBe(true)
     expect(h.calls).toHaveLength(61)
     expect(h.agent.snapshot()).toMatchObject({ phase: 'idle', error: null })
     const stored = await outcomeOf(h)
-    const events = stored.logs.flatMap((log) => log.events as { type: string; reason?: string; step?: number }[])
-    expect(events.filter((event) => event.type === 'step/start').map((event) => event.step)).toEqual(Array.from({ length: 61 }, (_, index) => index + 1))
-    expect(events.filter((event) => event.type === 'turn/end')).toEqual([expect.objectContaining({ reason: 'completed' })])
+    const events = stored.logs.flatMap(
+      (log) => log.events as { type: string; reason?: string; step?: number }[],
+    )
+    expect(
+      events.filter((event) => event.type === 'step/start').map((event) => event.step),
+    ).toEqual(Array.from({ length: 61 }, (_, index) => index + 1))
+    expect(events.filter((event) => event.type === 'turn/end')).toEqual([
+      expect.objectContaining({ reason: 'completed' }),
+    ])
   })
 
   it('regenerates the last turn', async () => {
@@ -412,7 +421,12 @@ describe('asking the user', () => {
   })
 
   it('reports questions the schema cannot reject to the model', async () => {
-    const duplicate = { questions: [{ id: 'k', question: 'a' }, { id: 'k', question: 'b' }] }
+    const duplicate = {
+      questions: [
+        { id: 'k', question: 'a' },
+        { id: 'k', question: 'b' },
+      ],
+    }
     const h = await setup([toolCall('ask_user_question', duplicate), text('answer')], withAsk)
     await lock('ask-invalid', h, { accepted: await turn(h) })
   })

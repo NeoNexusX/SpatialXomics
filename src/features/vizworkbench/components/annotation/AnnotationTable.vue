@@ -251,6 +251,9 @@ onUnmounted(() => {
         @mouseleave="onRowLeave"
       >
         <div class="flex min-w-0 items-center gap-2 kawaru-text-75">
+          <span class="shrink-0 font-mono kawaru-text-56 text-base-content/40"
+            >#{{ ion.rank }}</span
+          >
           <span class="min-w-0 truncate font-medium text-base-content kawaru-text-81">
             {{ moleculeName(mol) }}
           </span>

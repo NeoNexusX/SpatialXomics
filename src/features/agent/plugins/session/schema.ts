@@ -108,6 +108,7 @@ const schemas = [
           annotationWeights: z
             .object({ mass: z.number(), adduct: z.number(), spatial: z.number() })
             .optional(),
+          annotationOrder: count.optional(),
         })
         .optional(),
     }),

@@ -161,10 +161,16 @@
         "annotationReview": "注释审查",
         "msiAnalysis": "MSI 分析"
       },
+      "skillPrompts": {
+        "annotationReview": "请先用 skill 工具加载 \"annotation-review\" 技能，然后按其工作流与输出模板分析当前数据，给出明确判据。请用中文回答。",
+        "msiAnalysis": "请先用 skill 工具加载 \"msi-analysis\" 技能，然后按其工作流与输出模板分析当前数据，给出明确判据。请用中文回答。"
+      },
       "placeholder": "给 SXO Harness Agent 发消息",
       "attachImage": "添加图片",
       "removeImage": "移除图片",
       "imageAlt": "图片",
+      "figureLoading": "正在加载图片…",
+      "figureUnavailable": "此对话中的图片不可用。",
       "send": "发送",
       "stop": "停止",
       "contextOn": "已连接当前数据集",

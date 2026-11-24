@@ -3,10 +3,12 @@ import { mergeConfig, defineConfig, configDefaults } from 'vitest/config'
 import viteConfig from './vite.config'
 
 // vite.config 导出的是「函数式配置」(env => config)，需先用当前 env 求值成对象再合并，
-// 否则 mergeConfig 无法合并一个函数（TS2345）。
-export default defineConfig((configEnv) =>
+// 否则 mergeConfig 无法合并一个函数（TS2345）。vite.config 的工厂是 async 的（启动时
+// 探测本地代理），所以这里也要 await，否则合并的是一个 Promise：别名和 Vue 插件全部丢失，
+// 每个测试文件都会在 import 解析阶段报 "Failed to resolve import" / "Install @vitejs/plugin-vue"。
+export default defineConfig(async (configEnv) =>
   mergeConfig(
-    viteConfig(configEnv),
+    await viteConfig(configEnv),
     defineConfig({
       test: {
         environment: 'jsdom',

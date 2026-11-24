@@ -6,6 +6,11 @@ export interface IonRaster {
   width: number
   height: number
   label: string
+  /**
+   * 请求里的目标序号（1 基）。有目标取不到图时，成功数组的下标会和 summaries /
+   * failures 的编号错开，拼图上的 #N 必须沿用请求序号才对得上证据。
+   */
+  panel?: number
 }
 
 export interface RenderOptions {
@@ -120,14 +125,21 @@ const LEGEND_MIN_BAND_WIDTH = 360
  * 图例带布局（纯函数）：每行 ≤3 项，>12 项截断为 "+N more"。
  * 返回每个格子的左上坐标（相对图例带原点）、色块（null = 纯文本）与带高。
  */
-export function legendLayout(items: readonly OverlayLegendItem[], width: number): {
+export function legendLayout(
+  items: readonly OverlayLegendItem[],
+  width: number,
+): {
   cells: { x: number; y: number; swatch: readonly [number, number, number] | null; label: string }[]
   height: number
   truncated: number
 } {
   const column = width / 3
   const shown = items.slice(0, 12)
-  const place = (index: number, label: string, swatch: readonly [number, number, number] | null) => ({
+  const place = (
+    index: number,
+    label: string,
+    swatch: readonly [number, number, number] | null,
+  ) => ({
     x: Math.floor((index % 3) * column) + LEGEND_PAD,
     y: Math.floor(index / 3) * LEGEND_ROW_HEIGHT + 4,
     swatch,
@@ -276,9 +288,7 @@ export function renderSpectrumPlot(
     const y = (intensity: number) => bottom - (intensity / maxIntensity) * (bottom - top)
     ctx.lineWidth = 1
     for (const peak of drawn) {
-      ctx.strokeStyle = isSpectrumHighlight(peak.mz, options.highlightMzs)
-        ? '#f59e0b'
-        : '#9ca3af'
+      ctx.strokeStyle = isSpectrumHighlight(peak.mz, options.highlightMzs) ? '#f59e0b' : '#9ca3af'
       const px = x(peak.mz)
       ctx.beginPath()
       ctx.moveTo(px, bottom)
@@ -318,7 +328,8 @@ export function renderIonImages(
   const columns = montage ? Math.min(options.columns, images.length) : 1
   const rows = Math.ceil(images.length / columns)
   // Limit final montage dimensions as well as individual panels.
-  const labelHeight = 24
+  // 单图标题交给 Markdown figcaption；拼图只保留短序号，避免长标题在画布里截断。
+  const labelHeight = montage ? 22 : 0
   const side = Math.min(
     options.width,
     Math.floor(1536 / columns),
@@ -343,9 +354,13 @@ export function renderIonImages(
       width,
       height,
     )
-    panel.ctx.fillStyle = '#ffffff'
-    panel.ctx.font = '12px sans-serif'
-    panel.ctx.fillText(image.label, 6, 16, side - 12)
+    if (montage) {
+      panel.ctx.fillStyle = '#ffffff'
+      panel.ctx.font = '12px sans-serif'
+      panel.ctx.textAlign = 'center'
+      panel.ctx.textBaseline = 'middle'
+      panel.ctx.fillText(`#${image.panel ?? index + 1}`, side / 2, labelHeight / 2)
+    }
     return panel.canvas
   })
   let canvases = panels
@@ -368,6 +383,6 @@ export function renderIonImages(
       height: canvas.height,
       label: montage ? images.map((image) => image.label).join(' | ') : images[index]!.label,
     })),
-    description: `${options.colormap}, ${options.scale}, gamma=${options.gamma}, ${options.normalize} ${options.display}; ranges ${ranges.map((range, i) => `#${i + 1} ${range[0]}–${range[1]}`).join(', ')}. Color encodes ion intensity. Rows run top to bottom, columns left to right.`,
+    description: `${options.colormap}, ${options.scale}, gamma=${options.gamma}, ${options.normalize} ${options.display}; ranges ${ranges.map((range, i) => `#${images[i]!.panel ?? i + 1} ${range[0]}–${range[1]}`).join(', ')}. Color encodes ion intensity. Rows run top to bottom, columns left to right.${montage ? ' Montage panel indices are the requested target numbers, matching the #N summaries; unavailable targets leave a gap in the numbering.' : ''}`,
   }
 }

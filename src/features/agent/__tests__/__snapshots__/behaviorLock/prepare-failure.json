@@ -17,6 +17,7 @@
   "phase": "idle",
   "mode": "temporary",
   "messages": [],
-  "error": "model facts unavailable"
+  "error": "model facts unavailable",
+  "figures": []
  }
 }

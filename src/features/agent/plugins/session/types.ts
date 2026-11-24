@@ -11,6 +11,7 @@ export interface AnalysisBinding {
     kmeansK?: number | null
     pixel?: { index: number; x: number; y: number }
     annotationWeights?: AnnotationScoreWeights
+    annotationOrder?: number
   }
 }
 

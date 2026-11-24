@@ -96,7 +96,7 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt e75ee4f2>",
+      "system": "<prompt 399c0a65>",
       "tools": "<tools 1a66bb78>",
       "maxTokens": 64000,
       "contextWindow": 256000,
@@ -150,7 +150,7 @@
  ],
  "calls": [
   {
-   "system": "<prompt e75ee4f2>",
+   "system": "<prompt 399c0a65>",
    "tools": "<tools 1a66bb78>",
    "messages": [
     "<message 1>",
@@ -191,12 +191,13 @@
    }
   ],
   "error": null,
+  "figures": [],
   "pressure": {
-   "inputTokens": 2783,
+   "inputTokens": 2819,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.014891909246575342,
+   "ratio": 0.015084546232876712,
    "estimated": true
   }
  }

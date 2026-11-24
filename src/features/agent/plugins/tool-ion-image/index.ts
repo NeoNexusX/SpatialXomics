@@ -84,7 +84,7 @@ function renderOptions(targetCount: number): RenderOptions {
     normalize: 'shared',
     layout: targetCount > 4 ? 'montage' : 'separate',
     columns: 2,
-    width: 384,
+    width: 640,
   }
 }
 
@@ -97,7 +97,10 @@ function capturedTolerance(
     .find((event) => (event as { type?: string }).type === 'turn/start') as
     | { binding?: { page?: { selectedIon?: { tolerance?: number } } } }
     | undefined
-  return tolerance ?? (dataModeRef.value === 'continuous' ? turn?.binding?.page?.selectedIon?.tolerance : undefined)
+  return (
+    tolerance ??
+    (dataModeRef.value === 'continuous' ? turn?.binding?.page?.selectedIon?.tolerance : undefined)
+  )
 }
 
 async function renderIonTargets(
@@ -112,10 +115,10 @@ async function renderIonTargets(
   for (const [index, target] of targets.entries()) {
     try {
       const ion = await readIon(target.mz, tolerance, signal)
-      const label = `#${index + 1} ${target.label ?? ion.label}`
-      images.push({ ...ion, label })
+      const label = target.label ?? ion.label
+      images.push({ ...ion, label, panel: index + 1 })
       summaries.push(
-        `${label}\n${ion.label}; grid ${ion.width}×${ion.height}; stats ${JSON.stringify(buildIonImageStats(ion))}`,
+        `#${index + 1} ${label}\n${ion.label}; grid ${ion.width}×${ion.height}; stats ${JSON.stringify(buildIonImageStats(ion))}`,
       )
     } catch (error) {
       signal.throwIfAborted()
@@ -124,7 +127,8 @@ async function renderIonTargets(
   }
   signal.throwIfAborted()
   if (!images.length) throw new Error(failures.join('; '))
-  return { ...renderIonImages(images, renderOptions(targets.length)), summaries, failures }
+  // 排版按真正拿到的图数决定：5 个目标只成功 1 个时不该拼成一张「拼图」。
+  return { ...renderIonImages(images, renderOptions(images.length)), summaries, failures }
 }
 
 const ionImageOutput = {
@@ -135,50 +139,56 @@ const ionImageOutput = {
 
 export function apply(ctx: Context) {
   /**
-   * get_ion_image_by_rowIds —— 按注释行 id 取离子热图。
+   * get_ion_image_by_ranks —— 按面板 rank 取离子热图。
    * 同 obsMz 的行合并为一个带标签目标；固定 p99 显示范围与 shared 色阶。
    */
   ctx.tools.register(
     defineTool({
-      name: 'get_ion_image_by_rowIds',
+      name: 'get_ion_image_by_ranks',
       category: 'page',
       description:
-        'View spatial ion heatmaps for annotation rowIds. Rows sharing an observed m/z are grouped into one ' +
+        'View spatial ion heatmaps for annotation panel ranks. Rows sharing an observed m/z are grouped into one ' +
         'labeled target; 1–9 grouped targets are allowed. Display is fixed to p99 with a shared color range ' +
-        'for comparison; up to 4 targets render as separate images, more as a 2-column montage. Batch 6 ' +
-        'targets per call: 4 fills the separate-image limit and 6 fills the montage evenly, while odd counts ' +
-        'and larger batches leave a ragged grid. Each target returns ' +
+        'for comparison; up to 4 targets render as separate images, more as a 2-column montage. For a ' +
+        "per-molecule review, pass one molecule's own ranks per call (its adduct rows together): each " +
+        'returned image then shows that molecule alone and can be placed under its evidence. A montage ' +
+        'mixing several molecules cannot be attributed to any one of them; use it only for cross-molecule ' +
+        'comparison. Each target returns ' +
         'grid dimensions and quantitative statistics alongside its image. Unavailable targets are reported ' +
         'separately while successful images are retained; an unavailable m/z is not evidence that an isotope ' +
         'or molecule is absent. Requires continuous ion data and loaded annotations.',
       timeoutMs: 60000,
       maxResultChars: TOOL_RESULT_CHARS_EVIDENCE,
       parameters: {
-        rowIds: {
+        ranks: {
           type: 'array',
           items: { type: 'integer' },
           required: true,
           description:
-            'Annotation row ids; rows sharing an obsMz are grouped into one labeled target (1–9 grouped targets; batch 6).',
+            "Annotation panel ranks; rows sharing an obsMz are grouped into one labeled target (1–9 grouped targets). For a per-molecule review pass one molecule's own ranks per call.",
         },
         tolerance: toleranceParameter,
       },
       async execute(args, exec) {
         const rows = getAnnotationRows()
         if (!rows?.length) throw new Error('Annotation data is unavailable')
-        const selected = args.rowIds.map((id) => {
-          const row = rows.find((row) => row.id === id)
-          if (!row) throw new Error(`Unknown annotation rowId ${id}`)
+        const selected = args.ranks.map((rank) => {
+          const row = rows.find((row) => row.rank === rank)
+          if (!row) throw new Error(`Unknown annotation rank ${rank}`)
           return row
         })
         const grouped = new Map<number, string[]>()
         for (const row of selected)
           grouped.set(row.obsMz, [
             ...(grouped.get(row.obsMz) ?? []),
-            `rowId=${row.id} #${row.rank} ${row.name} ${row.adduct}`,
+            `#${row.rank} ${row.name} ${row.adduct}`,
           ])
         const targets = [...grouped].map(([mz, labels]) => ({ mz, label: labels.join(' | ') }))
-        return renderIonTargets(targets, capturedTolerance(args.tolerance, exec.session), exec.signal)
+        return renderIonTargets(
+          targets,
+          capturedTolerance(args.tolerance, exec.session),
+          exec.signal,
+        )
       },
       output: ionImageOutput,
     }),
@@ -195,8 +205,8 @@ export function apply(ctx: Context) {
       description:
         'View spatial ion heatmaps for 1–9 explicit m/z values, including unannotated peaks. Display is fixed ' +
         'to p99 with a shared color range for comparison; up to 4 targets render as separate images, more as ' +
-        'a 2-column montage. Batch 6 targets per call: 4 fills the separate-image limit and 6 fills the ' +
-        'montage evenly, while odd counts and larger batches leave a ragged grid. ' +
+        'a 2-column montage. Up to 4 targets give one image each; a larger batch is a single montage that ' +
+        'cannot be split per target. ' +
         'Each target returns grid dimensions and quantitative statistics alongside its image. ' +
         'Unavailable targets are reported separately while successful images are retained; an unavailable m/z ' +
         'is not evidence that an isotope or molecule is absent. Requires continuous ion data; processed data ' +
@@ -209,13 +219,18 @@ export function apply(ctx: Context) {
           items: { type: 'number' },
           maxItems: 9,
           required: true,
-          description: '1–9 explicit m/z values to view; batch 6 per call.',
+          description:
+            '1–9 explicit m/z values to view; up to 4 give one image each, more become a single montage.',
         },
         tolerance: toleranceParameter,
       },
       async execute(args, exec) {
         const targets = args.mzs.map((mz) => ({ mz }))
-        return renderIonTargets(targets, capturedTolerance(args.tolerance, exec.session), exec.signal)
+        return renderIonTargets(
+          targets,
+          capturedTolerance(args.tolerance, exec.session),
+          exec.signal,
+        )
       },
       output: ionImageOutput,
     }),

@@ -131,9 +131,9 @@ export function resolveRankRange(
   maxSize = 25,
 ): { rankFrom: number; rankTo: number } {
   const from = Number.isFinite(rankFrom) && rankFrom! > 1 ? Math.floor(rankFrom!) : 1
-  const to =
-    Number.isFinite(rankTo) && rankTo! > 0 ? Math.floor(rankTo!) : from + defaultSize - 1
-  if (to < from) throw new Error(`rankTo (${to}) must be greater than or equal to rankFrom (${from})`)
+  const to = Number.isFinite(rankTo) && rankTo! > 0 ? Math.floor(rankTo!) : from + defaultSize - 1
+  if (to < from)
+    throw new Error(`rankTo (${to}) must be greater than or equal to rankFrom (${from})`)
   return { rankFrom: from, rankTo: Math.min(to, from + maxSize - 1) }
 }
 
@@ -156,9 +156,9 @@ export function annotationRankRangeMeta(
 export type AnnotationOrigin = 'endogenous' | 'expected' | 'unknown' | 'exogenous'
 
 export interface AnnotationRow {
-  /** 行 id（get_annotation 精确查询用） */
+  /** 内部行 id，仅供页面/provider 关联；助手工具不暴露，定位一律用 rank */
   id: number
-  /** 按总分的排名，1 起 */
+  /** 面板排名，1 起；助手精确查询与离子图选择都用它 */
   rank: number
   /** 第一个候选名（没有候选名时为分子式） */
   name: string

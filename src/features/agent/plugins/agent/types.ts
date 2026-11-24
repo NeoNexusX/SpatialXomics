@@ -91,6 +91,8 @@ export interface AgentSnapshot {
   mode: SessionStorage['mode']
   messages: UiChatItem[]
   error: string | null
+  /** Saved tool figures available for inline Markdown references in this session. */
+  figures?: import('../llm').ImageAttachment[]
   pressure?: ContextPressure
   tokenUsage?: TokenUsage
   instructions?: { name: string; text: string }

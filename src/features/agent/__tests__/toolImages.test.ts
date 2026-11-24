@@ -91,6 +91,13 @@ it('sends tool images through archive middleware, restores them and displays a t
     images: [PNG],
     attachments: [{ width: 1, height: 1, label: 'ion A' }],
   })
+  // 模型实际收到的 system 必须带上这张图的可复制引用，否则它只能用文字指代、
+  // 用户看不到图（存档里的 request/context 快照有、真正发出的没有，就是这样漏的）。
+  // 引用用短句柄：模型抄 36 位 UUID 会截断（实测 35/35），所以不暴露存储 id。
+  expect(h.calls[0]!.system).not.toContain('session-artifact:')
+  expect(h.calls[1]!.system).toContain('## Session figures')
+  expect(h.calls[1]!.system).toContain('](session-artifact:fig-1)')
+  expect(h.calls[1]!.system).not.toContain(tool.attachments![0]!.id)
   const storage = h.storages[0]!.storage
   const batches = await storage.read()
   expect(JSON.stringify(batches)).not.toContain('base64')
