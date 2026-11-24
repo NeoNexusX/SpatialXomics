@@ -17,6 +17,7 @@
   "phase": "idle",
   "mode": "temporary",
   "messages": [],
-  "error": "Agent requires a multimodal model. Select a model that accepts images."
+  "error": "Agent requires a multimodal model. Select a model that accepts images.",
+  "figures": []
  }
 }

@@ -63,8 +63,8 @@
        "baseUrl": "https://llm.test/v1",
        "model": "m"
       },
-      "system": "<prompt 819a4635>",
-      "tools": "<tools f33b6adc>",
+      "system": "<prompt 0ca54738>",
+      "tools": "<tools 0afd06f0>",
       "maxTokens": 64000,
       "contextWindow": 256000,
       "imageMode": "image",
@@ -132,8 +132,8 @@
  ],
  "calls": [
   {
-   "system": "<prompt 819a4635>",
-   "tools": "<tools f33b6adc>",
+   "system": "<prompt 0ca54738>",
+   "tools": "<tools 0afd06f0>",
    "messages": [
     "<message 1>",
     "<message 2>"
@@ -180,12 +180,13 @@
    }
   ],
   "error": "Annotation scoring settings changed. Submit the question again.",
+  "figures": [],
   "pressure": {
-   "inputTokens": 12350,
+   "inputTokens": 13627,
    "contextWindow": 256000,
    "outputReserve": 64000,
    "inputBudget": 186880,
-   "ratio": 0.06608518835616438,
+   "ratio": 0.07291845034246576,
    "estimated": true
   }
  }

@@ -11,6 +11,7 @@ import type { Instructions } from '../agent-instructions'
 import type { ContextPressure } from '../token-meter'
 import type { TokenUsage } from '../llm'
 import type { AnalysisBinding, Session } from '../session'
+import { sessionFigures } from '../session'
 import type { QuestionRecords } from '../user-questions'
 import {
   SessionBusyError,
@@ -132,6 +133,7 @@ export class AgentRuntime extends Service implements Agent {
     const messages = withLiveTranscript(projected ?? [], driver?.live).map((item) => ({
       ...item,
     }))
+    const figures = session ? sessionFigures(session) : []
     for (const message of messages) {
       if (message.attachments?.length)
         message.images = message.attachments
@@ -157,6 +159,7 @@ export class AgentRuntime extends Service implements Agent {
       mode: session?.storage.mode ?? 'temporary',
       messages,
       error: this.storageError ?? this.actionError ?? driver?.error ?? null,
+      ...(session ? { figures } : {}),
       pressure: session
         ? this.ctx.sessionProjections.viewOf<ContextPressure>(session, 'contextPressure')
         : undefined,

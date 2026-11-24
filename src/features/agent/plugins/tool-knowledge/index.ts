@@ -507,7 +507,7 @@ export function apply(ctx: Context) {
         '(the archive sends no browser CORS headers); on network/relay failure the tool degrades to link-only ' +
         'output and never invents HMDB data. For m/z candidate search use kegg_mass_search instead. BATCHING: ' +
         'use "ids" in ONE call; send only 2–3 accessions per call because each archive fetch can take up to ' +
-        '20 s under a 90 s soft deadline.',
+        '20 s (a transient gateway error retries once, so one accession can take ~42 s) under a 70 s soft deadline.',
       parameters: {
         ...batchPageParameters,
         offset: {
@@ -535,12 +535,16 @@ export function apply(ctx: Context) {
           throw new Error('Provide "ids" (HMDB accession)')
         }
         const items = ids.map((id) => ({ kind: 'id' as const, value: id }))
-        // 90s soft budget inside the 120s tool timeout via renderBatch's
+        // 70s soft budget inside the 120s tool timeout via renderBatch's
         // deadline: items that would start past it are left for the next page
         // (nextOffset footer) instead of being degraded in place — a degraded
         // id rendered as "done" would be skipped forever when the model
-        // follows the footer.
-        const deadline = Date.now() + 90_000
+        // follows the footer. The 50s margin must cover the WORST single item,
+        // which since the bounded retry is pace + 20s + backoff + pace + 20s
+        // ≈ 42s (plus queue contention from concurrent calls). At 90s an item
+        // starting just under the deadline could run past 120s, and the runtime
+        // timeout would discard every profile already rendered in the page.
+        const deadline = Date.now() + 70_000
         return renderBatch(
           items,
           (item) => item.value,

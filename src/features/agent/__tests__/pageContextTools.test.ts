@@ -5,9 +5,9 @@
  *   raw 未知键透传，'--' 占位转 null
  * - get_ion：通道列表与 ROI/掩膜段；withImage:false 省略 images 字段（不返回 []）
  * - get_annotation：默认窗口 rank 1–10；rankFrom:20/rankTo:30 返回 rank 20–30；
- *   窗口与筛选解耦；精确 rowIds 与 rankFrom/rankTo 互斥；旧 offset/limit 与 mz/mzs/rowId 报错
+ *   窗口与筛选解耦；精确 ranks 与 rankFrom/rankTo 互斥；旧 offset/limit 与 mz/mzs/rank 报错
  * - get_mean_spectrum_top_peaks / get_pixel_spectrum：任意 rank 窗口（先完整排序再切片）
- * - get_ion_image_by_rowIds / get_ion_image_by_mzs：拆分入口，固定 p99/shared
+ * - get_ion_image_by_ranks / get_ion_image_by_mzs：拆分入口，固定 p99/shared
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -18,7 +18,8 @@ import { SystemPrompt } from '../plugins/system-prompt'
 import { ToolRuntime, TOOL_RESULT_CHARS_EVIDENCE } from '../plugins/tools'
 import { SkillsRegistry } from '../plugins/skill'
 import type { ToolDefinition, ToolRunContext } from '../plugins/tools'
-import { registerContextProviders, unregisterContextProviders } from '../bridge/analysisContext'
+import { registerContextProviders, unregisterContextProviders, buildAnalysisSelection } from '../bridge/analysisContext'
+import { fnv1a } from '@/shared/utils/fnv1a'
 import {
   dataModeRef,
   ionDims,
@@ -144,7 +145,13 @@ describe('get_annotation rank window', () => {
     expect(out.rows).toHaveLength(10)
     expect(out.rows[0].rank).toBe(1)
     expect(out.rows[9].rank).toBe(10)
-    expect(out.paging).toMatchObject({ total: 30, rankFrom: 1, rankTo: 10, returned: 10, nextRank: 11 })
+    expect(out.paging).toMatchObject({
+      total: 30,
+      rankFrom: 1,
+      rankTo: 10,
+      returned: 10,
+      nextRank: 11,
+    })
     // 面板头带归一化权重（与 conditions.scoreRatio 的输入比例对应）
     expect(out.panel.weights).toEqual({ mass: 0.6, adduct: 0.1, spatial: 0.3 })
   })
@@ -152,8 +159,16 @@ describe('get_annotation rank window', () => {
   it('rankFrom 20 + rankTo 30 returns rank 20-30 regardless of table filters', async () => {
     registerAnnotations(30, 5) // 表格筛选后只剩 5 行可见：窗口仍读全量
     const out = JSON.parse(String(await runTool('get_annotation', { rankFrom: 20, rankTo: 30 })))
-    expect(out.rows.map((r: AnnotationRow) => r.rank)).toEqual([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30])
-    expect(out.paging).toMatchObject({ total: 30, rankFrom: 20, rankTo: 30, returned: 11, nextRank: null })
+    expect(out.rows.map((r: AnnotationRow) => r.rank)).toEqual([
+      20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+    ])
+    expect(out.paging).toMatchObject({
+      total: 30,
+      rankFrom: 20,
+      rankTo: 30,
+      returned: 11,
+      nextRank: null,
+    })
     // 面板头报告筛选态与可见行数，窗口口径不受影响
     expect(out.panel.filters.searchQuery).toBe('filtered!')
     expect(out.panel.visibleRows).toBe(5)
@@ -162,7 +177,9 @@ describe('get_annotation rank window', () => {
   it('rankTo defaults to rankFrom+9 and the range is capped at 25 rows', async () => {
     registerAnnotations(60)
     const out = JSON.parse(String(await runTool('get_annotation', { rankFrom: 11 })))
-    expect(out.rows.map((r: AnnotationRow) => r.rank)).toEqual([11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
+    expect(out.rows.map((r: AnnotationRow) => r.rank)).toEqual([
+      11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+    ])
     expect(out.paging).toMatchObject({ rankFrom: 11, rankTo: 20, nextRank: 21 })
 
     const wide = JSON.parse(String(await runTool('get_annotation', { rankFrom: 1, rankTo: 60 })))
@@ -188,30 +205,36 @@ describe('get_annotation rank window', () => {
     registerAnnotations(12)
     const out = JSON.parse(String(await runTool('get_annotation', { rankFrom: 51, rankTo: 60 })))
     expect(out.rows).toEqual([])
-    expect(out.paging).toMatchObject({ total: 12, rankFrom: 51, rankTo: 60, returned: 0, nextRank: null })
+    expect(out.paging).toMatchObject({
+      total: 12,
+      rankFrom: 51,
+      rankTo: 60,
+      returned: 0,
+      nextRank: null,
+    })
   })
 
-  it('exact rowIds conflict with the rank window', async () => {
+  it('exact ranks conflict with the rank window', async () => {
     registerAnnotations(30)
-    await expect(runTool('get_annotation', { rowIds: [3], rankFrom: 6 })).rejects.toThrow(
+    await expect(runTool('get_annotation', { ranks: [3], rankFrom: 6 })).rejects.toThrow(
       /mutually exclusive/i,
     )
   })
 
-  it('exact rowIds returns the requested full rows', async () => {
+  it('exact ranks returns the requested full rows', async () => {
     registerAnnotations(30)
-    const out = String(await runTool('get_annotation', { rowIds: [4, 2] }))
-    expect(out).toContain('rowId: 4')
-    expect(out).toContain('rowId: 2')
+    const out = String(await runTool('get_annotation', { ranks: [4, 2] }))
+    expect(out).toContain('rank: 4')
+    expect(out).toContain('rank: 2')
   })
 
-  it('exact rowIds renders every selector without an unreachable pagination footer', async () => {
+  it('exact ranks renders every selector without an unreachable pagination footer', async () => {
     // 精确模式禁 rankFrom/rankTo，若沿用 renderBatch 的输入分页（默认 limit 5），
     // 第 6 个之后的选择器永远取不到——脚注让传 offset=5 会撞互斥校验。
     registerAnnotations(30)
     const ids = Array.from({ length: 10 }, (_, i) => i + 1)
-    const out = String(await runTool('get_annotation', { rowIds: ids }))
-    for (const id of ids) expect(out).toContain(`### rowId ${id}`)
+    const out = String(await runTool('get_annotation', { ranks: ids }))
+    for (const id of ids) expect(out).toContain(`### rank ${id}`)
     expect(out).not.toContain('nextOffset')
   })
 
@@ -223,8 +246,13 @@ describe('get_annotation rank window', () => {
         panelRows: () => [],
         weights: { mass: 0.6, adduct: 0.1, spatial: 0.3 },
         panel: () => ({
-          summary: null, conditions: null, filters: null, visibleRows: 0,
-          runState: 'done', dbInfo: null, peakStats: null,
+          summary: null,
+          conditions: null,
+          filters: null,
+          visibleRows: 0,
+          runState: 'done',
+          dbInfo: null,
+          peakStats: null,
         }),
       }),
     })
@@ -237,21 +265,31 @@ describe('get_annotation rank window', () => {
   it('keeps oversized first row results valid and advances the cursor', async () => {
     const row = annotationRows(1)[0]!
     row.candidates = Array.from({ length: 500 }, (_, i) => ({
-      id: `candidate-${i}`, name: 'compound'.repeat(50), origin: null,
+      id: `candidate-${i}`,
+      name: 'compound'.repeat(50),
+      origin: null,
     }))
     registerContextProviders({
       annotations: () => ({
         count: 2,
         rows: () => [row, ...annotationRows(1).map((r) => ({ ...r, id: 2, rank: 2 }))],
         panelRows: () => [row, ...annotationRows(1).map((r) => ({ ...r, id: 2, rank: 2 }))],
-        panel: () => ({ summary: null, conditions: null, filters: null, visibleRows: 2,
-          runState: 'done', dbInfo: null, peakStats: null }),
+        panel: () => ({
+          summary: null,
+          conditions: null,
+          filters: null,
+          visibleRows: 2,
+          runState: 'done',
+          dbInfo: null,
+          peakStats: null,
+        }),
       }),
     })
     const raw = String(await runTool('get_annotation'))
     const out = JSON.parse(raw)
     expect(raw.length).toBeLessThan(TOOL_RESULT_CHARS_EVIDENCE)
-    expect(out.rows[0]).toMatchObject({ id: 1, rank: 1, truncated: true })
+    expect(out.rows[0]).toMatchObject({ rank: 1, truncated: true })
+    expect(out.rows[0]).not.toHaveProperty('id')
     expect(out.paging).toMatchObject({ returned: 1, nextRank: 2 })
   })
 
@@ -267,19 +305,28 @@ describe('get_annotation rank window', () => {
         count: 30,
         rows: () => rows,
         panelRows: () => rows.slice(0, 10),
-        panel: () => ({ summary: null, conditions: null, filters: null, visibleRows: 10,
-          runState: 'done', dbInfo: null, peakStats: null }),
+        panel: () => ({
+          summary: null,
+          conditions: null,
+          filters: null,
+          visibleRows: 10,
+          runState: 'done',
+          dbInfo: null,
+          peakStats: null,
+        }),
       }),
     })
     const out = JSON.parse(String(await runTool('get_annotation', { molecule: 'Sorbitol' })))
     expect(out.matches).toHaveLength(1)
-    expect(out.matches[0]).toMatchObject({ rowId: 26, rank: 26, primaryCandidateMatch: true })
+    expect(out.matches[0]).toMatchObject({ rank: 26, primaryCandidateMatch: true })
     expect(out.matches[0].matchTypes).toContain('candidate-name-exact')
     expect(out.note).toContain('not that the named isomer was independently identified')
     const formula = JSON.parse(String(await runTool('get_annotation', { molecule: 'C6H14O6' })))
-    expect(formula.matches.map((m: { rowId: number }) => m.rowId)).toEqual([26])
-    const substring = JSON.parse(String(await runTool('get_annotation', { molecule: 'sorbitol', matchMode: 'contains' })))
-    expect(substring.matches.map((m: { rowId: number }) => m.rowId)).toEqual([25, 26])
+    expect(formula.matches.map((m: { rank: number }) => m.rank)).toEqual([26])
+    const substring = JSON.parse(
+      String(await runTool('get_annotation', { molecule: 'sorbitol', matchMode: 'contains' })),
+    )
+    expect(substring.matches.map((m: { rank: number }) => m.rank)).toEqual([25, 26])
   })
 
   it('reverse lookup distinguishes an annotation miss from biological absence', async () => {
@@ -290,7 +337,9 @@ describe('get_annotation rank window', () => {
   })
 
   it('unregistered annotations page degrades to an unavailable hint', async () => {
-    await expect(runTool('get_annotation')).resolves.toMatch(/not available in the current page context/)
+    await expect(runTool('get_annotation')).resolves.toMatch(
+      /not available in the current page context/,
+    )
   })
 })
 
@@ -329,21 +378,41 @@ describe('get_page combined snapshot', () => {
   it('returns a rendered ToolImage for get_page and preserves the turn-start target', async () => {
     const readIon = await import('../plugins/tool-ion-image')
     const readSpy = vi.spyOn(readIon, 'readIon').mockResolvedValue({
-      matrix: new Float32Array([1]), width: 1, height: 1, mz: 100, tolerance: 0.01, label: 'ion',
+      matrix: new Float32Array([1]),
+      width: 1,
+      height: 1,
+      mz: 100,
+      tolerance: 0.01,
+      label: 'ion',
     })
     registerContextProviders({
-      selectedIon: () => ({ mz: 200, tolerance: 0.02, matrix: new Float32Array([1]), width: 1, height: 1 }),
+      selectedIon: () => ({
+        mz: 200,
+        tolerance: 0.02,
+        matrix: new Float32Array([1]),
+        width: 1,
+        height: 1,
+      }),
     })
     const captured = {
-      type: 'turn/start', turnId: 'turn', user: { role: 'user', content: 'question' },
-      binding: { datasetId: 'd', generation: 1, page: { selectedIon: { mz: 100, tolerance: 0.01 } } },
+      type: 'turn/start',
+      turnId: 'turn',
+      user: { role: 'user', content: 'question' },
+      binding: {
+        datasetId: 'd',
+        generation: 1,
+        page: { selectedIon: { mz: 100, tolerance: 0.01 } },
+      },
       baseSurface: [],
     } as const
-    const value = (await loadTool('get_page').execute(
-      { withImage: true } as never,
-      { ...exec, session: { events: [captured] } as never },
-    )) as { page: Record<string, unknown>; images?: { dataUrl: string; mime: string }[] }
-    expect(value.images?.[0]).toMatchObject({ dataUrl: expect.stringContaining('data:image/png'), mime: 'image/png' })
+    const value = (await loadTool('get_page').execute({ withImage: true } as never, {
+      ...exec,
+      session: { events: [captured] } as never,
+    })) as { page: Record<string, unknown>; images?: { dataUrl: string; mime: string }[] }
+    expect(value.images?.[0]).toMatchObject({
+      dataUrl: expect.stringContaining('data:image/png'),
+      mime: 'image/png',
+    })
     expect(value.page.imageTarget).toEqual({ mz: 100, tolerance: 0.01, source: 'turn-start' })
     expect(readSpy).toHaveBeenCalledWith(100, 0.01, expect.any(AbortSignal))
   })
@@ -351,69 +420,99 @@ describe('get_page combined snapshot', () => {
   it('returns the initial KMeans computing state without a completed cluster result', async () => {
     registerContextProviders({
       kmeans: () => ({
-        k: null, clusterSizes: [], selectedIds: [],
+        k: null,
+        clusterSizes: [],
+        selectedIds: [],
         view: {
-          clusters: [], labelsAvailable: false, computing: true, visible: false,
-          labels: () => null, rgb: () => null, dims: () => null,
+          clusters: [],
+          labelsAvailable: false,
+          computing: true,
+          visible: false,
+          labels: () => null,
+          rgb: () => null,
+          dims: () => null,
         },
       }),
     })
-    const result = await loadTool('get_kmeans').execute({ withImage: false } as never, exec) as { state: { computing: boolean; clusters: unknown[] } }
+    const result = (await loadTool('get_kmeans').execute({ withImage: false } as never, exec)) as {
+      state: { computing: boolean; clusters: unknown[] }
+    }
     expect(result.state).toMatchObject({ computing: true, clusters: [] })
   })
   it('renders KMeans and UMAP overlays only when requested and available', async () => {
     const renderer = await import('../plugins/tool-ion-image/render')
     registerContextProviders({
       kmeans: () => ({
-        k: 2, clusterSizes: [1, 1], selectedIds: [0],
+        k: 2,
+        clusterSizes: [1, 1],
+        selectedIds: [0],
         view: {
           clusters: [
             { id: 0, color: [255, 0, 0], count: 1 },
             { id: 1, color: [0, 255, 0], count: 1 },
           ],
-          labelsAvailable: true, computing: false, visible: true,
+          labelsAvailable: true,
+          computing: false,
+          visible: true,
           labels: () => Int32Array.from([0, 1]),
           rgb: () => Uint8Array.from([255, 0, 0, 0, 255, 0]),
           dims: () => ({ width: 2, height: 1 }),
         },
       }),
       umap: () => ({
-        ready: true, visible: true, computing: false, error: null,
+        ready: true,
+        visible: true,
+        computing: false,
+        error: null,
         grid: { width: 1, height: 1 },
         rgb: () => Uint8Array.from([0, 0, 0]),
         occupancyMask: () => Uint8Array.from([1]),
       }),
     })
     const kmeans = loadTool('get_kmeans')
-    const disabled = await kmeans.execute({ withImage: false } as never, exec) as { images?: unknown }
+    const disabled = (await kmeans.execute({ withImage: false } as never, exec)) as {
+      images?: unknown
+    }
     expect(disabled.images).toBeUndefined()
     await kmeans.execute({ withImage: true } as never, exec)
     // 图例 = visibleIds ∩ clusters：selectedIds [0] 只含簇 0，簇 1 不进图例
     expect(renderer.renderOverlayImage).toHaveBeenCalledWith(
-      expect.any(Uint8Array), 2, 1, 'KMeans overlay',
+      expect.any(Uint8Array),
+      2,
+      1,
+      'KMeans overlay',
       expect.objectContaining({ labels: expect.any(Int32Array) }),
       [{ color: [255, 0, 0], label: '#0 (1 px)' }],
     )
-    const umap = await loadTool('get_umap').execute({ withImage: true } as never, exec) as { images?: unknown[] }
+    const umap = (await loadTool('get_umap').execute({ withImage: true } as never, exec)) as {
+      images?: unknown[]
+    }
     expect(umap.images).toHaveLength(1)
     expect(renderer.renderOverlayImage).toHaveBeenCalledWith(
-      expect.any(Uint8Array), 1, 1, 'UMAP overlay', { occupancy: Uint8Array.from([1]) },
+      expect.any(Uint8Array),
+      1,
+      1,
+      'UMAP overlay',
+      { occupancy: Uint8Array.from([1]) },
     )
   })
-
 
   it('budgets combined page and dataset JSON without breaking syntax', async () => {
     registerContextProviders({
       datasetInfo: () => ({
-        attrs: { huge: 'x'.repeat(TOOL_RESULT_CHARS_EVIDENCE * 2) }, acquisition: {}, sourceFile: null, methods: [],
-        displayRange: null, imageInfo: { pixels: null, nonZero: null, totalIon: null, pixelSize: null },
+        attrs: { huge: 'x'.repeat(TOOL_RESULT_CHARS_EVIDENCE * 2) },
+        acquisition: {},
+        sourceFile: null,
+        methods: [],
+        displayRange: null,
+        imageInfo: { pixels: null, nonZero: null, totalIon: null, pixelSize: null },
       }),
       pageHeader: () => ({ datasetName: 'x', status: '' }),
     })
     const dataset = String(await runTool('get_dataset'))
     expect(dataset.length).toBeLessThan(TOOL_RESULT_CHARS_EVIDENCE)
     expect(() => JSON.parse(dataset)).not.toThrow()
-    const page = await runTool('get_page', { withImage: false }) as { page: unknown }
+    const page = (await runTool('get_page', { withImage: false })) as { page: unknown }
     const rendered = JSON.stringify(page.page)
     expect(rendered.length).toBeLessThan(TOOL_RESULT_CHARS_EVIDENCE)
     expect(() => JSON.parse(rendered)).not.toThrow()
@@ -426,8 +525,12 @@ describe('get_page combined snapshot', () => {
     registerContextProviders({
       pageHeader: () => ({ datasetName: 'liver section', status: 'completed' }),
       datasetInfo: () => ({
-        attrs: { huge: 'x'.repeat(TOOL_RESULT_CHARS_EVIDENCE * 2) }, acquisition: {}, sourceFile: null, methods: [],
-        displayRange: null, imageInfo: { pixels: null, nonZero: null, totalIon: null, pixelSize: null },
+        attrs: { huge: 'x'.repeat(TOOL_RESULT_CHARS_EVIDENCE * 2) },
+        acquisition: {},
+        sourceFile: null,
+        methods: [],
+        displayRange: null,
+        imageInfo: { pixels: null, nonZero: null, totalIon: null, pixelSize: null },
       }),
       annotations: () => ({
         count: 30,
@@ -435,8 +538,13 @@ describe('get_page combined snapshot', () => {
         panelRows: () => fatRows,
         weights: { mass: 0.6, adduct: 0.1, spatial: 0.3 },
         panel: () => ({
-          summary: null, conditions: null, filters: null, visibleRows: 30,
-          runState: 'done', dbInfo: null, peakStats: null,
+          summary: null,
+          conditions: null,
+          filters: null,
+          visibleRows: 30,
+          runState: 'done',
+          dbInfo: null,
+          peakStats: null,
         }),
       }),
     })
@@ -557,7 +665,15 @@ describe('get_ion view', () => {
             enabled: true,
             overlayActive: true,
             list: [
-              { id: 1, mz: 200, color: [255, 0, 0], visible: true, opacity: 1, loading: false, error: null },
+              {
+                id: 1,
+                mz: 200,
+                color: [255, 0, 0],
+                visible: true,
+                opacity: 1,
+                loading: false,
+                error: null,
+              },
             ],
           },
           roi: { confirmed: 2, selected: 1 },
@@ -566,7 +682,11 @@ describe('get_ion view', () => {
       }),
     })
     const value = (await runTool('get_ion', { withImage: false })) as {
-      ion: { channels: { list: { mz: number }[] }; roi: { confirmed: number }; masks: { imported: number } }
+      ion: {
+        channels: { list: { mz: number }[] }
+        roi: { confirmed: number }
+        masks: { imported: number }
+      }
     }
     expect(value.ion.channels.list[0]!.mz).toBe(200)
     expect(value.ion.roi).toEqual({ confirmed: 2, selected: 1 })
@@ -601,7 +721,9 @@ describe('spectrum rank windows', () => {
       mz: Float64Array.from({ length: 30 }, (_, i) => 100 + i),
       intensity: Float32Array.from({ length: 30 }, (_, i) => 30 - i),
     }
-    const raw = String(await runTool('get_pixel_spectrum', { offset: 19, limit: 11, withImage: false }))
+    const raw = String(
+      await runTool('get_pixel_spectrum', { offset: 19, limit: 11, withImage: false }),
+    )
     const out = JSON.parse(raw.slice(raw.indexOf('{')))
     expect(out.window).toMatchObject({ total: 30, offset: 19, returned: 11 })
     expect(out.peaks.map((p: { mz: number }) => p.mz)).toEqual(
@@ -656,9 +778,9 @@ describe('spectrum rank windows', () => {
       images: unknown[]
     }
     expect(value.images).toHaveLength(2)
-    expect(
-      vi.mocked(renderer.renderSpectrumPlot).mock.calls.map((call) => call[1]!.label),
-    ).toEqual(['pixel #0 (x=1, y=1)', 'pixel #1 (x=2, y=1)'])
+    expect(vi.mocked(renderer.renderSpectrumPlot).mock.calls.map((call) => call[1]!.label)).toEqual(
+      ['pixel #0 (x=1, y=1)', 'pixel #1 (x=2, y=1)'],
+    )
   })
 
   it('omits images (never []) when disabled, unloaded or rendering fails', async () => {
@@ -694,7 +816,9 @@ describe('spectrum rank windows', () => {
     mzAxisRef.value = Float64Array.from({ length: 5 }, (_, i) => 100 + i)
     const { meanSpectrumRef } = await import('@/services/zarr/zarrSharedState')
     meanSpectrumRef.value = Float32Array.from([1, 2, 3, 4, 5])
-    const out = JSON.parse(String(await runTool('get_mean_spectrum_top_peaks', { offset: 99, limit: 10 })))
+    const out = JSON.parse(
+      String(await runTool('get_mean_spectrum_top_peaks', { offset: 99, limit: 10 })),
+    )
     expect(out.peaks).toEqual([])
     expect(out.window).toMatchObject({ total: 5, offset: 99, returned: 0, nextOffset: null })
   })
@@ -705,9 +829,16 @@ describe('split ion-image tools', () => {
     dataModeRef.value = 'continuous'
     mzAxisRef.value = Float64Array.from([135.0307])
     ionDims.value = { width: 1, height: 1 }
-    setZarrStore({ getSummedIonImageByMzIndices: async () => new Float32Array([1]) } as unknown as ZarrOssStore)
-    const value = await runTool('get_ion_image_by_mzs', { mzs: [135.0307, 137.0343], tolerance: 0.01 }) as {
-      images: unknown[]; summaries: string[]; failures: string[]
+    setZarrStore({
+      getSummedIonImageByMzIndices: async () => new Float32Array([1]),
+    } as unknown as ZarrOssStore)
+    const value = (await runTool('get_ion_image_by_mzs', {
+      mzs: [135.0307, 137.0343],
+      tolerance: 0.01,
+    })) as {
+      images: unknown[]
+      summaries: string[]
+      failures: string[]
     }
     expect(value.images).toHaveLength(1)
     expect(value.summaries[0]).toContain('135.0307')
@@ -719,19 +850,26 @@ describe('split ion-image tools', () => {
     dataModeRef.value = 'continuous'
     mzAxisRef.value = Float64Array.from([100])
     ionDims.value = { width: 1, height: 1 }
-    setZarrStore({ getSummedIonImageByMzIndices: async () => new Float32Array([1]) } as unknown as ZarrOssStore)
+    setZarrStore({
+      getSummedIonImageByMzIndices: async () => new Float32Array([1]),
+    } as unknown as ZarrOssStore)
     const renderer = await import('../plugins/tool-ion-image/render')
     await runTool('get_ion_image_by_mzs', { mzs: [100], tolerance: 0.01 })
     const calls = vi.mocked(renderer.renderIonImages).mock.calls
     const options = calls[calls.length - 1]![1]
-    expect(options).toMatchObject({ display: 'p99', normalize: 'shared', scale: 'linear', gamma: 1 })
+    expect(options).toMatchObject({
+      display: 'p99',
+      normalize: 'shared',
+      scale: 'linear',
+      gamma: 1,
+    })
   })
 
   it('rejects removed selectors and missing required inputs', async () => {
     await expect(runTool('get_ion_image_by_mzs', { mz: 100 })).rejects.toThrow(/mzs/)
-    await expect(runTool('get_ion_image_by_rowIds', { mzs: [200] })).rejects.toThrow(/rowIds/)
+    await expect(runTool('get_ion_image_by_ranks', { mzs: [200] })).rejects.toThrow(/ranks/)
     await expect(runTool('get_ion_image_by_mzs', {})).rejects.toThrow(/mzs/)
-    await expect(runTool('get_ion_image_by_rowIds', {})).rejects.toThrow(/rowIds/)
+    await expect(runTool('get_ion_image_by_ranks', {})).rejects.toThrow(/ranks/)
   })
 })
 
@@ -755,7 +893,7 @@ describe('批量工具调用（array 参数走完整 ToolRuntime 管线；自 to
       const r = await ctx.tools.execute({
         callId: 'c1',
         name: 'get_annotation',
-        arguments: { rowIds: [1] },
+        arguments: { ranks: [1] },
         signal: new AbortController().signal,
       })
       expect(r.isError).toBe(false)
@@ -765,7 +903,7 @@ describe('批量工具调用（array 参数走完整 ToolRuntime 管线；自 to
     }
   })
 
-  it('get_annotation 批量 rowIds：一次调用返回逐行分节结果', async () => {
+  it('get_annotation 批量 ranks：一次调用返回逐行分节结果', async () => {
     const mkRow = (id: number, name: string, obsMz: number): AnnotationRow =>
       ({
         id,
@@ -791,7 +929,11 @@ describe('批量工具调用（array 参数走完整 ToolRuntime 管线；自 to
     registerContextProviders({
       annotations: () => ({
         count: 3,
-        rows: () => [mkRow(1, 'PC 34:1', 760.5856), mkRow(2, 'PC 36:4', 806.5696), mkRow(3, 'SM d18:1/16:0', 703.5748)],
+        rows: () => [
+          mkRow(1, 'PC 34:1', 760.5856),
+          mkRow(2, 'PC 36:4', 806.5696),
+          mkRow(3, 'SM d18:1/16:0', 703.5748),
+        ],
       }),
     })
     const ctx = mkCtx()
@@ -800,16 +942,16 @@ describe('批量工具调用（array 参数走完整 ToolRuntime 管线；自 to
       const r = await ctx.tools.execute({
         callId: 'c2',
         name: 'get_annotation',
-        arguments: { rowIds: [1, 2, 999] },
+        arguments: { ranks: [1, 2, 999] },
         signal: new AbortController().signal,
       })
       expect(r.isError).toBe(false)
-      expect(r.content).toContain('### rowId 1')
+      expect(r.content).toContain('### rank 1')
       expect(r.content).toContain('PC 34:1')
-      expect(r.content).toContain('### rowId 2')
+      expect(r.content).toContain('### rank 2')
       expect(r.content).toContain('PC 36:4')
-      expect(r.content).toContain('### rowId 999')
-      expect(r.content).toContain('No annotation row with rowId 999')
+      expect(r.content).toContain('### rank 999')
+      expect(r.content).toContain('No annotation row with rank 999')
       const removed = await ctx.tools.execute({
         callId: 'c3',
         name: 'get_annotation',
@@ -817,9 +959,32 @@ describe('批量工具调用（array 参数走完整 ToolRuntime 管线；自 to
         signal: new AbortController().signal,
       })
       expect(removed.isError).toBe(true)
-      expect(removed.content).toContain('rowIds only')
+      expect(removed.content).toContain('ranks only')
     } finally {
       await ctx.fiber.dispose()
     }
+  })
+})
+
+describe('annotation order baseline', () => {
+  it('captures no baseline while the first annotation run still has zero rows', () => {
+    // 首次注释运行中 provider 已存在但 ions 为空。若把空指纹记成基线，打分完成、
+    // 行出现时就会被判成「rank 变了」，整轮后续的 rank 类工具全部误失效。
+    let rows: AnnotationRow[] = []
+    registerContextProviders({
+      annotations: () => ({
+        count: rows.length,
+        rows: () => rows,
+        orderSignature: () =>
+          rows.length ? fnv1a(rows.map((r) => `${r.id}:${r.rank}`).join('|')) : undefined,
+      }),
+    })
+    expect(buildAnalysisSelection().annotationOrder).toBeUndefined()
+
+    rows = annotationRows(3)
+    const signature = buildAnalysisSelection().annotationOrder
+    expect(signature).toBeTypeOf('number')
+    // 基线只在真的记下来之后才参与失效判断。
+    expect(signature).toBe(fnv1a(rows.map((r) => `${r.id}:${r.rank}`).join('|')))
   })
 })

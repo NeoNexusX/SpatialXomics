@@ -119,10 +119,24 @@ Use these identities for analysis. Live page state may have changed.`,
       throw new Error('The selected pixel changed. Submit the question again.')
     if (
       binding.selection &&
-      toolName?.startsWith('get_annotation') &&
-      JSON.stringify(selection.annotationWeights) !==
+      (toolName?.startsWith('get_annotation') ||
+        toolName === 'get_ion_image_by_ranks' ||
+        toolName === 'kegg_pathway_annotations')
+    ) {
+      if (
+        JSON.stringify(selection.annotationWeights) !==
         JSON.stringify(binding.selection.annotationWeights)
-    )
-      throw new Error('Annotation scoring settings changed. Submit the question again.')
+      ) {
+        throw new Error('Annotation scoring settings changed. Submit the question again.')
+      }
+      if (
+        binding.selection.annotationOrder != null &&
+        selection.annotationOrder !== binding.selection.annotationOrder
+      ) {
+        throw new Error(
+          'Annotation ranks changed after this question was submitted. Submit the question again.',
+        )
+      }
+    }
   }
 }

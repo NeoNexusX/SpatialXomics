@@ -2,19 +2,134 @@ import { fileURLToPath, URL } from 'node:url'
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
+import https from 'node:https'
+import net from 'node:net'
+import tls from 'node:tls'
 
-import { defineConfig, loadEnv, type Plugin } from 'vite'
-import type { Connect } from 'vite'
+import { loadEnv, type Plugin } from 'vite'
+import type { ConfigEnv, Connect, UserConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import tailwindcss from '@tailwindcss/vite';
 import vueI18n from '@intlify/unplugin-vue-i18n/vite'
 import { parseFrontmatter, parseMarkdown } from 'comark/parse'
+import { rewriteHmdbArchiveLocation, rewriteHmdbArchivePath } from './src/features/agent/plugins/tool-knowledge/hmdbRelay'
 import breaks from 'comark/plugins/breaks'
 import frontmatter from 'comark/plugins/frontmatter'
 import html from 'comark/plugins/html'
 import taskList from 'comark/plugins/task-list'
 import cjkFriendly from 'markdown-it-cjk-friendly'
+
+/**
+ * 启动时探测本地代理是否真的在转发：端口在监听不代表能用——Clash 关掉系统代理后
+ * 进程还在、端口还开着，但 CONNECT 任何目标都握不上手（2026-11-23 实测）。
+ * 探测通过才用代理，否则直连，开关代理都不必改 env、不必重启 vite。
+ */
+function probeHmdbProxy(proxyUrl: string, targetHost: string): Promise<boolean> {
+  const proxy = new URL(proxyUrl)
+  if (proxy.protocol !== 'http:') throw new Error('VITE_HMDB_PROXY_URL must use an HTTP proxy URL')
+  const port = Number(proxy.port || 80)
+  const connectTimeoutMs = 5_000
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: proxy.hostname, port })
+    let headers = Buffer.alloc(0)
+    let settled = false
+    const done = (ok: boolean) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      socket.destroy()
+      resolve(ok)
+    }
+    const timer = setTimeout(() => done(false), connectTimeoutMs)
+    socket.once('error', () => done(false))
+    socket.once('close', () => done(false))
+    const onData = (chunk: Buffer) => {
+      headers = Buffer.concat([headers, chunk])
+      const end = headers.indexOf('\r\n\r\n')
+      if (end < 0) return
+      socket.off('data', onData)
+      const status = /^HTTP\/\d\.\d\s+(\d{3})/.exec(headers.subarray(0, end).toString('latin1'))
+      if (!status || Number(status[1]) !== 200) return done(false)
+      // CONNECT 200 只说明代理接了隧道；再握手 TLS 才证明它真把流量转出去了
+      const secureSocket = tls.connect({ socket, servername: targetHost })
+      secureSocket.once('secureConnect', () => {
+        secureSocket.destroy()
+        done(true)
+      })
+      secureSocket.once('error', () => done(false))
+    }
+    socket.on('data', onData)
+    socket.once('connect', () => {
+      const auth = proxy.username
+        ? `Proxy-Authorization: Basic ${Buffer.from(`${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`).toString('base64')}\r\n`
+        : ''
+      socket.write(`CONNECT ${targetHost}:443 HTTP/1.1\r\nHost: ${targetHost}:443\r\n${auth}\r\n`)
+    })
+  })
+}
+
+const HMDB_ARCHIVE_HOST = 'web.archive.org'
+
+function localHmdbProxyAgent(proxyUrl: string): https.Agent {
+  const proxy = new URL(proxyUrl)
+  if (proxy.protocol !== 'http:') throw new Error('VITE_HMDB_PROXY_URL must use an HTTP proxy URL')
+  const port = Number(proxy.port || 80)
+  const connectTimeoutMs = 5_000
+  return new (class extends https.Agent {
+    override createConnection(
+      options: https.RequestOptions,
+      callback?: (error: Error | null, stream: tls.TLSSocket) => void,
+    ): tls.TLSSocket | null | undefined {
+      const socket = net.connect({ host: proxy.hostname, port })
+      let settled = false
+      const fail = (error: Error) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        socket.destroy()
+        callback?.(error, null as unknown as tls.TLSSocket)
+      }
+      const timer = setTimeout(() => fail(new Error('Local HMDB proxy CONNECT timed out')), connectTimeoutMs)
+      socket.once('error', fail)
+      socket.once('connect', () => {
+        const auth = proxy.username
+          ? `Proxy-Authorization: Basic ${Buffer.from(`${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`).toString('base64')}\r\n`
+          : ''
+        socket.write(
+          `CONNECT ${options.host}:${options.port} HTTP/1.1\r\nHost: ${options.host}:${options.port}\r\n${auth}Connection: keep-alive\r\n\r\n`,
+        )
+      })
+      let headers = Buffer.alloc(0)
+      const onData = (chunk: Buffer) => {
+        headers = Buffer.concat([headers, chunk])
+        const end = headers.indexOf('\r\n\r\n')
+        if (end < 0) return
+        socket.off('data', onData)
+        const status = /^HTTP\/\d\.\d\s+(\d{3})/.exec(headers.subarray(0, end).toString('latin1'))
+        if (!status || Number(status[1]) !== 200) {
+          fail(new Error(`Local HMDB proxy rejected CONNECT (${status?.[1] ?? 'invalid response'})`))
+          return
+        }
+        const remainder = headers.subarray(end + 4)
+        if (remainder.length) socket.unshift(remainder)
+        const secureSocket = tls.connect({
+          socket: socket as tls.TLSSocket,
+          servername: options.servername ?? options.host ?? undefined,
+        })
+        secureSocket.once('secureConnect', () => {
+          if (settled) return
+          settled = true
+          clearTimeout(timer)
+          callback?.(null, secureSocket)
+        })
+        secureSocket.once('error', fail)
+      }
+      socket.on('data', onData)
+      return undefined
+    }
+  })({ keepAlive: true })
+}
 
 /**
  * 动态（/news）的 Markdown 在构建时解析，浏览器只拿结果，不用下载解析器。
@@ -184,11 +299,29 @@ function llmRelayPlugin(): Plugin {
 }
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => {
+// 不套 defineConfig：它的同步重载不接受 Promise，async 工厂靠返回类型推断。
+// 探测本地代理要等网络，所以工厂必须是 async 的。
+export default async ({ mode }: ConfigEnv): Promise<UserConfig> => {
   // envDir 指向 env/ 目录，集中管理多环境 .env 文件
   const envDir = fileURLToPath(new URL('./env', import.meta.url))
   const env = loadEnv(mode, envDir, 'VITE_')
   const backendUrl = env.VITE_BACKEND_URL || 'http://localhost:8000'
+  // 默认直连。本地代理是显式 opt-in（见 env/.env.development）：默认指向某个人的
+  // Clash 端口会让所有人和 CI 每次启动都去 CONNECT 一个不存在的服务。
+  const hmdbProxyUrl = env.VITE_HMDB_PROXY_URL || ''
+  let hmdbProxyAgent: https.Agent | undefined
+  if (hmdbProxyUrl) {
+    const proxyAlive = await probeHmdbProxy(hmdbProxyUrl, HMDB_ARCHIVE_HOST)
+    if (proxyAlive) {
+      hmdbProxyAgent = localHmdbProxyAgent(hmdbProxyUrl)
+      console.info(`[hmdb-archive] Wayback relay via proxy ${hmdbProxyUrl}`)
+    } else {
+      console.warn(
+        `[hmdb-archive] proxy ${hmdbProxyUrl} is not forwarding; Wayback relay goes direct. ` +
+          'HMDB lookups fail if web.archive.org is unreachable from this network.',
+      )
+    }
+  }
 
   return {
     envDir: envDir,
@@ -222,16 +355,9 @@ export default defineConfig(({ mode }) => {
         // redirects to an external host. Rewrite that redirect back through this same origin.
         '/hmdb-archive': {
           target: 'https://web.archive.org',
+          agent: hmdbProxyAgent,
           changeOrigin: true,
-          rewrite: (path) => {
-            const request = new URL(path, 'http://localhost')
-            const match = /^\/hmdb-archive\/(HMDB\d{5,})\.xml$/.exec(request.pathname)
-            const snapshot = request.searchParams.get('snapshot')
-            if (!match || (snapshot && !/^\d{14}$/.test(snapshot))) {
-              return '/__invalid_hmdb_archive_request__'
-            }
-            return `/web/${snapshot ? `${snapshot}id_` : '2id_'}/https://hmdb.ca/metabolites/${match[1]}.xml`
-          },
+          rewrite: rewriteHmdbArchivePath,
           // Reject invalid requests locally (mirrors llmRelayPlugin's 400) and
           // rewrite the 2id_ redirect back to this origin with ?snapshot=.
           // The Location check stays case-sensitive on purpose: nginx's
@@ -261,16 +387,13 @@ export default defineConfig(({ mode }) => {
               // canonicalises the host to www.hmdb.ca (seen 2026-11-11):
               // https://web.archive.org/web/<ts>id_/https://www.hmdb.ca/metabolites/HMDB0007861.xml
               // An exact-scheme/host regex turned every such capture into a 502.
-              const match =
-                typeof location === 'string' &&
-                /^https?:\/\/web\.archive\.org\/web\/(\d{14})id_\/https?:\/\/(?:www\.)?hmdb\.ca\/metabolites\/(HMDB\d{5,})\.xml$/.exec(
-                  location,
-                )
-              if (match) {
-                proxyRes.headers.location = `/hmdb-archive/${match[2]}.xml?snapshot=${match[1]}`
+              const rewritten = rewriteHmdbArchiveLocation(location)
+              if (rewritten) {
+                proxyRes.headers.location = rewritten
               } else {
                 proxyRes.statusCode = 502
                 delete proxyRes.headers.location
+                console.warn('[hmdb-archive] rejected unexpected Wayback redirect', location)
               }
             })
           },
@@ -375,4 +498,4 @@ export default defineConfig(({ mode }) => {
       },
     },
   }
-})
+}

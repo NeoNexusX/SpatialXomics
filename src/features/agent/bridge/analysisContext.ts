@@ -77,6 +77,9 @@ export interface AnalysisContextProviders {
     weights?: AnnotationScoreWeights
     panel?: () => Omit<AnnotationPanelState, 'rows'> | null
     panelRows?: () => AnnotationRow[] | null
+    /** id:rank 顺序指纹；空间评分补全可能改 rank，rank 选择器据此失效。
+     *  行还没加载出来时返回 undefined——空签名不是「顺序」，不该被记为基线。 */
+    orderSignature?: () => number | undefined
   } | null
   /** UMAP 降维/聚类任务状态与栅格概要（不含逐点 embedding——量大且 LLM 用不上） */
   umap?: () => {
@@ -138,6 +141,7 @@ export function buildAnalysisSelection() {
     kmeansK: providers.kmeans?.()?.k,
     pixel: pixel ? { index: pixel.pixelIndex, x: pixel.x, y: pixel.y } : undefined,
     annotationWeights: providers.annotations?.()?.weights,
+    annotationOrder: providers.annotations?.()?.orderSignature?.(),
   }
 }
 
@@ -312,7 +316,11 @@ export function buildKmeansState():
   }
   return {
     k: p.k,
-    clusters: p.clusterSizes.map((count, id) => ({ id, color: [0, 0, 0] as [number, number, number], count })),
+    clusters: p.clusterSizes.map((count, id) => ({
+      id,
+      color: [0, 0, 0] as [number, number, number],
+      count,
+    })),
     selectedIds: p.selectedIds,
     labelsAvailable: p.clusterSizes.length > 0,
     computing: false,
@@ -380,7 +388,9 @@ export function buildPixelSpectrumPeakWindow(
   offset: number,
   limit: number,
   ps: PixelSpectrum | null = pixelSpectrum.value,
-): { pixel: { index: number; x: number; y: number }; window: RankWindow; peaks: SpectrumPeak[] } | undefined {
+):
+  | { pixel: { index: number; x: number; y: number }; window: RankWindow; peaks: SpectrumPeak[] }
+  | undefined {
   if (!ps || ps.intensity.length === 0) return undefined
   // 完整降序排名（不受 top-20 内部 cap 限制——offset 需要到达任意 rank）
   const all = computeAllSpectrumPeaks(ps.mz, ps.intensity)
@@ -492,17 +502,27 @@ export function hasAnnotationContext(): boolean {
  */
 const SOURCE_FILE_EXCLUDED_KEYS = new Set([
   'raw',
-  'publicId', 'public_id',
-  'imagePath', 'image_path',
-  'hashMd5', 'file_verify_code',
-  'sizeBytes', 'size',
-  'storageType', 'storage_type',
-  'isPublic', 'is_public',
-  'submitTime', 'uploaded_at',
-  'submitter', 'first_uploaded_by',
+  'publicId',
+  'public_id',
+  'imagePath',
+  'image_path',
+  'hashMd5',
+  'file_verify_code',
+  'sizeBytes',
+  'size',
+  'storageType',
+  'storage_type',
+  'isPublic',
+  'is_public',
+  'submitTime',
+  'uploaded_at',
+  'submitter',
+  'first_uploaded_by',
   'institution',
-  'defaultRunId', 'default_run_id',
-  'runStatus', 'run_status',
+  'defaultRunId',
+  'default_run_id',
+  'runStatus',
+  'run_status',
   'status', // 上传状态：面板不显示
 ])
 
@@ -551,7 +571,9 @@ export function buildPageHeader(): { datasetName: string; status: string } | und
 }
 
 /** get_ion 的完整离子视图：优先 provider 的 view（含显示参数/通道/ROI），缺省退化为选中 + 统计。 */
-export function buildIonState(): { view: IonView; matrix: Float32Array; width: number; height: number } | undefined {
+export function buildIonState():
+  | { view: IonView; matrix: Float32Array; width: number; height: number }
+  | undefined {
   const ion = providers.selectedIon?.()
   if (!ion) return undefined
   const stats = buildIonImageStats(ion)

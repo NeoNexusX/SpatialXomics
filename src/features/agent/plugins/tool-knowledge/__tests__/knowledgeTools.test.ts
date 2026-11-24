@@ -676,6 +676,38 @@ describe('hmdb_lookup archived profiles', () => {
     expect(truncateDescription('x'.repeat(1200))).toBe('x'.repeat(1000))
   })
 
+  it('retries transient rate-limit and gateway statuses once, but not the relay redirect-contract 502', async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(archiveResponse('busy', 503))
+      .mockResolvedValueOnce(archiveResponse(HMDB_XML))
+    vi.stubGlobal('fetch', fetcher)
+    const out = await hmdbLookupById('HMDB0003502')
+    expect(out).toContain('Common Name: Example metabolite')
+    expect(fetcher).toHaveBeenCalledTimes(2)
+
+    fetcher.mockReset().mockResolvedValue(archiveResponse('bad redirect', 502))
+    const fallback = await hmdbLookupById('HMDB0003502')
+    expect(fallback).toContain('HTTP 502 from the HMDB Wayback relay after bounded retry')
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows cancellation while an HMDB request waits in the shared pacing queue', async () => {
+    const controller = new AbortController()
+    let releaseFirst!: (response: Response) => void
+    const fetcher = vi.fn()
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { releaseFirst = resolve }))
+      .mockResolvedValue(archiveResponse(HMDB_XML))
+    vi.stubGlobal('fetch', fetcher)
+    const first = hmdbLookupById('HMDB0003502')
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
+    const queued = hmdbLookupById('HMDB0003503', controller.signal)
+    controller.abort(new Error('cancel queued request'))
+    await expect(queued).rejects.toThrow('cancel queued request')
+    releaseFirst(archiveResponse(HMDB_XML))
+    await expect(first).resolves.toContain('Common Name: Example metabolite')
+    expect(fetcher).toHaveBeenCalledOnce()
+  })
+
   it('returns the fixed 404 message and does not block later batch items', async () => {
     const calls: string[] = []
     const fetcher = vi.fn(async (url: string) => {

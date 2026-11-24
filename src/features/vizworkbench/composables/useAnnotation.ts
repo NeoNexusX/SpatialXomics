@@ -365,11 +365,7 @@ export function useAnnotation(opts: {
   }
 
   /** 解析、换上并记住一个库 CSV（本地文件与平台库导入共用尾段） */
-  async function loadAndRememberDb(
-    fileName: string,
-    text: string,
-    reused = false,
-  ): Promise<void> {
+  async function loadAndRememberDb(fileName: string, text: string, reused = false): Promise<void> {
     const info = await engine.loadDb(fileName, text)
     if (disposed) return
     dbRequest++
@@ -442,7 +438,11 @@ export function useAnnotation(opts: {
             console.warn('platform database probe failed, reusing the saved file:', e)
           }
           if (fresh) {
-            return { kind: 'reuse', name: file.name, text: decodeCsvBytes(await file.arrayBuffer()) }
+            return {
+              kind: 'reuse',
+              name: file.name,
+              text: decodeCsvBytes(await file.arrayBuffer()),
+            }
           }
           // 过期：有写权限就下载后覆盖原文件；没有则只导入、不落盘
           const writable = await hasPermission(stored.handle, 'readwrite')
@@ -470,11 +470,7 @@ export function useAnnotation(opts: {
    *
    * label 为库的显示名（点击时按当前语言取），作为导入后的库标签。
    */
-  function importPlatformDb(
-    db: DatabaseCsvImport,
-    label: string,
-    sourceId: string,
-  ): Promise<void> {
+  function importPlatformDb(db: DatabaseCsvImport, label: string, sourceId: string): Promise<void> {
     importingDb.value = true
     importingKind.value = 'platform'
     platformFetch.value = null
@@ -954,6 +950,13 @@ export function useAnnotation(opts: {
             }),
             // 全量行（rank 窗口分页的数据源，与 rows computed 的筛选无关）
             panelRows: () => ions.value.map(toAgentRow),
+            // 还没有行时不给签名：首次注释运行中 runState 已非 idle 但 ions 为空，
+            // 记下空签名会在打分完成、行出现时变成「rank 变了」，把整轮后续的
+            // get_annotation / by_ranks / 通路扫描全部误判为失效。
+            orderSignature: () =>
+              ions.value.length
+                ? fnv1a(ions.value.map((ion) => `${ion.id}:${ion.rank}`).join('|'))
+                : undefined,
           }
         : null,
   })

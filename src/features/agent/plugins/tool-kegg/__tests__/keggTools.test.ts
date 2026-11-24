@@ -1,9 +1,14 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { apply, keggFind, keggMassSearch } from '../index'
+import { apply, keggFind, keggMassSearch, keggPathwayAnnotations } from '../index'
 import { KeggClient, isPng, parseAtext, pngDataUrl, pngDimensions } from '../kegg'
 import { ToolRuntime } from '../../tools'
 import { SystemPrompt } from '../../system-prompt'
+import {
+  registerContextProviders,
+  unregisterContextProviders,
+} from '../../../bridge/analysisContext'
+import type { AnnotationRow } from '../../../bridge/analysisTypes'
 
 let tick = 0
 beforeEach(() => {
@@ -13,6 +18,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  unregisterContextProviders()
 })
 
 async function complete<T>(promise: Promise<T>): Promise<T> {
@@ -786,4 +792,214 @@ it('treats an HTML SPA fallback for the map image as an upstream failure', async
   const result = await callTool('kegg_pathway', { ids: ['map00010'], withImage: true })
   expect(result.isError).toBe(true)
   expect(result.content).toContain('not a PNG')
+})
+
+function annotationRow(
+  rank: number,
+  name: string,
+  formula: string,
+  candidates: AnnotationRow['candidates'] = [],
+): AnnotationRow {
+  return {
+    id: rank,
+    rank,
+    name,
+    origin: null,
+    candidates,
+    formula,
+    adduct: '[M-H]-',
+    theoMz: 100 + rank,
+    obsMz: 100.005 + rank,
+    errPpm: 1,
+    intensity: 1000,
+    massScore: 0.9,
+    adductFit: 0.8,
+    chaos: null,
+    spatialScore: null,
+    totalScore: 0.85,
+    q: 0.05,
+    siblings: [],
+    samePeak: [],
+  }
+}
+
+function memberEntry(id: string, name: string, formula: string, hmdb?: string): string {
+  const lines = [
+    field('ENTRY', `${id}                      Compound`),
+    field('NAME', name),
+    field('FORMULA', formula),
+  ]
+  if (hmdb) lines.push(field('DBLINKS', `HMDB: ${hmdb}`))
+  lines.push('///')
+  return lines.join('\n')
+}
+
+it('scans every loaded annotation row for pathway members and counts distinct compounds', async () => {
+  const rows = Array.from({ length: 40 }, (_, i) =>
+    annotationRow(i + 1, `row ${i + 1}`, `C${i + 1}H2`),
+  )
+  rows[4] = annotationRow(5, 'D-Glucose', 'C6H12O6', [
+    { id: 'HMDB0000123', name: 'D-Glucose', origin: null },
+  ])
+  rows[25] = annotationRow(26, 'Sorbitol', 'C6H14O6', [
+    { id: 'C00794', name: 'Sorbitol', origin: null },
+  ])
+  rows[39] = annotationRow(40, 'Unknown isomer', 'C4H10O2')
+  registerContextProviders({
+    annotations: () => ({
+      count: rows.length,
+      rows: () => rows,
+      panelRows: () => rows.slice(0, 10),
+    }),
+  })
+  const fetcher = stub({
+    'link/compound/map00052': pathwayCompoundLinks('map00052', ['C00031', 'C00794', 'C00103']),
+    'get/C00031+C00103+C00794': [
+      memberEntry('C00031', 'D-Glucose', 'C6H12O6', 'HMDB0000123'),
+      memberEntry('C00103', 'Butanediol', 'C4H10O2'),
+      memberEntry('C00794', 'Sorbitol', 'C6H14O6'),
+    ].join('\n'),
+  })
+  const result = await callTool('kegg_pathway_annotations', { pathwayId: 'path:map00052' })
+  expect(result.isError).toBe(false)
+  const out = resultJson(result.content)
+  expect(out).toMatchObject({
+    memberCount: 3,
+    resolvedMemberCount: 3,
+    annotationRowsScanned: 40,
+    matchedRowCount: 3,
+    matchedMoleculeCount: 2,
+    formulaOnlyCandidateCount: 1,
+  })
+  expect(out.matches.map((m: { rank: number }) => m.rank)).toEqual([5, 26, 40])
+  expect(out.matches[0].matchTypes).toContain('hmdb-id')
+  expect(out.matches[1].matchTypes).toContain('kegg-id')
+  expect(out.matches[2].identity).toBe('formula')
+  expect(out.note).toContain('not only the reviewed rank window')
+  expect(fetcher).toHaveBeenCalledTimes(2)
+})
+
+it('reports unresolved pathway members honestly instead of treating them as annotation misses', async () => {
+  registerContextProviders({
+    annotations: () => ({
+      count: 1,
+      rows: () => [
+        annotationRow(1, 'D-Glucose', 'C6H12O6', [
+          { id: 'C00031', name: 'D-Glucose', origin: null },
+        ]),
+      ],
+    }),
+  })
+  stub({
+    'link/compound/map00052': pathwayCompoundLinks('map00052', ['C00031', 'C99999']),
+    'get/C00031+C99999': memberEntry('C00031', 'D-Glucose', 'C6H12O6'),
+  })
+  const result = await callTool('kegg_pathway_annotations', { pathwayId: 'map00052' })
+  expect(result.isError).toBe(false)
+  const out = resultJson(result.content)
+  expect(out).toMatchObject({
+    memberCount: 2,
+    resolvedMemberCount: 1,
+    missingMemberIds: ['C99999'],
+    matchedMoleculeCount: 1,
+  })
+})
+
+it('requires loaded annotations before a pathway scan', async () => {
+  const fetcher = stub({})
+  const result = await callTool('kegg_pathway_annotations', { pathwayId: 'map00052' })
+  expect(result.isError).toBe(true)
+  expect(result.content).toContain('Annotation data is unavailable')
+  expect(fetcher).not.toHaveBeenCalled()
+})
+
+it('exports the pathway annotation scan for direct testing', async () => {
+  registerContextProviders({
+    annotations: () => ({
+      count: 1,
+      rows: () => [
+        annotationRow(1, 'D-Glucose', 'C6H12O6', [
+          { id: 'C00031', name: 'D-Glucose', origin: null },
+        ]),
+      ],
+    }),
+  })
+  stub({
+    'link/compound/map00052': pathwayCompoundLinks('map00052', ['C00031']),
+    'get/C00031': memberEntry('C00031', 'D-Glucose', 'C6H12O6'),
+  })
+  const out = resultJson(await complete(keggPathwayAnnotations('map00052')))
+  expect(out.matchedMoleculeCount).toBe(1)
+})
+
+it('keeps formula-only isomers out of the confirmed count on a row that also matched by name', async () => {
+  // 真实的 map00052 里 C00031/C00095/C00124 都是 C6H12O6。一行「D-Glucose」
+  // 名字命中 C00031，分子式同时命中果糖和半乳糖——后两者只是同分异构体候选。
+  registerContextProviders({
+    annotations: () => ({
+      count: 1,
+      rows: () => [annotationRow(1, 'D-Glucose', 'C6H12O6')],
+    }),
+  })
+  stub({
+    'link/compound/map00052': pathwayCompoundLinks('map00052', ['C00031', 'C00095', 'C00124']),
+    'get/C00031+C00095+C00124': [
+      memberEntry('C00031', 'D-Glucose', 'C6H12O6'),
+      memberEntry('C00095', 'D-Fructose', 'C6H12O6'),
+      memberEntry('C00124', 'D-Galactose', 'C6H12O6'),
+    ].join('\n'),
+  })
+  const out = resultJson(await complete(keggPathwayAnnotations('map00052')))
+  expect(out.matches[0].identity).toBe('name')
+  expect(out.matches[0].idEvidence).toEqual({
+    C00031: 'name',
+    C00095: 'formula',
+    C00124: 'formula',
+  })
+  expect(out.matchedMoleculeCount).toBe(1)
+  expect(out.formulaOnlyCandidateCount).toBe(2)
+})
+
+it('pages the member scan and marks partial counts as lower bounds', async () => {
+  const members = compoundIds(25)
+  registerContextProviders({
+    annotations: () => ({
+      count: 1,
+      rows: () => [annotationRow(1, 'Compound C00021', 'C21H2')],
+    }),
+  })
+  const routes: Record<string, string> = {
+    'link/compound/map00052': pathwayCompoundLinks('map00052', members),
+  }
+  for (let offset = 0; offset < members.length; offset += 10) {
+    const batch = members.slice(offset, offset + 10)
+    routes[`get/${batch.join('+')}`] = batch
+      .map((id, i) => memberEntry(id, `Compound ${id}`, `C${offset + i + 1}H2`))
+      .join('\n')
+  }
+  stub(routes)
+
+  const first = resultJson(await complete(keggPathwayAnnotations('map00052')))
+  expect(first.scanComplete).toBe(true)
+  expect(first.memberWindow).toEqual({ from: 0, scanned: 25 })
+  expect(first.nextMemberOffset).toBeUndefined()
+
+  // 从第 21 个成员续扫：只解析最后 5 个，前面的命中不在本页里。
+  const page = resultJson(await complete(keggPathwayAnnotations('map00052', undefined, 20)))
+  expect(page.scanComplete).toBe(false)
+  expect(page.memberWindow).toEqual({ from: 20, scanned: 5 })
+  expect(page.resolvedMemberCount).toBe(5)
+  expect(page.matchedMoleculeCount).toBe(1)
+  expect(page.note).toContain('LOWER BOUNDS')
+  expect(page.note).toContain('union the member ids across pages')
+})
+
+it('rejects a member cursor past the end of the pathway', async () => {
+  registerContextProviders({
+    annotations: () => ({ count: 1, rows: () => [annotationRow(1, 'D-Glucose', 'C6H12O6')] }),
+  })
+  stub({ 'link/compound/map00052': pathwayCompoundLinks('map00052', ['C00031']) })
+  await expect(complete(keggPathwayAnnotations('map00052', undefined, 5))).rejects.toThrow(
+    'past the end',
+  )
 })

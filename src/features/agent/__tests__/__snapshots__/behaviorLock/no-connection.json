@@ -18,6 +18,7 @@
   "phase": "idle",
   "mode": "temporary",
   "messages": [],
-  "error": "common.agent.noApiConfigured"
+  "error": "common.agent.noApiConfigured",
+  "figures": []
  }
 }

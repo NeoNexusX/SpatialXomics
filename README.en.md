@@ -151,15 +151,15 @@ The assistant runs in the browser and answers analysis questions about the datas
 
 ### Tool Catalog
 
-Tools are registered by Cordis plugins: 9 domains, 28 tools. Page tools page through a zero-based `offset` / `limit` rank window (default rank 1–10, page cap 25); the model continues with the returned `nextOffset`.
+Tools are registered by Cordis plugins: 9 domains, 30 tools. Page tools page through rank windows (default rank 1–10, page cap 25); the model continues with the returned cursor.
 
 | Domain plugin | Tools | Purpose |
 |---|---|---|
 | `tool-page-context` | `get_page`, `get_dataset`, `get_ion`, `get_annotation`, `get_kmeans`, `get_umap`, `get_mean_spectrum_top_peaks`, `get_pixel_spectrum` | Page snapshot, dataset info, selected-ion view, annotation rows (window and exact modes), clustering and UMAP, spectrum peaks, pixel spectra |
-| `tool-ion-image` | `get_ion_image` | Ion heatmaps for the selected ion, one or more m/z values, or annotation rowIds; up to 4 separate images, more as a montage |
+| `tool-ion-image` | `get_ion_image_by_ranks`, `get_ion_image_by_mzs` | Ion heatmaps for annotation panel ranks or explicit m/z values; up to 4 separate images, more as a montage |
 | `tool-knowledge` | `pubchem_compound_lookup`, `pubchem_formula_search`, `chebi_lookup`, `hmdb_lookup` | Chemical identity checks; HMDB reads official records from Wayback-archived XML |
-| `tool-kegg` | `kegg_find`, `kegg_compound`, `kegg_pathway`, `kegg_mass_search` | Live KEGG REST queries, no local index |
-| `tool-literature` | `pubmed_search`, `europepmc_search`, `openalex_search` | Literature search |
+| `tool-kegg` | `kegg_find`, `kegg_compound`, `kegg_pathway`, `kegg_pathway_annotations`, `kegg_mass_search` | Live KEGG REST queries, no local index; pathway annotation scan covers every loaded annotation row |
+| `tool-literature` | `pubmed_search`, `europepmc_search` | Literature search |
 | `tool-web-search` | `web_search` | Exa web search (anonymous allowance or `VITE_EXA_API_KEY`) |
 | `tool-backend-api` | `list_files`, `list_my_files`, `get_file_metadata`, `list_my_processes`, `get_user_quota` | Files, jobs, and quota queries |
 | `tool-archive` | `read_archived_result` | Read back a truncated archived result by offset |

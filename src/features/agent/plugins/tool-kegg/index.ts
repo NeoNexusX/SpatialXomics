@@ -1,7 +1,9 @@
-/** Live KEGG tools. Each invocation makes at most one upstream request. */
+/** Live KEGG tools. Detail/search calls make one upstream request; the pathway annotation scan batches member records under the shared rate limiter. */
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool, TOOL_RESULT_CHARS_EVIDENCE } from '../tools'
 import { rankWindowMeta, resolveRankWindow } from '../../bridge/analysisTypes'
+import { getAnnotationRows } from '../../bridge/analysisContext'
+import type { AnnotationRow } from '../../bridge/analysisTypes'
 import { adductShiftTable } from '@/shared/chem/adducts'
 import {
   KEGG_ENTRY_LIMIT,
@@ -146,6 +148,192 @@ function formatMembers(id: string, compounds: Set<string>, offset: number, limit
     )
   }
   return lines.join('\n')
+}
+
+const normalizeName = (value: string) => value.trim().toLocaleLowerCase()
+const normalizeFormula = (value: string) => value.replace(/\s+/g, '')
+const normalizeLibraryId = (value: string) => value.trim().replace(/^cpd:/i, '').toUpperCase()
+
+interface PathwayMemberIndex {
+  keggIds: Set<string>
+  hmdbIds: Map<string, string[]>
+  names: Map<string, string[]>
+  formulas: Map<string, string[]>
+}
+
+/** 证据强度：id > name > formula。formula 命中只是同分异构体候选。 */
+type MatchIdentity = 'id' | 'name' | 'formula'
+const IDENTITY_RANK: Record<MatchIdentity, number> = { formula: 0, name: 1, id: 2 }
+
+/** 成员扫描的软预算，留出余量给 180s 硬超时收尾（最后一批仍会跑完）。 */
+const KEGG_SCAN_BUDGET_MS = 150_000
+
+function indexMember(entry: KeggEntry, index: PathwayMemberIndex): void {
+  index.keggIds.add(entry.id)
+  const add = (map: Map<string, string[]>, key: string) => {
+    if (!key) return
+    const list = map.get(key) ?? []
+    if (!list.includes(entry.id)) list.push(entry.id)
+    map.set(key, list)
+  }
+  for (const name of entry.names) add(index.names, normalizeName(name))
+  if (entry.formula) add(index.formulas, normalizeFormula(entry.formula))
+  for (const link of entry.dblinks) {
+    if (link.database.toUpperCase() !== 'HMDB') continue
+    for (const value of link.values) add(index.hmdbIds, normalizeLibraryId(value))
+  }
+}
+
+function matchAnnotationRow(row: AnnotationRow, index: PathwayMemberIndex) {
+  // 证据强度按 KEGG id 记录，而不是按行：一行「D-Glucose / C6H12O6」会同时
+  // 名字命中 C00031 和分子式命中 C00095/C00124（果糖、半乳糖）。按行取最强证据
+  // 会把这些同分异构体一起算成 confirmed，虚报通路覆盖数。
+  const strength = new Map<string, MatchIdentity>()
+  const matchTypes = new Set<string>()
+  const matchedNames = new Set<string>()
+  const add = (ids: string[] | undefined, type: string, identity: MatchIdentity) => {
+    if (!ids?.length) return
+    matchTypes.add(type)
+    for (const id of ids) {
+      const previous = strength.get(id)
+      if (previous == null || IDENTITY_RANK[identity] > IDENTITY_RANK[previous]) {
+        strength.set(id, identity)
+      }
+    }
+  }
+  for (const candidate of row.candidates) {
+    const id = normalizeLibraryId(candidate.id)
+    if (index.keggIds.has(id)) {
+      add([id], 'kegg-id', 'id')
+      matchedNames.add(candidate.name)
+    }
+    add(index.hmdbIds.get(id), 'hmdb-id', 'id')
+    const nameHits = index.names.get(normalizeName(candidate.name))
+    if (nameHits?.length) {
+      add(nameHits, 'exact-name', 'name')
+      matchedNames.add(candidate.name)
+    }
+  }
+  const primaryHits = index.names.get(normalizeName(row.name))
+  if (primaryHits?.length) {
+    add(primaryHits, 'exact-name', 'name')
+    matchedNames.add(row.name)
+  }
+  add(index.formulas.get(normalizeFormula(row.formula)), 'formula', 'formula')
+  if (!strength.size) return undefined
+  const keggIds = [...strength.keys()].sort()
+  const identity = keggIds.reduce<MatchIdentity>(
+    (best, id) => (IDENTITY_RANK[strength.get(id)!] > IDENTITY_RANK[best] ? strength.get(id)! : best),
+    'formula',
+  )
+  return {
+    rank: row.rank,
+    primaryName: row.name,
+    matchedNames: [...matchedNames],
+    formula: row.formula,
+    adduct: row.adduct,
+    obsMz: row.obsMz,
+    keggIds,
+    // 每个 id 自己的证据等级：identity 是整行最强证据，不代表 keggIds 里每个 id
+    // 都这么强。formula 级的 id 只是同分异构体候选。
+    idEvidence: Object.fromEntries(keggIds.map((id) => [id, strength.get(id)!])),
+    matchTypes: [...matchTypes],
+    identity,
+  }
+}
+
+/** 反向扫描：通路成员 × 全量注释，而不是只查当前审查窗口。 */
+export async function keggPathwayAnnotations(
+  pathwayId: string,
+  signal?: AbortSignal,
+  memberOffset = 0,
+): Promise<string> {
+  const map = pathwayId
+    .trim()
+    .replace(/^path:/i, '')
+    .toLowerCase()
+  if (!/^map\d{5}$/.test(map)) {
+    throw new Error('Provide a KEGG reference pathway id such as map00010')
+  }
+  if (!Number.isInteger(memberOffset) || memberOffset < 0) {
+    throw new Error('memberOffset must be a non-negative integer')
+  }
+  const rows = getAnnotationRows()
+  if (!rows?.length)
+    throw new Error('Annotation data is unavailable; load annotations before scanning a pathway')
+  const client = new KeggClient(signal)
+  const groups = await client.pathwayCompounds([map])
+  const memberIds = [...(groups.get(map) ?? [])].sort()
+  if (memberOffset > memberIds.length) {
+    throw new Error(`memberOffset ${memberOffset} is past the end of ${memberIds.length} members`)
+  }
+  const index: PathwayMemberIndex = {
+    keggIds: new Set(),
+    hmdbIds: new Map(),
+    names: new Map(),
+    formulas: new Map(),
+  }
+  const missingMembers: string[] = []
+  // 大通路（map01100 有 3290 个成员 = 330 次上游请求）远超 180s 硬超时。软预算
+  // 到点就停止取成员，返回已解析的部分并给出续扫游标——否则运行时超时会把整批
+  // 已取到的结果全部丢掉，重试还会撞同一堵墙。
+  const deadline = Date.now() + KEGG_SCAN_BUDGET_MS
+  let offset = memberOffset
+  let scanTruncated = false
+  for (; offset < memberIds.length; offset += KEGG_ENTRY_LIMIT) {
+    signal?.throwIfAborted()
+    if (offset > memberOffset && Date.now() > deadline) {
+      scanTruncated = true
+      break
+    }
+    const batch = memberIds.slice(offset, offset + KEGG_ENTRY_LIMIT)
+    const entries = await client.getEntries(batch)
+    const returned = new Set(entries.map((entry) => entry.id))
+    for (const id of batch) if (!returned.has(id)) missingMembers.push(id)
+    for (const entry of entries) indexMember(entry, index)
+  }
+  const scannedMemberCount = Math.min(offset, memberIds.length) - memberOffset
+  const matches = rows
+    .map((row) => matchAnnotationRow(row, index))
+    .filter((match): match is NonNullable<typeof match> => match != null)
+    .sort((a, b) => a.rank - b.rank)
+  const confirmedMembers = new Set<string>()
+  const formulaOnlyMembers = new Set<string>()
+  for (const match of matches) {
+    for (const [id, evidence] of Object.entries(match.idEvidence)) {
+      if (evidence === 'formula') formulaOnlyMembers.add(id)
+      else confirmedMembers.add(id)
+    }
+  }
+  for (const id of confirmedMembers) formulaOnlyMembers.delete(id)
+  const complete = !scanTruncated && memberOffset === 0
+  const result = {
+    pathway: { id: map, url: `https://www.kegg.jp/pathway/${map}` },
+    memberCount: memberIds.length,
+    memberWindow: { from: memberOffset, scanned: scannedMemberCount },
+    resolvedMemberCount: index.keggIds.size,
+    missingMemberIds: missingMembers,
+    annotationRowsScanned: rows.length,
+    matchedRowCount: matches.length,
+    matchedMoleculeCount: confirmedMembers.size,
+    formulaOnlyCandidateCount: formulaOnlyMembers.size,
+    scanComplete: complete,
+    ...(scanTruncated ? { nextMemberOffset: Math.min(offset, memberIds.length) } : {}),
+    matches,
+    note:
+      'Scanned every loaded annotation row, not only the reviewed rank window. Evidence is graded per KEGG id ' +
+      '(see idEvidence): id/name matches are candidate-level pathway membership; formula-only matches are ambiguous ' +
+      'isomer candidates and are counted separately, even when another id on the same row matched by name. ' +
+      "When starting from an anchor molecule A, subtract A's own matched rows/members to count other annotations in the pathway. " +
+      'This is descriptive co-membership, not statistical enrichment, pathway activity or biological absence.' +
+      (complete
+        ? ''
+        : ' PARTIAL SCAN: only memberWindow was resolved, so matchedRowCount/matchedMoleculeCount/formulaOnlyCandidateCount are LOWER BOUNDS on the whole pathway, never totals. ' +
+          (scanTruncated
+            ? 'Call again with memberOffset=nextMemberOffset to continue, and union the member ids across pages before reporting any count.'
+            : 'This page continues an earlier scan; union the member ids across pages before reporting any count.')),
+  }
+  return `${JSON.stringify(result, null, 2)}\n${keggSource()}`
 }
 
 function entryInput(id?: string, ids?: string[]): string[] {
@@ -341,7 +529,16 @@ export function apply(ctx: Context) {
         const ids = entryInput(args.id, args.ids)
         const text = await readIds('pathway', ids, client)
         if (args.withImage !== true) return text
-        const maps = [...new Set(ids.map((id) => id.trim().replace(/^path:/i, '').toLowerCase()))]
+        const maps = [
+          ...new Set(
+            ids.map((id) =>
+              id
+                .trim()
+                .replace(/^path:/i, '')
+                .toLowerCase(),
+            ),
+          ),
+        ]
         if (maps.length !== 1 || !/^map\d{5}$/.test(maps[0]!)) {
           throw new Error('withImage requires exactly one reference map id, e.g. ids=["map00010"]')
         }
@@ -349,7 +546,9 @@ export function apply(ctx: Context) {
         const bytes = await client.pathwayImage(map)
         // Same decoded-size ceiling the attachment pipeline enforces; fail with a readable reason.
         if (bytes.length > 2 * 1024 * 1024) {
-          throw new Error(`KEGG pathway map ${map} exceeds the 2 MB image limit; read the entry text instead`)
+          throw new Error(
+            `KEGG pathway map ${map} exceeds the 2 MB image limit; read the entry text instead`,
+          )
         }
         const { width, height } = pngDimensions(bytes)
         return {
@@ -368,6 +567,38 @@ export function apply(ctx: Context) {
       output: {
         render: (_args, value) => (typeof value === 'string' ? value : value.text),
         images: (_args, value) => (typeof value === 'string' ? undefined : value.images),
+      },
+    }),
+  )
+
+  ctx.tools.register(
+    defineTool({
+      name: 'kegg_pathway_annotations',
+      timeoutMs: 180_000,
+      maxResultChars: TOOL_RESULT_CHARS_EVIDENCE,
+      category: 'biology',
+      description:
+        'Reverse pathway scan: given a KEGG reference pathway that a molecule belongs to, search EVERY loaded ' +
+        'annotation row for other members of that pathway, not only the reviewed/top rank window. Resolves pathway ' +
+        'member names, formulas and HMDB cross-references, then reports matched panel ranks, distinct member counts ' +
+        'and coverage. Formula-only hits are ambiguous candidates and counted separately. Use this to answer whether ' +
+        'a pathway is represented by many annotations; it is descriptive co-membership, not enrichment or activity. ' +
+        'Large pathways are scanned in pages: when scanComplete is false the counts are LOWER BOUNDS, and you must ' +
+        'call again with memberOffset=nextMemberOffset and union member ids across pages before reporting a total.',
+      parameters: {
+        pathwayId: {
+          type: 'string',
+          required: true,
+          description: 'One KEGG reference map id, e.g. map00010 or path:map00010.',
+        },
+        memberOffset: {
+          type: 'integer',
+          description:
+            'Zero-based start into the sorted pathway member list (default 0). Continue with the returned nextMemberOffset; each page reports only the members it resolved.',
+        },
+      },
+      execute(args, exec) {
+        return keggPathwayAnnotations(args.pathwayId, exec.signal, args.memberOffset ?? 0)
       },
     }),
   )

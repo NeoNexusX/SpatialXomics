@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import AgentMarkdown from '../components/ai-elements/AgentMarkdown.vue'
+import type { FigureResolver } from '../components/ai-elements/figureResolver'
+import { FIGURE_RESOLVER } from '../components/ai-elements/figureResolver'
 
-async function render(text: string) {
-  const wrapper = mount(AgentMarkdown, { props: { text } })
+async function render(text: string, resolveFigure?: FigureResolver) {
+  const wrapper = mount(AgentMarkdown, {
+    props: { text },
+    global: resolveFigure ? { provide: { [FIGURE_RESOLVER]: resolveFigure } } : undefined,
+  })
   await flushPromises()
   await flushPromises()
   return wrapper
@@ -147,8 +152,68 @@ describe('AgentMarkdown syntax', () => {
     expect(link.attributes('title')).toBe('标题')
   })
 
+  it('renders a session figure handle through the injected active-session resolver', async () => {
+    const resolveFigure = vi.fn(async (handle: string) =>
+      handle === '123e4567-e89b-12d3-a456-426614174000' ? 'blob:session-image' : undefined,
+    )
+    const wrapper = mount(AgentMarkdown, {
+      props: {
+        text: '![Ion image, m/z 100](session-artifact:123e4567-e89b-12d3-a456-426614174000)',
+      },
+      global: { provide: { [FIGURE_RESOLVER]: resolveFigure } },
+    })
+    await vi.waitFor(() =>
+      expect(resolveFigure).toHaveBeenCalledWith('123e4567-e89b-12d3-a456-426614174000'),
+    )
+    await vi.waitFor(() => {
+      expect(wrapper.find('img').exists()).toBe(true)
+      expect(wrapper.find('img').attributes('src')).toBe('blob:session-image')
+    })
+    expect(wrapper.get('figcaption').text()).toBe('Ion image, m/z 100')
+    expect(wrapper.get('img').classes()).toEqual(
+      expect.arrayContaining(['w-full', 'h-auto', 'max-w-[25%]']),
+    )
+    expect(resolveFigure).toHaveBeenCalledWith('123e4567-e89b-12d3-a456-426614174000')
+  })
+
+  it('passes the short fig-N handle and a truncated UUID prefix to the resolver', async () => {
+    // 清单给模型的是 fig-N；模型若抄了长 id 又截断，也放行到 resolver 判断是否有歧义
+    const resolveFigure = vi.fn(async (handle: string) =>
+      handle === 'fig-7' ? 'blob:short' : handle === '47dc8cb5' ? 'blob:prefix' : undefined,
+    )
+    const wrapper = mount(AgentMarkdown, {
+      props: {
+        text: '![short](session-artifact:fig-7)\n\n![prefix](session-artifact:47dc8cb5)\n\n![too short](session-artifact:47dc8c)\n\n![not a handle](session-artifact:fig-abc)',
+      },
+      global: { provide: { [FIGURE_RESOLVER]: resolveFigure } },
+    })
+    await vi.waitFor(() => expect(wrapper.findAll('img').length).toBe(2))
+    expect(wrapper.findAll('img').map((img) => img.attributes('src'))).toEqual([
+      'blob:short',
+      'blob:prefix',
+    ])
+    expect(resolveFigure).toHaveBeenCalledWith('fig-7')
+    expect(resolveFigure).toHaveBeenCalledWith('47dc8cb5')
+    // 6 位前缀和非法句柄根本不算引用：只剩 figcaption 文本
+    expect(resolveFigure).not.toHaveBeenCalledWith('47dc8c')
+    expect(resolveFigure).not.toHaveBeenCalledWith('fig-abc')
+  })
+
+  it('does not resolve unknown session figure handles or unsafe image URLs', async () => {
+    const wrapper = mount(AgentMarkdown, {
+      props: {
+        text: '![missing](session-artifact:123e4567-e89b-12d3-a456-426614174000)\n\n![unsafe](javascript:alert(1))',
+      },
+      global: { provide: { [FIGURE_RESOLVER]: async () => undefined } },
+    })
+    await vi.waitFor(() => expect(wrapper.find('figure').exists()).toBe(true))
+    expect(wrapper.get('figcaption').text()).toBe('missing')
+    expect(wrapper.find('img').exists()).toBe(false)
+  })
+
   it('shows images', async () => {
-    const wrapper = await render('![图](https://example.org/a.png)')
+    const wrapper = mount(AgentMarkdown, { props: { text: '![图](https://example.org/a.png)' } })
+    await vi.waitFor(() => expect(wrapper.find('img').exists()).toBe(true))
     expect(wrapper.get('img').attributes('src')).toBe('https://example.org/a.png')
   })
 })

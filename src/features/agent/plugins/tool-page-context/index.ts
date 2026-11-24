@@ -8,6 +8,7 @@
  * 排名窗口契约（决策 7）：两个谱峰工具支持零基 offset/limit 任意窗口，默认窗口 rank 1–10，
  * offset 可达任意 rank（rank 20–30 = offset 19 + limit 11），绝不能先截前 N 再分页。
  * get_annotation 改用 1 基闭区间 rankFrom/rankTo——注释行自带 rank，不让模型做零基换算。
+ * 助手侧只用面板 rank 定位行，不暴露内部 rowId；精确重读用 ranks。
  * get_page 固定只嵌入注释 rank 1–10 作为页面预览。
  */
 
@@ -48,7 +49,11 @@ import {
   getAnnotationRows,
   hasAnnotationContext,
 } from '../../bridge/analysisContext'
-import { resolveRankWindow, resolveRankRange, annotationRankRangeMeta } from '../../bridge/analysisTypes'
+import {
+  resolveRankWindow,
+  resolveRankRange,
+  annotationRankRangeMeta,
+} from '../../bridge/analysisTypes'
 import type { AnnotationRow, SpectrumPeak } from '../../bridge/analysisTypes'
 
 function renderPeaks(peaks: SpectrumPeak[]): string {
@@ -184,27 +189,24 @@ function budgetJson(value: unknown, limit: number): string {
   return out
 }
 
+type AgentAnnotationRow = Omit<AnnotationRow, 'id'>
+
+/** 助手可见行：rank 是面板排名，内部 id 不进入工具输出。 */
+function agentRow(row: AnnotationRow): AgentAnnotationRow {
+  const { id: _id, ...visible } = row
+  return visible
+}
+
 function fitAnnotationRow(
-  row: AnnotationRow,
-): AnnotationRow & { truncated: true; omitted: string[] } {
+  row: AnnotationRow | AgentAnnotationRow,
+): AgentAnnotationRow & { truncated: true; omitted: string[] } {
+  const { id: _id, ...visible } = row as AnnotationRow
   return {
-    id: row.id,
-    rank: row.rank,
+    ...visible,
     name: row.name.slice(0, 100),
-    origin: row.origin,
-    candidates: [],
     formula: row.formula.slice(0, 64),
     adduct: row.adduct.slice(0, 64),
-    theoMz: row.theoMz,
-    obsMz: row.obsMz,
-    errPpm: row.errPpm,
-    intensity: row.intensity,
-    massScore: row.massScore,
-    adductFit: row.adductFit,
-    chaos: row.chaos,
-    spatialScore: row.spatialScore,
-    totalScore: row.totalScore,
-    q: row.q,
+    candidates: [],
     siblings: [],
     samePeak: [],
     truncated: true,
@@ -236,7 +238,11 @@ function annotationMoleculeMatches(
     const formulaHit = row.formula.toLocaleLowerCase() === term
     if (!candidates.length && !idHit && !formulaHit) return []
     const matchTypes = [
-      candidates.length ? (matchMode === 'contains' ? 'candidate-name-contains' : 'candidate-name-exact') : null,
+      candidates.length
+        ? matchMode === 'contains'
+          ? 'candidate-name-contains'
+          : 'candidate-name-exact'
+        : null,
       idHit ? 'library-id-exact' : null,
       formulaHit ? 'formula-exact' : null,
     ].filter(Boolean)
@@ -257,18 +263,19 @@ function annotationMoleculeMatches(
     query,
     matchMode,
     totalMatches: matched.length,
-    matches: matched.sort((a, b) => a.row.rank - b.row.rank).map(({ row, matchTypes, matchedNames, primary }) => ({
-      rowId: row.id,
-      rank: row.rank,
-      primaryName: row.name,
-      matchedNames,
-      matchTypes,
-      primaryCandidateMatch: primary,
-      formula: row.formula,
-      adduct: row.adduct,
-      obsMz: row.obsMz,
-    })),
-    note: 'A candidate-name hit means the name occurs in this row, not that the named isomer was independently identified. Read full evidence with get_annotation(rowIds=[...]) before judging a newly surfaced molecule.',
+    matches: matched
+      .sort((a, b) => a.row.rank - b.row.rank)
+      .map(({ row, matchTypes, matchedNames, primary }) => ({
+        rank: row.rank,
+        primaryName: row.name,
+        matchedNames,
+        matchTypes,
+        primaryCandidateMatch: primary,
+        formula: row.formula,
+        adduct: row.adduct,
+        obsMz: row.obsMz,
+      })),
+    note: 'A candidate-name hit means the name occurs in this row, not that the named isomer was independently identified. Read full evidence with get_annotation(ranks=[...]) before judging a newly surfaced molecule.',
   })
 }
 
@@ -290,10 +297,18 @@ function annotationPage(
     truncated = true
   }
 
-  const rows: (AnnotationRow | (AnnotationRow & { truncated: true; omitted: string[] }))[] = []
+  const rows: (
+    | AgentAnnotationRow
+    | (AgentAnnotationRow & { truncated: true; omitted: string[] })
+  )[] = []
   for (const row of window.rows) {
-    const candidateRows = [...rows, row]
-    const paging = annotationRankRangeMeta(window.window.total, rankFrom, rankTo, candidateRows.length)
+    const candidateRows = [...rows, agentRow(row)]
+    const paging = annotationRankRangeMeta(
+      window.window.total,
+      rankFrom,
+      rankTo,
+      candidateRows.length,
+    )
     const candidate = {
       panel,
       paging,
@@ -301,7 +316,7 @@ function annotationPage(
       ...(truncated ? { truncated: true } : {}),
     }
     if (JSON.stringify(candidate).length <= max) {
-      rows.push(row)
+      rows.push(agentRow(row))
       continue
     }
     if (rows.length === 0) {
@@ -347,10 +362,10 @@ function annotationPage(
   }
 }
 
-/** 注释行文本渲染（get_annotation 精确 rowIds 模式沿用 detail 批量语义） */
+/** 注释行文本渲染（get_annotation 精确 ranks 模式沿用 detail 批量语义） */
 export function renderAnnotationDetail(a: AnnotationRow): string {
   const lines: string[] = []
-  lines.push(`rowId: ${a.id}`)
+  lines.push(`rank: ${a.rank}`)
   lines.push(`name: ${a.name}`)
   if (a.origin) {
     lines.push(
@@ -391,9 +406,7 @@ export function renderAnnotationDetail(a: AnnotationRow): string {
   }
   if (a.siblings.length) {
     const sibs = a.siblings.map((x) => `${x.adduct} mz=${x.obsMz.toFixed(4)} rank=${x.rank}`)
-    lines.push(
-      `same molecule, other adduct ions (${a.siblings.length}): ${sibs.join('; ')}`,
-    )
+    lines.push(`same molecule, other adduct ions (${a.siblings.length}): ${sibs.join('; ')}`)
   }
   if (a.samePeak.length) {
     const others = a.samePeak.map((x) => `${x.name} ${x.adduct}${x.origin ? ` (${x.origin})` : ''}`)
@@ -497,7 +510,7 @@ export function apply(ctx: Context) {
               normalize: 'per-image',
               layout: 'separate',
               columns: 1,
-              width: 384,
+              width: 640,
               range:
                 display && display.displayMax > display.displayMin
                   ? [display.displayMin, display.displayMax]
@@ -658,7 +671,7 @@ export function apply(ctx: Context) {
               normalize: 'per-image',
               layout: 'separate',
               columns: 1,
-              width: 384,
+              width: 640,
               range:
                 ion.view.display.displayMax > ion.view.display.displayMin
                   ? [ion.view.display.displayMin, ion.view.display.displayMax]
@@ -695,15 +708,15 @@ export function apply(ctx: Context) {
    *
    * 作用：窗口模式（默认）按稳定 rank 序对完整结果集取 1 基闭区间 rankFrom/rankTo，绝不
    * 先截前 N 再分页；窗口忽略表格筛选/排序，面板头另行报告当前筛选与可见行数。精确
-   * 模式只按 rowIds 取完整行，与 rankFrom/rankTo 互斥。一行 = 一个加合物离子；精确模式
+   * 模式只按 ranks 取完整行，与 rankFrom/rankTo 互斥。一行 = 一个加合物离子；精确模式
    * 批量走 renderBatch，单项失败不拖垮整批。反向模式按 molecule/molecules（候选名、库 id
-   * 或分子式）检索完整注释结果，用于 C1 判断某通路/文献中的分子是否已在数据集中被注释。
+   * 或分子式）检索完整注释结果，用于判断某通路/文献中的分子是否已在数据集中被注释。
    *
    * 参数：
    * - rankFrom (integer, 可选)：窗口模式起点 rank（1 基，含），默认 1、可达任意 rank
    * - rankTo (integer, 可选)：窗口模式终点 rank（1 基，含），默认 rankFrom+9、单页 cap 25
    *   行（字符预算可能少给）
-   * - rowIds (integer[], 可选)：精确模式按行 id 找行；批量（≤25）
+   * - ranks (integer[], 可选)：精确模式按面板 rank 找行；批量（≤25）
    */
   ctx.tools.register(
     defineTool({
@@ -712,13 +725,13 @@ export function apply(ctx: Context) {
       maxResultChars: TOOL_RESULT_CHARS_EVIDENCE,
       description:
         'Read annotation rows from the current page. Window mode (default): rankFrom/rankTo select an ' +
-        'INCLUSIVE 1-based rank range over the FULL result set in stable rank order — default rank 1–10, ' +
-        'any rank reachable (rank 20–30 = rankFrom 20 + rankTo 30); windowing ignores the panel\'s current ' +
-        'filters/sorting, which the panel header reports separately. Exact mode: rowIds fetch specific full ' +
-        'rows; exact selectors conflict with rankFrom/rankTo. Reverse mode: molecule/molecules search exact ' +
+        'INCLUSIVE 1-based rank range over the FULL result set in stable panel rank order — default rank 1–10, ' +
+        "any rank reachable (rank 20–30 = rankFrom 20 + rankTo 30); windowing ignores the panel's current " +
+        'filters/sorting, which the panel header reports separately. Exact mode: ranks fetch specific full ' +
+        'rows by panel rank; exact selectors conflict with rankFrom/rankTo. Reverse mode: molecule/molecules search exact ' +
         'candidate names, library ids or formulas across the FULL loaded annotation result and return compact ' +
-        'row/rank hits; matchMode="contains" is opt-in exploratory substring discovery. A candidate hit is not ' +
-        'independent isomer identification; read full rows by rowIds before judging a newly surfaced molecule. ' +
+        'rank hits; matchMode="contains" is opt-in exploratory substring discovery. A candidate hit is not ' +
+        'independent isomer identification; read full rows by ranks before judging a newly surfaced molecule. ' +
         'One row = one adduct ion. The character budget may return fewer rows than the requested range — follow ' +
         'the returned paging/nextRank.',
       parameters: {
@@ -735,13 +748,14 @@ export function apply(ctx: Context) {
         molecule: {
           type: 'string',
           description:
-            'Reverse annotation lookup by exact candidate name (case-insensitive), library id or molecular formula. Returns compact row/rank hits; use rowIds for full evidence.',
+            'Reverse annotation lookup by exact candidate name (case-insensitive), library id or molecular formula. Returns compact rank hits; use ranks for full evidence.',
         },
         molecules: {
           type: 'array',
           items: { type: 'string' },
           maxItems: MAX_BATCH_QUERIES,
-          description: 'Batch exact reverse annotation lookups; each reports compact matching rows and ranks.',
+          description:
+            'Batch exact reverse annotation lookups; each reports compact matching rows and ranks.',
         },
         matchMode: {
           type: 'string',
@@ -749,39 +763,51 @@ export function apply(ctx: Context) {
           description:
             'Reverse lookup only: exact (default) matches whole candidate names; contains is exploratory substring discovery and may return derivatives such as methylxanthine for xanthine.',
         },
-        rowIds: {
+        ranks: {
           type: 'array',
           items: { type: 'integer' },
           maxItems: MAX_BATCH_QUERIES,
-          description: 'Batch annotation row ids (exact mode); one full row each.',
+          description: 'Batch annotation panel ranks (exact mode); one full row each.',
         },
       },
       async execute(args, exec) {
         // 根 schema 是开放对象，未声明的键会静默透传。旧的 offset/limit 若被忽略，
         // 模型以为取到了深窗口、实际拿到 rank 1–10——宁可报错也不静默取错窗。
-        const legacy = args as { offset?: unknown; limit?: unknown; mz?: unknown; mzs?: unknown; rowId?: unknown }
+        const legacy = args as {
+          offset?: unknown
+          limit?: unknown
+          mz?: unknown
+          mzs?: unknown
+          rowId?: unknown
+          rowIds?: unknown
+        }
         if (legacy.offset != null || legacy.limit != null) {
           throw new Error(
             'get_annotation no longer takes offset/limit; use the inclusive 1-based rank range ' +
               'rankFrom/rankTo instead (rank 11–20 = rankFrom 11 + rankTo 20)',
           )
         }
-        if (legacy.mz != null || legacy.mzs != null || legacy.rowId != null) {
+        if (
+          legacy.mz != null ||
+          legacy.mzs != null ||
+          legacy.rowId != null ||
+          legacy.rowIds != null
+        ) {
           throw new Error(
-            'get_annotation exact lookup now takes rowIds only; mz/mzs/rowId were removed because ' +
-              'nearest-peak lookup can hide competing rows. Use a rank window to find rowIds.',
+            'get_annotation exact lookup now takes ranks only; mz/mzs/rowId/rowIds were removed. ' +
+              'Use the panel rank shown in get_annotation/get_page.',
           )
         }
         const reverse = args.molecule != null || args.molecules != null
         if (args.matchMode != null && !reverse) {
           throw new Error('matchMode is only valid with molecule/molecules reverse lookup')
         }
-        const exact = reverse || args.rowIds != null
+        const exact = reverse || args.ranks != null
         const rows = exact ? getAnnotationRows() : undefined
         const windowed = args.rankFrom != null || args.rankTo != null
         if (exact && windowed) {
           throw new Error(
-            'rankFrom/rankTo (rank window) and rowIds/molecule/molecules (exact/reverse lookup) are mutually exclusive; pass one mode only',
+            'rankFrom/rankTo (rank window) and ranks/molecule/molecules (exact/reverse lookup) are mutually exclusive; pass one mode only',
           )
         }
         if (exact && !rows) return unavailable('Annotation data')
@@ -792,8 +818,8 @@ export function apply(ctx: Context) {
           if (!queries.length || queries.some((query) => !query.trim())) {
             throw new Error('Provide nonempty "molecule"/"molecules" values')
           }
-          if (args.rowIds != null) {
-            throw new Error('molecule/molecules cannot be combined with rowIds')
+          if (args.ranks != null) {
+            throw new Error('molecule/molecules cannot be combined with ranks')
           }
           return renderBatch(
             queries,
@@ -810,23 +836,23 @@ export function apply(ctx: Context) {
         }
 
         if (exact) {
-          const rowIdList = args.rowIds ?? []
-          if (rowIdList.length === 0) {
-            throw new Error('Provide "rowIds" to identify the annotation row(s)')
+          const rankList = args.ranks ?? []
+          if (rankList.length === 0) {
+            throw new Error('Provide "ranks" to identify the annotation row(s)')
           }
-          const findByRowId = (id: number): AnnotationRow | undefined =>
-            rows!.find((r) => r.id === id)
-          const renderRow = (rowId: number) => {
-            const row = findByRowId(rowId)
+          const findByRank = (rank: number): AnnotationRow | undefined =>
+            rows!.find((r) => r.rank === rank)
+          const renderRow = (rank: number) => {
+            const row = findByRank(rank)
             if (!row) {
-              return `No annotation row with rowId ${rowId}. Call get_annotation to list valid rows.`
+              return `No annotation row with rank ${rank}. Call get_annotation to list valid ranks.`
             }
             return renderAnnotationDetail(row)
           }
           return renderBatch(
-            rowIdList,
-            (id) => `rowId ${id}`,
-            (id) => renderRow(id),
+            rankList,
+            (rank) => `rank ${rank}`,
+            (rank) => renderRow(rank),
             {
               ...args,
               // 精确选择器没有输入分页语义：传 rankFrom 会撞互斥校验，

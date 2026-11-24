@@ -151,15 +151,15 @@ npm run dev:app   # 只启动 SPA
 
 ### 工具目录
 
-工具由 Cordis 插件注册，共 9 个领域、28 个工具；页面类工具支持零基 `offset` / `limit` 排名窗口翻页（默认 1–10，页上限 25，模型按返回的 `nextOffset` 续页）。
+工具由 Cordis 插件注册，共 9 个领域、30 个工具；页面类工具支持排名窗口翻页（默认 1–10，页上限 25，模型按返回的游标续页）。
 
 | 领域插件 | 工具 | 说明 |
 |---|---|---|
 | `tool-page-context` | `get_page`、`get_dataset`、`get_ion`、`get_annotation`、`get_kmeans`、`get_umap`、`get_mean_spectrum_top_peaks`、`get_pixel_spectrum` | 页面快照、数据集信息、离子视图、注释行（窗口/精确两种模式）、聚类与 UMAP、谱峰与像素谱 |
-| `tool-ion-image` | `get_ion_image` | 按选中离子、单个/多个 m/z 或注释 rowId 出热图，1–4 张独立出图，更多拼 montage |
+| `tool-ion-image` | `get_ion_image_by_ranks`、`get_ion_image_by_mzs` | 按注释面板 rank 或显式 m/z 出热图，1–4 张独立出图，更多拼 montage |
 | `tool-knowledge` | `pubchem_compound_lookup`、`pubchem_formula_search`、`chebi_lookup`、`hmdb_lookup` | 化学身份核验；HMDB 读 Wayback 归档 XML 的官方条目 |
-| `tool-kegg` | `kegg_find`、`kegg_compound`、`kegg_pathway`、`kegg_mass_search` | 运行时查询 KEGG 官方 REST API，无本地索引 |
-| `tool-literature` | `pubmed_search`、`europepmc_search`、`openalex_search` | 文献检索 |
+| `tool-kegg` | `kegg_find`、`kegg_compound`、`kegg_pathway`、`kegg_pathway_annotations`、`kegg_mass_search` | 运行时查询 KEGG 官方 REST API，无本地索引；通路注释扫描覆盖全部已加载注释行 |
+| `tool-literature` | `pubmed_search`、`europepmc_search` | 文献检索 |
 | `tool-web-search` | `web_search` | Exa 联网搜索（匿名额度或 `VITE_EXA_API_KEY`） |
 | `tool-backend-api` | `list_files`、`list_my_files`、`get_file_metadata`、`list_my_processes`、`get_user_quota` | 文件、任务与配额查询 |
 | `tool-archive` | `read_archived_result` | 按 offset 读回被截断的存档结果 |

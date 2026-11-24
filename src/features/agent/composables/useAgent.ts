@@ -17,7 +17,7 @@ const snapshot = shallowRef<AgentSnapshot>({
 })
 const visibleCount = shallowRef(MAX_UI_MESSAGES)
 const hasContext = shallowRef(false)
-const skillButtons = shallowRef<{ name: string; text: string }[]>([])
+const skillNames = shallowRef<string[]>([])
 let bound = false
 
 function bind(): void {
@@ -29,12 +29,9 @@ function bind(): void {
         if (next.sessionId !== snapshot.value.sessionId) visibleCount.value = MAX_UI_MESSAGES
         snapshot.value = next
       })
-      skillButtons.value = ['annotation-review', 'msi-analysis']
-        .filter((name) => ctx.skills.catalog().some((skill) => skill.name === name))
-        .map((name) => ({
-          name,
-          text: `Load the "${name}" skill with the skill tool first, then follow its workflow and output template to analyze the current data with explicit judgment criteria.`,
-        }))
+      skillNames.value = ['annotation-review', 'msi-analysis'].filter((name) =>
+        ctx.skills.catalog().some((skill) => skill.name === name),
+      )
       await ctx.agent.ready()
     })
     .catch((error) => {
@@ -49,18 +46,16 @@ export function useAgent() {
     () => !['idle', 'storage-error', 'disposed'].includes(snapshot.value.phase),
   )
   const messages = computed(() => {
-    const items = snapshot.value.messages
-      .slice(-visibleCount.value)
-      .map((item) =>
-        item.compacted
-          ? {
-              ...item,
-              content: item.error
-                ? t('common.agent.compactionFailed', { reason: item.error })
-                : t('common.agent.compacted'),
-            }
-          : item,
-      )
+    const items = snapshot.value.messages.slice(-visibleCount.value).map((item) =>
+      item.compacted
+        ? {
+            ...item,
+            content: item.error
+              ? t('common.agent.compactionFailed', { reason: item.error })
+              : t('common.agent.compacted'),
+          }
+        : item,
+    )
     if (snapshot.value.phase !== 'compacting' || items.length === 0) return items
     // 和压缩完成后的分界线在同一个位置：进行中的回复之前，没有回复时在末尾
     const active = items.findIndex((item) => item.pending)
@@ -77,6 +72,15 @@ export function useAgent() {
     'annotation-review': t('common.agent.skillBtns.annotationReview'),
     'msi-analysis': t('common.agent.skillBtns.msiAnalysis'),
   }))
+  const skillButtons = computed(() =>
+    skillNames.value.map((name) => ({
+      name,
+      text:
+        name === 'annotation-review'
+          ? t('common.agent.skillPrompts.annotationReview')
+          : t('common.agent.skillPrompts.msiAnalysis'),
+    })),
+  )
 
   function refreshContext(): void {
     const state = buildPageState()
@@ -113,6 +117,7 @@ export function useAgent() {
 
   return {
     messages,
+    figures: computed(() => snapshot.value.figures ?? []),
     streaming,
     hasContext,
     skillButtons,

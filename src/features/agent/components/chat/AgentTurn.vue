@@ -3,11 +3,12 @@
  * 助手的一个回合：思考、工具调用和正文按实际发生的顺序排列。
  * 连续的思考和工具调用归成一组步骤，正文不加气泡。
  */
-import { computed } from 'vue'
+import { computed, provide } from 'vue'
 import { RotateCcwIcon } from '@lucide/vue'
 import type { UiChatItem, UiPart } from '../../plugins/session-transcript'
 import type { QuestionRecord, QuestionRecords } from '../../plugins/user-questions'
 import { totalInputTokens } from '../../plugins/llm'
+import type { ImageAttachment } from '../../plugins/llm'
 import AgentMarkdown from '../ai-elements/AgentMarkdown.vue'
 import CopyButton from '../ai-elements/CopyButton.vue'
 import IconButton from '../ai-elements/IconButton.vue'
@@ -18,6 +19,9 @@ import WorkingStep from '../ai-elements/WorkingStep.vue'
 import { Message, MessageContent, MessageFooter } from '../ui/message'
 import { Trace } from '../ui/trace'
 import QuestionReply from './QuestionReply.vue'
+import { whenAgentReady } from '../../bootstrap'
+import { FIGURE_RESOLVER } from '../ai-elements/figureResolver'
+import { resolveFigureHandle } from '../../plugins/session/figures'
 
 type StepPart = Exclude<UiPart, { type: 'text' }>
 type Block =
@@ -25,8 +29,25 @@ type Block =
   | { kind: 'text'; text: string }
   | { kind: 'question'; record: QuestionRecord }
 
-const props = defineProps<{ message: UiChatItem; canRetry: boolean; questions?: QuestionRecords }>()
+const props = defineProps<{
+  message: UiChatItem
+  canRetry: boolean
+  questions?: QuestionRecords
+  figures?: ImageAttachment[]
+}>()
 const emit = defineEmits<{ retry: [] }>()
+
+provide(FIGURE_RESOLVER, async (handle: string) => {
+  // props.figures 与 agent-loop 写进 system prompt 的清单同序（session/figures），
+  // 所以 `fig-N` 在这里解析回的就是清单里那一行
+  const id = resolveFigureHandle(handle, props.figures ?? [])
+  if (!id) return undefined
+  try {
+    return await (await whenAgentReady()).agent.imageUrl(id)
+  } catch {
+    return undefined
+  }
+})
 
 /** 提问步骤对应的记录；参数不合法的调用没有记录，仍按普通工具显示 */
 const recordOf = (part: StepPart) => (part.type === 'tool' ? props.questions?.[part.id] : undefined)

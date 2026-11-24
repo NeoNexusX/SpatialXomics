@@ -17,6 +17,7 @@
   "phase": "idle",
   "mode": "temporary",
   "messages": [],
-  "error": "Unsupported image attachment"
+  "error": "Unsupported image attachment",
+  "figures": []
  }
 }

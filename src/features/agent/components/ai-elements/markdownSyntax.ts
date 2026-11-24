@@ -18,6 +18,7 @@ import { tex } from '@mdit/plugin-tex'
 import cjkFriendly from 'markdown-it-cjk-friendly'
 import MarkdownCodeBlock from './MarkdownCodeBlock.vue'
 import MarkdownLink from './MarkdownLink.vue'
+import MarkdownImage from './MarkdownImage.vue'
 
 type MarkdownIt = Parameters<typeof tex>[0]
 
@@ -43,6 +44,7 @@ export const MARKDOWN_PLUGINS: ComarkPlugin[] = [
 export const MARKDOWN_COMPONENTS = {
   pre: MarkdownCodeBlock,
   a: MarkdownLink,
+  img: MarkdownImage,
   // 大部分回答用不到公式，KaTeX、化学式扩展（\ce）和样式都按需加载
   math: defineAsyncComponent(() =>
     Promise.all([

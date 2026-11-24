@@ -17,6 +17,7 @@
   "phase": "idle",
   "mode": "temporary",
   "messages": [],
-  "error": "common.agent.compactionNoProgress"
+  "error": "common.agent.compactionNoProgress",
+  "figures": []
  }
 }
