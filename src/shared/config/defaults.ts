@@ -147,12 +147,15 @@ export function pickPartPlan(totalBytes: number): PartPlan {
   return planForPartSize(totalBytes < 5 * GB ? 10 * MB : totalBytes < 10 * GB ? 50 * MB : 128 * MB)
 }
 
-/** Zarr OSS Store 配置 */
+/**
+ * Zarr store 内存缓存配置（每个结果页一个会话，离开页面即释放）。
+ * spectra 组的缓存/并发在运行时 config.json 的 zarr 块里配，见 runtimeConfig.ts。
+ */
 export const ZARR_STORE = {
-  /** intensity chunk 缓存数量（LRU） */
-  intensityChunkCacheSize: 5,
-  /** data/mz chunk 缓存数量（LRU），仅 processed 模式使用 */
-  mzChunkCacheSize: 5,
+  /** 主数据组 intensity chunk 缓存数量（LRU）：continuous 的离子图；processed 的像素谱 */
+  intensityChunkCacheSize: 20,
+  /** spectra/mz chunk 缓存数量（LRU），仅 processed 模式使用，与 intensity chunk 成对读取 */
+  mzChunkCacheSize: 20,
   /** 默认 m/z 容差 */
   defaultMzTolerance: 0.0001,
   /** m/z 容差取值范围：最小 1e-8，最大 1 */

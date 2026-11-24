@@ -1,5 +1,5 @@
 import { ref, watch, onBeforeUnmount, type Ref } from 'vue'
-import { getZarrAccess } from '@/services/zarr/api/zarrAccessApi'
+import { getZarrUrl } from '@/services/zarr/api/zarrAccessApi'
 import { createClustering } from '@/services/clustering/api/clusteringApi'
 import type { ClusteringTaskResponse, UmapEmbedding } from '@/services/clustering/types/clustering'
 import { ClusteringZarrStore } from '@/services/clustering/clusteringZarrStore'
@@ -49,7 +49,7 @@ function deriveKmeansClusters(labels: Int32Array): KmeansCluster[] {
  * UMAP / KMeans overlay data.
  *
  * UMAP comes from the run's own zarr (GET /processes/{run_id}/zarr - the same
- * credentials as the algorithm data): the backend clustering task writes its
+ * zarr_url as the algorithm data): the backend clustering task writes its
  * results back into the embedded `analysis/umap` group (raw coordinates +
  * scaled embedding); ClusteringZarrStore rasterizes that onto the ion-image
  * grid. KMeans is computed LOCALLY in the browser from the embedding
@@ -197,12 +197,8 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     const forRun = runId.value
     try {
       // The UMAP group (analysis/umap) is embedded in the run's own zarr -
-      // same STS credentials as the algorithm data, no zarr_type parameter.
-      const s = new ClusteringZarrStore(
-        await getZarrAccess(forRun),
-        // STS 过期时自动重拉凭据（与算法数据同一 zarr，同一凭据端点）
-        () => getZarrAccess(forRun),
-      )
+      // same zarr_url as the algorithm data, no zarr_type parameter.
+      const s = new ClusteringZarrStore(await getZarrUrl(forRun))
       await s.init()
       const umap = await s.loadUmap()
       // The user navigated to another run mid-load - discard, don't pollute

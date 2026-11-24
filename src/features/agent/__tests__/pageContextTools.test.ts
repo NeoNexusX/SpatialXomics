@@ -29,7 +29,7 @@ import {
   setZarrStore,
 } from '@/services/zarr/zarrSharedState'
 import type { AnnotationRow } from '../bridge/analysisTypes'
-import type { ZarrOssStore } from '@/services/zarr/zarrOssStore'
+import type { ZarrStore } from '@/services/zarr/zarrStore'
 
 /** 不拉起 cordis：桩 ctx 捕获注册的工具定义，直接执行 execute */
 function loadTools(): ToolDefinition[] {
@@ -773,7 +773,7 @@ describe('spectrum rank windows', () => {
         intensity: Float32Array.from([1, 9]),
       }),
       loadCoordinates: async () => new Uint32Array([1, 1, 1, 2, 1, 1]),
-    } as unknown as ZarrOssStore)
+    } as unknown as ZarrStore)
     const value = (await runTool('get_pixel_spectrum', { pixelIndices: [0, 1] })) as {
       images: unknown[]
     }
@@ -831,7 +831,7 @@ describe('split ion-image tools', () => {
     ionDims.value = { width: 1, height: 1 }
     setZarrStore({
       getSummedIonImageByMzIndices: async () => new Float32Array([1]),
-    } as unknown as ZarrOssStore)
+    } as unknown as ZarrStore)
     const value = (await runTool('get_ion_image_by_mzs', {
       mzs: [135.0307, 137.0343],
       tolerance: 0.01,
@@ -852,7 +852,7 @@ describe('split ion-image tools', () => {
     ionDims.value = { width: 1, height: 1 }
     setZarrStore({
       getSummedIonImageByMzIndices: async () => new Float32Array([1]),
-    } as unknown as ZarrOssStore)
+    } as unknown as ZarrStore)
     const renderer = await import('../plugins/tool-ion-image/render')
     await runTool('get_ion_image_by_mzs', { mzs: [100], tolerance: 0.01 })
     const calls = vi.mocked(renderer.renderIonImages).mock.calls

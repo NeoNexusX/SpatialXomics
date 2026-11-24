@@ -79,8 +79,7 @@ const routes = [
     // 与 /collections/overview/:publicId 分段数不同不会冲突，
     // 且 public_id 是 16 位 base62，不会与静态段撞名。
     // 查看需登录（与数据集分享页统一）：路由守卫拦匿名。详情仍读公开接口
-    // （认证版详情 owner 限定，见上一路由注释），下载改走认证 download_raw
-    // + 身份完整校验；noauth 下载端点停用但保留。
+    // （认证版详情 owner 限定，见上一路由注释），下载走认证 download_raw 并校验身份信息。
     path: '/collections/:publicId',
     name: 'PublicCollection',
     component: view(() => import('../views/PublicCollectionView.vue'), 'collections', 'datasets'),

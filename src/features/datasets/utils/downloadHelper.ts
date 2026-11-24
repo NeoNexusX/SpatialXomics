@@ -1,4 +1,4 @@
-import { getDownloadMetadata, getDownloadRaw, getDownloadRawNoauth } from '@/features/datasets/api/datasetApi'
+import { getDownloadMetadata, getDownloadRaw } from '@/features/datasets/api/datasetApi'
 import type { DownloadRawEntry } from '@/features/datasets/types/dataset'
 import { downloadUrl } from '@/shared/utils/download'
 import { t } from '@/i18n'
@@ -58,9 +58,15 @@ export async function ossDownloadAndSave(
  * OSS region) silently dropped the first file (imzML) while the last one (ibd)
  * won.
  *
- * The download and its filename both come from the OSS pre-signed URL's
- * `Content-Disposition: attachment` header — the cross-origin `download`
+ * The download is triggered by the CDN response's `Content-Disposition: attachment`
+ * header: the backend appends `response-content-disposition=attachment` to each
+ * link, and OSS honours it because the CDN signs its origin fetch. The filename is
+ * the link's last path segment (the OSS object name). The cross-origin `download`
  * attribute is ignored by browsers, so no anchor is needed.
+ *
+ * A CDN error page also loads silently inside the hidden iframe, so a failed
+ * transfer cannot be reported from here; check the link with curl when a user
+ * says a file never arrived.
  *
  * The iframe is removed only after the response has had time to detach to the
  * browser's download manager; removing it earlier would cancel the transfer.
@@ -73,7 +79,7 @@ function triggerIframeDownload(url: string): void {
   window.setTimeout(() => iframe.remove(), 60_000)
 }
 
-/** 每个 pre-signed URL 各起一个隐藏 iframe 触发下载；无 URL 视为后端未就绪，抛错让上层提示。 */
+/** 每个 CDN 直链各起一个隐藏 iframe 触发下载；无 URL 视为后端未就绪，抛错让上层提示。 */
 function downloadEntries(files: DownloadRawEntry[] | undefined) {
   if (!files || !files.length) {
     throw new Error(t('datasets.download.noUrls'))
@@ -84,23 +90,11 @@ function downloadEntries(files: DownloadRawEntry[] | undefined) {
 }
 
 /**
- * RAW pre-signed download: GET /files/{public_id}/download_raw → imzML + ibd URLs.
- * No polling — pre-signed URLs are returned immediately.
+ * RAW download: GET /files/{public_id}/download_raw → imzML + ibd CDN links.
+ * No polling — the links are returned immediately.
  * Each file downloads in its own hidden iframe so they can't cancel each other.
  */
-export async function ossDownloadRaw(
-  publicId: string,
-  options?: { isPublic?: boolean },
-) {
-  const { files } = await getDownloadRaw(publicId, options?.isPublic ?? false)
-  downloadEntries(files)
-}
-
-/**
- * RAW pre-signed download via the no-auth endpoint (public collection page).
- * Same iframe strategy; backend only serves is_public files.
- */
-export async function ossDownloadRawNoauth(publicId: string) {
-  const { files } = await getDownloadRawNoauth(publicId)
+export async function ossDownloadRaw(publicId: string) {
+  const { files } = await getDownloadRaw(publicId)
   downloadEntries(files)
 }

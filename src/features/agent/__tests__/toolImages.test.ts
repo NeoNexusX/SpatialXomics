@@ -35,7 +35,7 @@ import {
   setZarrStore,
   resetZarrSharedState,
 } from '@/services/zarr/zarrSharedState'
-import type { ZarrOssStore } from '@/services/zarr/zarrOssStore'
+import type { ZarrStore } from '@/services/zarr/zarrStore'
 import {
   buildIonImageStats,
   registerContextProviders,
@@ -291,7 +291,7 @@ it('reads the same tolerance window as the workbench and rejects out-of-window t
   mzAxisRef.value = new Float64Array([100, 100.005, 101])
   ionDims.value = { width: 2, height: 2 }
   const sum = vi.fn(async () => new Float32Array([0, 10, 0, 0]))
-  setZarrStore({ getSummedIonImageByMzIndices: sum } as unknown as ZarrOssStore)
+  setZarrStore({ getSummedIonImageByMzIndices: sum } as unknown as ZarrStore)
   const ion = await readIon(100, 0.01, new AbortController().signal)
   expect(sum).toHaveBeenCalledWith([0, 1])
   expect(ion.label).toContain('window 99.99–100.01')
@@ -324,7 +324,7 @@ it('lets explicit mz queries through when the selection changed mid-turn', async
   mzAxisRef.value = new Float64Array([100, 200, 300])
   setZarrStore({
     getSummedIonImageByMzIndices: async () => new Float32Array([0, 10, 0, 0]),
-  } as unknown as ZarrOssStore)
+  } as unknown as ZarrStore)
   const accepted = await h.agent.send('compare these ions')
   await h.agent.whenIdle()
   expect(accepted).toBe(true)
@@ -382,7 +382,7 @@ it('reads explicit pixels without changing the page and filters the raw mean spe
   setZarrStore({
     getPixelSpectrum: read,
     loadCoordinates: async () => new Uint32Array([1, 1, 1, 2, 1, 1]),
-  } as unknown as ZarrOssStore)
+  } as unknown as ZarrStore)
   const result = await h.ctx.tools.execute({
     name: 'get_pixel_spectrum',
     callId: 'p',
@@ -414,7 +414,7 @@ it('keeps only split ion-image tools and ignores removed display parameters', as
   dataModeRef.value = 'continuous'
   mzAxisRef.value = new Float64Array([200])
   ionDims.value = { width: 1, height: 1 }
-  setZarrStore({ getSummedIonImageByMzIndices: async () => new Float32Array([1]) } as unknown as ZarrOssStore)
+  setZarrStore({ getSummedIonImageByMzIndices: async () => new Float32Array([1]) } as unknown as ZarrStore)
   const result = await h.ctx.tools.execute({
     name: 'get_ion_image_by_mzs',
     callId: 's',

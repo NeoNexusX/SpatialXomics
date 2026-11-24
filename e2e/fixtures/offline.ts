@@ -7,7 +7,8 @@ import { test as base, expect, type Page, type Route } from '@playwright/test'
 export const MODEL = 'e2e-vision'
 export const API_KEY = 'e2e-fake-key'
 export const LLM_ORIGIN = 'https://llm.e2e.invalid'
-export const OSS_ORIGIN = 'https://oss.e2e.invalid'
+/** RAW 下载直链所在的 CDN 源（后端返回免签链接，浏览器在隐藏 iframe 里直接打开） */
+export const CDN_ORIGIN = 'https://cdn.e2e.invalid'
 /** 1x1 PNG。Firefox 严格校验 chunk CRC，Chromium 不校验，改动后要确认 CRC 仍然正确。 */
 export const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII='
 
@@ -259,7 +260,8 @@ export const test = base.extend<{
         backend.rawDownloads.push(publicId)
         await route.fulfill(backend.rawDownloadStatus === 200
           ? { json: { files: ['imzML', 'ibd'].map((ext) => ({
-              filename: `${publicId}.${ext}`, url: `${OSS_ORIGIN}/${publicId}.${ext}?signature=e2e`, size: 1024,
+              filename: `${publicId}.${ext}`,
+              url: `${CDN_ORIGIN}/origin/${publicId}.${ext}?response-content-disposition=attachment`, size: 1024,
             })) } }
           : { status: backend.rawDownloadStatus, json: { detail: 'E2E download refused' } })
       } else if (path === '/logout') {
@@ -269,7 +271,7 @@ export const test = base.extend<{
         await route.fulfill({ status: 501, json: { detail: 'Unconfigured E2E endpoint' } })
       }
     })
-    await context.route(`${OSS_ORIGIN}/**`, (route) => route.fulfill({
+    await context.route(`${CDN_ORIGIN}/**`, (route) => route.fulfill({
       contentType: 'application/octet-stream', headers: { 'content-disposition': 'attachment' }, body: 'e2e',
     }))
     // Same adapter in dev (relay) and production (direct fetch).

@@ -168,7 +168,7 @@ watch(runId, () => {
 })
 
 // 离开页面时释放模块级状态，避免大数组（mzAxis、meanChartData、ticMatrix 等）
-// 和 ZarrOssStore 缓存在 SPA 导航后仍驻留内存
+// 和 ZarrStore 缓存在 SPA 导航后仍驻留内存
 onUnmounted(() => {
   setAgentDataset('', true)
   unregisterContextProviders()

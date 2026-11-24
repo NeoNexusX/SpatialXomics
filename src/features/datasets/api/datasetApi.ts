@@ -38,19 +38,11 @@ export async function getFileMetadata(publicId: FilePublicId, signal?: AbortSign
   )
 }
 
-// GET /files/{public_id}/download_raw - pre-signed URLs for imzML + ibd, zero polling
-export async function getDownloadRaw(
-  publicId: FilePublicId,
-  isPublic = false,
-): Promise<DownloadRawResponse> {
-  const client = isPublic ? api : auth_api
-  return unwrap(client.get(`/files/${publicId}/download_raw`))
-}
-
-// GET /files/{public_id}/download_raw_noauth — 公开集合页专用（免登录）。
-// 后端仅对 is_public 文件放行，私有文件 404。
-export async function getDownloadRawNoauth(publicId: FilePublicId): Promise<DownloadRawResponse> {
-  return unwrap(api.get(`/files/${publicId}/download_raw_noauth`))
+// GET /files/{public_id}/download_raw — 需登录：后端校验权限与配额后即时返回 imzML + ibd 的
+// CDN 直链（免签，可直接下载）。只能走 auth_api：匿名客户端不带 token，必然 401，
+// 而全局 401 拦截会把它当成会话失效、清掉登录态。
+export async function getDownloadRaw(publicId: FilePublicId): Promise<DownloadRawResponse> {
+  return unwrap(auth_api.get(`/files/${publicId}/download_raw`))
 }
 
 // DELETE /files/{public_id} — 响应回传 public_id

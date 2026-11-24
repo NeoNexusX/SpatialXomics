@@ -3,7 +3,7 @@
   "include": [
     "src/**/__tests__/*",
     "env.d.ts",
-    // 测试经 import 链（useZarrIonImage → ossClient）间接引入 ali-oss，需要其环境声明
+    // 测试的 import 链可能经 upload 模块（imzmlOssUpload / ossMultipart）间接引入 ali-oss，需要其环境声明
     "src/shared/types/**/*.d.ts"
   ],
   "exclude": [],

@@ -21,9 +21,9 @@
  * are fetched — KMeans is computed locally in the browser.
  */
 
-import { createOssClient, OssError, ossKey } from '../zarr/ossClient'
-import type { OssClient } from '../zarr/ossClient'
-import type { ZarrAccessResponse, RootAttrs } from '../zarr/types/zarr'
+import { createZarrHttpClient, ZarrFetchError } from '../zarr/zarrHttpClient'
+import type { ZarrObjectSource } from '../zarr/zarrHttpClient'
+import type { RootAttrs } from '../zarr/types/zarr'
 import type { ClusteringImage, UmapData, UmapEmbedding } from './types/clustering'
 import type { ZarrV3ArrayMetadata, ZarrV3GroupMetadata } from '../zarr/types/zarrV3'
 import { assertV3Array, computeNDChunkKey } from '../zarr/zarrMetadata'
@@ -35,18 +35,13 @@ import { readFullArray } from '../zarr/zarrReader'
 const UMAP_GROUP = 'analysis/umap'
 
 export class ClusteringZarrStore {
-  private oss: OssClient
-  private folderPath: string
+  private readonly source: ZarrObjectSource
   private _disposed = false
   /** Root spatial_shape ([height, width]) - grid for embedding rasterization. */
   private spatialShape: [number, number] | null = null
 
-  constructor(
-    source: ZarrAccessResponse,
-    refreshAccess?: () => Promise<ZarrAccessResponse>,
-  ) {
-    this.oss = createOssClient(source, { refresh: refreshAccess })
-    this.folderPath = source.folder_path
+  constructor(zarrUrl: string) {
+    this.source = createZarrHttpClient(zarrUrl)
   }
 
   dispose(): void {
@@ -116,7 +111,7 @@ export class ClusteringZarrStore {
 
   /** Root attributes of the run zarr (spatial_shape, coordinate_base, ...). */
   private async readRootAttrs(): Promise<RootAttrs> {
-    const ab = await this.oss.getObjectArrayBuffer(ossKey(this.folderPath, 'zarr.json'))
+    const ab = await this.source.getObjectArrayBuffer('zarr.json')
     const text = new TextDecoder('utf-8').decode(new Uint8Array(ab))
     const root = JSON.parse(text) as ZarrV3GroupMetadata
     const attrs = root.attributes as unknown as RootAttrs | undefined
@@ -137,7 +132,7 @@ export class ClusteringZarrStore {
     try {
       coordMeta = await this.readArrayMeta('coordinates')
     } catch (e) {
-      if (e instanceof OssError && e.code === 'not_found') return null
+      if (e instanceof ZarrFetchError && e.code === 'not_found') return null
       throw e
     }
     if (
@@ -213,7 +208,7 @@ export class ClusteringZarrStore {
   ): Promise<Uint8Array> {
     return readFullArray(meta, arrayPath, async (coords) => {
       const chunkKey = computeNDChunkKey(meta, coords)
-      const raw = await this.oss.getObjectArrayBuffer(this.key(`${arrayPath}/${chunkKey}`))
+      const raw = await this.source.getObjectArrayBuffer(this.key(`${arrayPath}/${chunkKey}`))
       if (this._disposed) throw new Error('[ClusteringZarrStore] disposed during read')
       return decodePayload(meta, raw)
     })
@@ -221,12 +216,12 @@ export class ClusteringZarrStore {
 
   /** All arrays live under the UMAP group, so the rest of the store uses plain array names. */
   private key(relativePath: string): string {
-    return ossKey(this.folderPath, `${UMAP_GROUP}/${relativePath.replace(/^\/+/, '')}`)
+    return `${UMAP_GROUP}/${relativePath.replace(/^\/+/, '')}`
   }
 
   private async readJson<T>(relativePath: string): Promise<T> {
     const key = this.key(relativePath)
-    const ab = await this.oss.getObjectArrayBuffer(key)
+    const ab = await this.source.getObjectArrayBuffer(key)
     const text = new TextDecoder('utf-8').decode(new Uint8Array(ab))
     try {
       return JSON.parse(text) as T

@@ -48,7 +48,7 @@ src/
 ├── features/             # Business modules: agent, auth, collections, databases, datasets, home, upload, users, vizworkbench, workspace
 ├── i18n/                 # vue-i18n instance, type definitions, and locales/{locale}/{ns}.json message files
 ├── router/               # Routes and guards
-├── services/             # Cross-module Zarr (with OSS client), clustering, and PubChem services
+├── services/             # Cross-module Zarr (with an HTTP reader), clustering, and PubChem services
 ├── shared/               # HTTP, auth, directives, generic components/composables/config/types
 ├── views/                # Route pages that compose features
 └── workers/              # Upload ZIP/MD5 worker

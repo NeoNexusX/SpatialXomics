@@ -1,7 +1,7 @@
 import { findMzRangeIndices, loadIonSliceSum } from '@/services/zarr/ionRead'
 export { loadIonMatrixByIndex, findClosestMzIndex } from '@/services/zarr/ionRead'
 /**
- * Ion image composable — loads zarr data on demand via OSS STS.
+ * Ion image composable — loads zarr data on demand from the run's zarr CDN URL.
  *
  * Supports two data modes:
  *   - continuous: ion image + mean spectrum, plus per-pixel spectra read from
@@ -23,8 +23,8 @@ export { loadIonMatrixByIndex, findClosestMzIndex } from '@/services/zarr/ionRea
  */
 
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
-import { getZarrAccess } from '@/services/zarr/api/zarrAccessApi'
-import { ZarrIncompatibleError, ZarrOssStore } from '@/services/zarr/zarrOssStore'
+import { getZarrUrl } from '@/services/zarr/api/zarrAccessApi'
+import { ZarrIncompatibleError, ZarrStore } from '@/services/zarr/zarrStore'
 import {
   // 共享状态收在 services 层（跨 feature API）：这里引入内部使用 + 转发导出
   store,
@@ -80,7 +80,7 @@ export {
 /**
  * Release all module-level state. Call on VizWorkbench unmount so that large
  * TypedArrays (mzAxis, meanChartData, ticMatrix, pixelSpectrum) and the
- * ZarrOssStore (chunk caches, in-flight requests) become GC-eligible instead
+ * ZarrStore (chunk caches, in-flight requests) become GC-eligible instead
  * of persisting for the entire SPA lifetime.
  */
 export function disposeZarrState(): void {
@@ -223,7 +223,7 @@ export async function loadPixelSpectrum(pixelIndex: number): Promise<void> {
 const normalizationCache = new Map<'tic', Float32Array>()
 const normalizationPending = new Map<
   'tic',
-  { store: ZarrOssStore; promise: Promise<Float32Array> }
+  { store: ZarrStore; promise: Promise<Float32Array> }
 >()
 let normalizationRequestId = 0
 let ionImageRequestId = 0
@@ -405,23 +405,23 @@ export function useZarrIonImage() {
     const isCurrent = () => gen === initGeneration
     /** Abort this stale init: dispose the store we created (it is no longer
      *  reachable via the module-level `store`) and stop writing shared refs. */
-    const abortIfStale = (s: ZarrOssStore): boolean => {
+    const abortIfStale = (s: ZarrStore): boolean => {
       if (isCurrent() && store === s) return false
       s.dispose()
       return true
     }
 
     try {
-      // spectra 读取的缓存/并发走运行时 config.json 的 zarr 块（缺省 100MB/16）
+      // 离子图 / m/z chunk 缓存取 ZARR_STORE；spectra 的缓存/并发走运行时 config.json
+      // 的 zarr 块（缺省 20 个 chunk ≈ 20MB / 16 并发）
       const zarrCfg = getConfig().zarr
-      const s = new ZarrOssStore(await getZarrAccess(runId), {
+      const s = new ZarrStore(await getZarrUrl(runId), {
         intensityChunkCacheSize: ZARR_STORE.intensityChunkCacheSize,
+        mzChunkCacheSize: ZARR_STORE.mzChunkCacheSize,
         spectraChunkCacheSize: zarrCfg?.spectraChunkCacheSize,
         spectraConcurrency: zarrCfg?.spectraConcurrency,
-        // STS 过期时自动重拉凭据，避免结果页久置后所有 OSS 读取 403
-        refreshAccess: () => getZarrAccess(runId),
       })
-      // 如果 await getZarrAccess 期间发生了 dispose/重新 init，直接放弃本次加载
+      // 如果 await getZarrUrl 期间发生了 dispose/重新 init，直接放弃本次加载
       if (!isCurrent()) {
         s.dispose()
         return

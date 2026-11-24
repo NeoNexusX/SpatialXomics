@@ -1,5 +1,5 @@
 /**
- * On-demand reader for MassFlow MSI Zarr v1.1 data stored in Alibaba Cloud OSS.
+ * On-demand reader for MassFlow MSI Zarr v1.1 data (stored in OSS, served via CDN).
  *
  * Intensities live in up to two groups, each carrying row_axis + encoding
  * attributes; the first one present is the main data group:
@@ -23,22 +23,21 @@
  *   <root>/stats/mean_spectrum/ — optional, pre-computed mean spectrum
  *   <root>/stats/tic/           — optional, pre-computed TIC (both modes)
  *
- * The byte source is OSS via STS (ZarrAccessResponse from
- * GET /processes/{run_id}/zarr).
+ * The byte source is the run's zarr root URL (getZarrUrl, from
+ * GET /processes/{run_id}/zarr), read over plain HTTP GET by zarrHttpClient.
  *
- * Chunk caching: intensity chunks use LRU cache (default 20 chunks).
- * In-flight request deduplication prevents redundant OSS requests for
- * the same chunk.
+ * Chunk caching: intensity / m/z / spectra chunks each use their own LRU
+ * cache (default 20 chunks each). In-flight request deduplication prevents
+ * redundant requests for the same chunk.
  *
  * Supported codecs: gzip / zlib / deflate (native DecompressionStream),
  * zstd (via zstddec).
  */
 
 import { LruCache } from '@/shared/utils/lruCache'
-import { createOssClient, OssError, ossKey } from './ossClient'
-import type { OssClient } from './ossClient'
+import { createZarrHttpClient, ZarrFetchError } from './zarrHttpClient'
+import type { ZarrObjectSource } from './zarrHttpClient'
 import type {
-  ZarrAccessResponse,
   DataMode,
   RootAttrs,
   DataAttrs,
@@ -112,21 +111,70 @@ function assertSupportedDtype(meta: ZarrV3ArrayMetadata, label: string): void {
   const shape = meta.shape
   const chunkShape = meta.chunk_grid?.configuration?.chunk_shape
   if (!Array.isArray(shape) || !shape.length || shape.some((s) => !Number.isInteger(s) || s < 0)) {
-    throw new Error(`[ZarrOssStore] ${label}: invalid shape ${JSON.stringify(shape)}`)
+    throw new Error(`[ZarrStore] ${label}: invalid shape ${JSON.stringify(shape)}`)
   }
   if (!Array.isArray(chunkShape) || chunkShape.length !== shape.length) {
     throw new Error(
-      `[ZarrOssStore] ${label}: chunk_shape rank mismatch (shape ${shape.length}D vs chunk_shape ${JSON.stringify(chunkShape)})`,
+      `[ZarrStore] ${label}: chunk_shape rank mismatch (shape ${shape.length}D vs chunk_shape ${JSON.stringify(chunkShape)})`,
     )
   }
   bytesPerElement(meta.data_type) // throws on an unknown dtype
 }
 
-export class ZarrOssStore {
-  private oss: OssClient
-  private folderPath: string
-  private sourceLabel: string
-  /** Main data group: the first of ion_image/ / spectra/ present. */
+/**
+ * Validate a data group's row_axis + encoding. A group that exists without
+ * them is a hard error, and so is an unknown value — a writer bug (e.g.
+ * encoding: "raw") used to slip through a truthiness check and make every
+ * `_dataMode === 'continuous'/'processed'` test silently false, leaving a
+ * blank result page with no error.
+ */
+function dataGroupAttrs(path: string, meta: ZarrV3GroupMetadata): DataAttrs {
+  const rowAxis = meta.attributes?.row_axis
+  const encoding = meta.attributes?.encoding
+  if (!rowAxis || !encoding) {
+    throw new Error(
+      `[ZarrStore] ${path}/zarr.json missing required attributes (row_axis, encoding)`,
+    )
+  }
+  if (rowAxis !== 'pixel' && rowAxis !== 'ion') {
+    throw new Error(
+      `[ZarrStore] ${path}/zarr.json invalid row_axis: ${JSON.stringify(rowAxis)} (expected "pixel" | "ion")`,
+    )
+  }
+  if (encoding !== 'continuous' && encoding !== 'processed') {
+    throw new Error(
+      `[ZarrStore] ${path}/zarr.json invalid encoding: ${JSON.stringify(encoding)} (expected "continuous" | "processed")`,
+    )
+  }
+  return { row_axis: rowAxis, encoding }
+}
+
+/** 一个组 zarr.json 的读取结果：组不存在时 meta 为 null；读取出错时带上 error */
+interface GroupRead {
+  meta: ZarrV3GroupMetadata | null
+  error?: unknown
+}
+
+/** 非致命读取：失败按缺失处理 */
+function optional<T>(read: Promise<T>): Promise<T | null> {
+  return read.then(
+    (value) => value,
+    () => null,
+  )
+}
+
+/** 致命读取：失败以 Error 值返回，等同一轮请求全部结束后再由调用方抛出 */
+function required<T>(read: Promise<T>): Promise<T | Error> {
+  return read.then(
+    (value) => value,
+    (e: unknown) => (e instanceof Error ? e : new Error(String(e))),
+  )
+}
+
+export class ZarrStore {
+  private readonly zarrUrl: string
+  private readonly source: ZarrObjectSource
+  /** Main data group: ion_image/ when present (continuous only), else spectra/. */
   private dataPath: 'ion_image' | 'spectra' = 'ion_image'
   private _disposed = false
 
@@ -177,28 +225,24 @@ export class ZarrOssStore {
   private totalMzPoints: number = 0
 
   constructor(
-    source: ZarrAccessResponse,
+    zarrUrl: string,
     options: {
       intensityChunkCacheSize?: number
       mzChunkCacheSize?: number
       spectraChunkCacheSize?: number
       spectraConcurrency?: number
-      /** Re-fetch STS credentials when they expire (see ossClient). */
-      refreshAccess?: () => Promise<ZarrAccessResponse>
     } = {},
   ) {
-    this.oss = createOssClient(source, { refresh: options.refreshAccess })
-    this.folderPath = source.folder_path
-    this.sourceLabel = `${source.bucket} (${source.region})`
+    this.zarrUrl = zarrUrl
+    this.source = createZarrHttpClient(zarrUrl)
     this.intensityChunkCache = new LruCache<number, Float32Array>(
       options.intensityChunkCacheSize ?? 20,
     )
-    this.mzChunkCache = new LruCache<number, Float64Array>(options.mzChunkCacheSize ?? 5)
+    this.mzChunkCache = new LruCache<number, Float64Array>(options.mzChunkCacheSize ?? 20)
     // spectra 缓存独立（chunk 边界与 ion_image 不同），1 chunk ≈ 1MB；
-    // 100 个 ≈ 100MB 内存上限。两项均可经 config.json 的 zarr 块配置。
-    this.spectraChunkCache = new LruCache<number, Float32Array>(
-      options.spectraChunkCacheSize ?? 100,
-    )
+    // 20 个 ≈ 20MB 内存上限。缓存大小与并发均可经 config.json 的 zarr 块配置。
+    // 内存 LRU 只管本次会话内的复用；跨会话的复用交给浏览器 HTTP 缓存（CDN 固定 URL）。
+    this.spectraChunkCache = new LruCache<number, Float32Array>(options.spectraChunkCacheSize ?? 20)
     this.spectraConcurrency = Math.max(1, Math.floor(options.spectraConcurrency ?? 16))
   }
 
@@ -225,17 +269,17 @@ export class ZarrOssStore {
   // ========== public accessors ==========
 
   get dataMode(): DataMode {
-    if (!this._dataMode) throw new Error('[ZarrOssStore] call init() first')
+    if (!this._dataMode) throw new Error('[ZarrStore] call init() first')
     return this._dataMode
   }
 
   get rowAxis(): 'pixel' | 'ion' {
-    if (!this._rowAxis) throw new Error('[ZarrOssStore] call init() first')
+    if (!this._rowAxis) throw new Error('[ZarrStore] call init() first')
     return this._rowAxis
   }
 
   get spatialShape(): [number, number] {
-    if (!this._spatialShape) throw new Error('[ZarrOssStore] call init() first')
+    if (!this._spatialShape) throw new Error('[ZarrStore] call init() first')
     return this._spatialShape
   }
 
@@ -246,148 +290,106 @@ export class ZarrOssStore {
   // ========== lifecycle ==========
 
   /**
-   * 初始化：读取根属性、data 属性、各数组元数据。
-   * 自动判定数据模式（continuous / processed）和行轴（pixel / ion）。
+   * 初始化：读取根属性与数据组属性，判定数据模式（continuous / processed）和
+   * 行轴（pixel / ion），再并发读取各数组的元数据。
    *
-   * 属性优先从 zarr.json 的 attributes 字段读取；
-   * 如果不存在才尝试独立 .zattrs 文件（兼容其他 writer）。
+   * 请求按依赖分三轮：根 zarr.json 与 spectra/zarr.json → ion_image/zarr.json
+   * （仅 continuous）→ 全部数组元数据。CDN 不缓存 404、每个 404 都要回源，所以
+   * 只请求按格式应当存在的对象：processed 不读 ion_image/ 和 stats/mean_spectrum。
    */
   async init(): Promise<void> {
-    // 1) 根 zarr.json：验证 v3 group + 从中提取根属性
-    const rootZarrJson = await this.readJson<ZarrV3GroupMetadata>('zarr.json')
+    // 1) 根 zarr.json 与 spectra/zarr.json 互不依赖，并发读取。spectra 读取出错先记下，
+    //    是否致命要等主数据组确定后再看（见 resolveDataGroups）
+    const [rootZarrJson, spectraGroup] = await Promise.all([
+      this.readJson<ZarrV3GroupMetadata>('zarr.json'),
+      this.readGroup('spectra').then(
+        (meta): GroupRead => ({ meta }),
+        (error: unknown): GroupRead => ({ meta: null, error }),
+      ),
+    ])
     if (rootZarrJson.zarr_format !== 3 || rootZarrJson.node_type !== 'group') {
       throw new Error(
-        `[ZarrOssStore] unsupported root zarr format/node_type: ${rootZarrJson.zarr_format}/${rootZarrJson.node_type}`,
+        `[ZarrStore] unsupported root zarr format/node_type: ${rootZarrJson.zarr_format}/${rootZarrJson.node_type}`,
       )
     }
 
     const rootAttrs = rootZarrJson.attributes as unknown as RootAttrs | undefined
     if (!rootAttrs?.format || !rootAttrs?.spatial_shape) {
       throw new Error(
-        '[ZarrOssStore] root zarr.json missing required attributes (format, spatial_shape)',
+        '[ZarrStore] root zarr.json missing required attributes (format, spatial_shape)',
       )
     }
     this.validateRootAttrs(rootAttrs)
     this._spatialShape = rootAttrs.spatial_shape
     this.coordinateBase = rootAttrs.coordinate_base
 
-    // 2) data 组属性：优先 zarr.json attributes，其次 .zattrs
-    const dataAttrs = await this.readDataAttrs()
-    this._rowAxis = dataAttrs.row_axis
-    this._dataMode = dataAttrs.encoding
+    // 2) 主数据组 → 数据模式与行轴
+    const { path, attrs, pixelSpectra } = await this.resolveDataGroups(spectraGroup)
+    this.dataPath = path
+    this._rowAxis = attrs.row_axis
+    this._dataMode = attrs.encoding
+    const continuous = this._dataMode === 'continuous'
 
-    // 3) 拿到 dataMode 后，下面这些 zarr.json 互不依赖，全部并发拉取，
-    //    把冷启动从 ~8 次串行 RTT 压到 ~1 次（连接复用后）。
-    //    保持原语义：processed 缺 data/mz、continuous 缺 axes/mz 属致命错误；
-    //    metadata / stats 为非致命，缺失只记日志不抛。
+    // 3) 各数组的 zarr.json 互不依赖，全部并发拉取。主数据组的数组和模式对应的
+    //    m/z 数组缺失属致命错误；metadata、stats 和像素主序的 spectra 组为非致命，
+    //    缺失时对应功能不可用，用到时再报错
     const [
       intensityMeta,
       offsetsMeta,
       coordinatesMeta,
-      metadataResult,
-      meanSpectrumResult,
-      modeArrayResult,
-      statsResult,
+      mzMeta,
+      metadataGroup,
+      meanSpectrumMeta,
+      ticMeta,
+      spectraIntensityMeta,
+      spectraOffsetsMeta,
     ] = await Promise.all([
-      // 必备：data 子数组（失败以 Error 形式冒泡到下方统一抛出）
-      this.readArrayMeta(this.intensityPath).then((m) => m, (e) => e as Error),
-      this.readArrayMeta(this.offsetsPath).then((m) => m, (e) => e as Error),
-      this.readArrayMeta('axes/coordinates').then((m) => m, (e) => e as Error),
-
-      // 非致命：metadata 组
-      this.readJson<ZarrV3GroupMetadata>('metadata/zarr.json').then(
-        (m) => m,
-        () => null as ZarrV3GroupMetadata | null,
-      ),
-
-      // 非致命：stats/mean_spectrum
-      this.readArrayMeta('stats/mean_spectrum').then(
-        (m) => m,
-        () => null as ZarrV3ArrayMetadata | null,
-      ),
-
-      // 模式相关（二选一）：processed-><data>/mz，continuous->axes/mz
-      // 只有一个会真正发起请求；缺失属致命错误，下方统一抛。
-      (this._dataMode === 'processed'
-        ? this.readArrayMeta(this.dataMzPath)
-        : this.readArrayMeta('axes/mz')
-      ).then(
-        (m) => m,
-        (e) => e as Error,
-      ),
-
-      // 非致命：stats/tic（两种模式均可选；continuous 下作为 TIC 归一化快路径）
-      this.readArrayMeta('stats/tic').then(
-        (m) => m,
-        () => null as ZarrV3ArrayMetadata | null,
-      ),
+      required(this.readArrayMeta(this.intensityPath)),
+      required(this.readArrayMeta(this.offsetsPath)),
+      required(this.readArrayMeta('axes/coordinates')),
+      // continuous 共用 axes/mz；processed 每个点自带 m/z（<data>/mz）
+      required(this.readArrayMeta(continuous ? 'axes/mz' : this.dataMzPath)),
+      optional(this.readJson<ZarrV3GroupMetadata>('metadata/zarr.json')),
+      // 平均谱依赖共享 m/z 轴，只有 continuous 有
+      continuous ? optional(this.readArrayMeta('stats/mean_spectrum')) : null,
+      // stats/tic 两种模式都可选：processed 的 TIC 图、continuous 的 TIC 归一化快路径
+      optional(this.readArrayMeta('stats/tic')),
+      pixelSpectra ? optional(this.readArrayMeta('spectra/intensity')) : null,
+      pixelSpectra ? optional(this.readArrayMeta('spectra/offsets')) : null,
     ])
 
-    // 必备数组：失败必须抛错（与原逻辑一致）
     if (intensityMeta instanceof Error) throw intensityMeta
     if (offsetsMeta instanceof Error) throw offsetsMeta
     if (coordinatesMeta instanceof Error) throw coordinatesMeta
+    if (mzMeta instanceof Error) {
+      const mzPath = continuous ? 'axes/mz' : this.dataMzPath
+      throw new Error(`[ZarrStore] ${this._dataMode} mode requires ${mzPath} array`)
+    }
     this.intensityMeta = intensityMeta
     this.offsetsMeta = offsetsMeta
     this.coordinatesMeta = coordinatesMeta
-    this.totalIntensityPoints = this.intensityMeta.shape[0]!
-
-    // 模式相关数组：缺失属致命错误（与原逻辑一致）
-    if (this._dataMode === 'processed') {
-      if (modeArrayResult instanceof Error || modeArrayResult === null) {
-        throw new Error(`[ZarrOssStore] processed mode requires ${this.dataMzPath} array`)
-      }
-      this.dataMzMeta = modeArrayResult
-      this.totalMzPoints = this.dataMzMeta.shape[0]!
+    this.totalIntensityPoints = intensityMeta.shape[0]!
+    if (continuous) {
+      this.axesMzMeta = mzMeta
     } else {
-      if (modeArrayResult instanceof Error || modeArrayResult === null) {
-        throw new Error('[ZarrOssStore] continuous mode requires axes/mz array')
-      }
-      this.axesMzMeta = modeArrayResult
+      this.dataMzMeta = mzMeta
+      this.totalMzPoints = mzMeta.shape[0]!
     }
 
-    // metadata 组（非致命）
-    if (metadataResult && metadataResult.attributes) {
-      this._metadataAttrs = metadataResult.attributes as unknown as MetadataAttrs
+    if (metadataGroup?.attributes) {
+      this._metadataAttrs = metadataGroup.attributes as unknown as MetadataAttrs
     }
-
-    // stats/mean_spectrum（非致命）
-    if (meanSpectrumResult) {
-      this.meanSpectrumMeta = meanSpectrumResult
-      if (import.meta.env.DEV) {
-        console.log('[ZarrOssStore] mean_spectrum found', {
-          shape: this.meanSpectrumMeta.shape.join('×'),
-          dtype: this.meanSpectrumMeta.data_type,
-        })
-      }
-    } else if (import.meta.env.DEV) {
-      console.warn(
-        '[ZarrOssStore] mean_spectrum not available - this Zarr file has no pre-computed stats.',
-      )
+    this.meanSpectrumMeta = meanSpectrumMeta
+    this.ticMeta = ticMeta
+    // 像素主序的 continuous spectra 组：两个数组都在才可用（像素谱、按谱的区域比较）
+    if (spectraIntensityMeta && spectraOffsetsMeta) {
+      this.spectraIntensityMeta = spectraIntensityMeta
+      this.spectraOffsetsMeta = spectraOffsetsMeta
     }
-
-    // stats/tic（非致命）
-    if (statsResult) {
-      this.ticMeta = statsResult
-      if (import.meta.env.DEV) {
-        console.log('[ZarrOssStore] stats/tic found', {
-          shape: statsResult.shape.join('×'),
-          dtype: statsResult.data_type,
-        })
-      }
-    } else if (import.meta.env.DEV) {
-      console.warn('[ZarrOssStore] stats/tic not available.')
-    }
-
-    // spectra 组（continuous 的像素主序侧，非致命）
-    // 与 readDataAttrs 的 dataPath 探测独立——continuous 的主数据组是 ion_image/，
-    // spectra 是另外那组，必须单独读；缺失只记日志，像素谱 / 区域比较用到时再报错。
-    await this.probeSpectraGroup()
 
     if (import.meta.env.DEV) {
       console.table({
-        source: this.sourceLabel,
-        folderPath: this.folderPath || '(root)',
+        source: this.zarrUrl,
         dataGroup: this.dataPath,
         dataMode: this._dataMode,
         rowAxis: this._rowAxis,
@@ -403,48 +405,12 @@ export class ZarrOssStore {
     }
   }
 
-  /**
-   * 非致命探测 spectra 组。
-   * 与 dataPath 探测独立：主组可能是 ion_image/（continuous）或 spectra/
-   * （processed），这里找的是像素主序 + continuous 编码的那组，供像素谱和
-   * 区域比较按谱取。探测失败（无此组 / 属性不符）只记日志、两个字段置空。
-   */
-  private async probeSpectraGroup(): Promise<void> {
-    try {
-      const meta = await this.readJson<ZarrV3GroupMetadata>('spectra/zarr.json')
-      const attrs = meta.attributes
-      if (attrs?.row_axis !== 'pixel' || attrs?.encoding !== 'continuous') {
-        if (import.meta.env.DEV) {
-          console.log(
-            `[ZarrOssStore] spectra group has unexpected attrs (${attrs?.row_axis}/${attrs?.encoding}), ignoring`,
-          )
-        }
-        return
-      }
-      const [intensityMeta, offsetsMeta] = await Promise.all([
-        this.readArrayMeta('spectra/intensity'),
-        this.readArrayMeta('spectra/offsets'),
-      ])
-      this.spectraIntensityMeta = intensityMeta
-      this.spectraOffsetsMeta = offsetsMeta
-      if (import.meta.env.DEV) {
-        console.log('[ZarrOssStore] spectra group found (pixel-major), region comparison uses per-spectrum reads')
-      }
-    } catch {
-      this.spectraIntensityMeta = null
-      this.spectraOffsetsMeta = null
-      if (import.meta.env.DEV) {
-        console.log('[ZarrOssStore] spectra group not available.')
-      }
-    }
-  }
-
   // ========== data loading: common ==========
 
   /** Load pixel coordinates. Shape (n_pixels, 3), dtype uint32, one-based. */
   async loadCoordinates(): Promise<Uint32Array> {
     const meta = this.coordinatesMeta
-    if (!meta && !this.coordinates.current) throw new Error('[ZarrOssStore] call init() first')
+    if (!meta && !this.coordinates.current) throw new Error('[ZarrStore] call init() first')
     return this.coordinates.get(async () =>
       new Uint32Array(await this.fetchArrayFull('axes/coordinates', meta!)),
     )
@@ -454,7 +420,7 @@ export class ZarrOssStore {
   async loadMzAxis(): Promise<Float64Array | null> {
     if (this._dataMode === 'processed') return null
     if (this.mzAxis) return this.mzAxis
-    if (!this.axesMzMeta) throw new Error('[ZarrOssStore] axes/mz metadata not loaded')
+    if (!this.axesMzMeta) throw new Error('[ZarrStore] axes/mz metadata not loaded')
     const ab = await this.fetchArrayFull('axes/mz', this.axesMzMeta)
     const dtype = this.axesMzMeta.data_type
     const typed = makeTypedArray(dtype, ab)
@@ -471,7 +437,7 @@ export class ZarrOssStore {
   /** Load row offsets of the main data group. */
   async loadOffsets(): Promise<number[]> {
     const meta = this.offsetsMeta
-    if (!meta && !this.offsets.current) throw new Error('[ZarrOssStore] call init() first')
+    if (!meta && !this.offsets.current) throw new Error('[ZarrStore] call init() first')
     return this.offsets.get(() => this.readOffsets(this.offsetsPath, meta!))
   }
 
@@ -522,10 +488,10 @@ export class ZarrOssStore {
   async getSummedIonImageByMzIndices(mzIndices: number[]): Promise<Float32Array> {
     if (this._dataMode !== 'continuous') {
       throw new Error(
-        '[ZarrOssStore] getSummedIonImageByMzIndices only available in continuous mode',
+        '[ZarrStore] getSummedIonImageByMzIndices only available in continuous mode',
       )
     }
-    if (!mzIndices.length) throw new Error('[ZarrOssStore] no m/z indices were selected')
+    if (!mzIndices.length) throw new Error('[ZarrStore] no m/z indices were selected')
 
     const [offsets, coords] = await Promise.all([this.loadOffsets(), this.loadCoordinates()])
     const nPixels = coords.length / 3
@@ -533,7 +499,7 @@ export class ZarrOssStore {
     for (const mzIndex of mzIndices) {
       if (mzIndex < 0 || mzIndex >= offsets.length - 1) {
         throw new Error(
-          `[ZarrOssStore] mzIndex out of range: ${mzIndex} (total ${offsets.length - 1} ions)`,
+          `[ZarrStore] mzIndex out of range: ${mzIndex} (total ${offsets.length - 1} ions)`,
         )
       }
     }
@@ -553,7 +519,7 @@ export class ZarrOssStore {
         } catch (e) {
           const failure = e instanceof Error ? e : new Error(String(e))
           failures.push(failure)
-          console.warn(`[ZarrOssStore] skip mzIndex=${mzIndex}:`, failure.message)
+          console.warn(`[ZarrStore] skip mzIndex=${mzIndex}:`, failure.message)
           return null
         }
       }),
@@ -587,7 +553,7 @@ export class ZarrOssStore {
       try {
         this.meanSpectrumMeta = await this.readArrayMeta('stats/mean_spectrum')
       } catch (e) {
-        if (e instanceof OssError && e.code === 'not_found') return null
+        if (e instanceof ZarrFetchError && e.code === 'not_found') return null
         throw e
       }
     }
@@ -616,7 +582,7 @@ export class ZarrOssStore {
       } catch (e) {
         // A malformed array (bad dtype/shape) is a loud error — only a missing
         // stats/tic falls back to computing the TIC from intensity chunks.
-        if (e instanceof OssError && e.code === 'not_found') return null
+        if (e instanceof ZarrFetchError && e.code === 'not_found') return null
         throw e
       }
     }
@@ -633,7 +599,7 @@ export class ZarrOssStore {
     const nPixels = coords.length / 3
 
     if (tic.length < nPixels) {
-      console.warn('[ZarrOssStore] stats/tic length mismatch, falling back to computeTICImage')
+      console.warn('[ZarrStore] stats/tic length mismatch, falling back to computeTICImage')
       this.ticMeta = null
       return null
     }
@@ -658,7 +624,7 @@ export class ZarrOssStore {
    */
   async computeTICImage(): Promise<Float32Array> {
     if (this._dataMode !== 'processed') {
-      throw new Error('[ZarrOssStore] computeTICImage only available in processed mode')
+      throw new Error('[ZarrStore] computeTICImage only available in processed mode')
     }
 
     const offsets = await this.loadOffsets()
@@ -723,7 +689,7 @@ export class ZarrOssStore {
    */
   async getPixelSpectrum(pixelIndex: number): Promise<PixelSpectrum | null> {
     if (this._dataMode === 'continuous') return this.getContinuousPixelSpectrum(pixelIndex)
-    if (this._dataMode !== 'processed') throw new Error('[ZarrOssStore] call init() first')
+    if (this._dataMode !== 'processed') throw new Error('[ZarrStore] call init() first')
 
     const offsets = await this.loadOffsets()
     const coords = await this.loadCoordinates()
@@ -731,7 +697,7 @@ export class ZarrOssStore {
 
     if (pixelIndex < 0 || pixelIndex >= nPixels) {
       throw new Error(
-        `[ZarrOssStore] pixelIndex out of range: ${pixelIndex} (total ${nPixels} pixels)`,
+        `[ZarrStore] pixelIndex out of range: ${pixelIndex} (total ${nPixels} pixels)`,
       )
     }
 
@@ -762,14 +728,14 @@ export class ZarrOssStore {
    *   intensity = spectra/intensity[offsets[p]:offsets[p+1]]
    * Rows are dense - value k is the intensity of bin k of the shared axes/mz,
    * which is returned as `mz` (shared reference, not copied). A row usually
-   * sits in one chunk, so this costs one or two OSS reads through the spectra
+   * sits in one chunk, so this costs one or two reads through the spectra
    * chunk cache (shared with region comparison).
    */
   private async getContinuousPixelSpectrum(pixelIndex: number): Promise<PixelSpectrum> {
     const intensityMeta = this.spectraIntensityMeta
     if (!intensityMeta || !this.spectraOffsetsMeta) {
       throw new Error(
-        '[ZarrOssStore] pixel spectra require the spectra group (row_axis=pixel, encoding=continuous)',
+        '[ZarrStore] pixel spectra require the spectra group (row_axis=pixel, encoding=continuous)',
       )
     }
 
@@ -779,13 +745,13 @@ export class ZarrOssStore {
       this.loadMzAxis(),
     ])
     if (!offsets || !mzAxis) {
-      throw new Error('[ZarrOssStore] spectra offsets or m/z axis unavailable')
+      throw new Error('[ZarrStore] spectra offsets or m/z axis unavailable')
     }
 
     const nPixels = offsets.length - 1
     if (pixelIndex < 0 || pixelIndex >= nPixels) {
       throw new Error(
-        `[ZarrOssStore] pixelIndex out of range: ${pixelIndex} (total ${nPixels} pixels)`,
+        `[ZarrStore] pixelIndex out of range: ${pixelIndex} (total ${nPixels} pixels)`,
       )
     }
 
@@ -794,7 +760,7 @@ export class ZarrOssStore {
     // Same dense-row invariant streamRegionStatsBySpectra relies on.
     if (end - start !== mzAxis.length) {
       throw new Error(
-        `[ZarrOssStore] spectra row ${pixelIndex} has ${end - start} values, expected ${mzAxis.length} (m/z axis length)`,
+        `[ZarrStore] spectra row ${pixelIndex} has ${end - start} values, expected ${mzAxis.length} (m/z axis length)`,
       )
     }
 
@@ -838,7 +804,7 @@ export class ZarrOssStore {
     return bestDist <= tolerance ? bestIdx : -1
   }
 
-  // ========== internal: OSS key helpers ==========
+  // ========== internal: path helpers ==========
 
   private get intensityPath(): string {
     return `${this.dataPath}/intensity`
@@ -852,18 +818,15 @@ export class ZarrOssStore {
     return `${this.dataPath}/mz`
   }
 
-  private key(relativePath: string): string {
-    return ossKey(this.folderPath, relativePath)
-  }
-
   private async readJson<T>(relativePath: string): Promise<T> {
-    const key = this.key(relativePath)
-    const ab = await this.oss.getObjectArrayBuffer(key)
+    const ab = await this.source.getObjectArrayBuffer(relativePath)
     const text = new TextDecoder('utf-8').decode(new Uint8Array(ab))
     try {
       return JSON.parse(text) as T
     } catch (e) {
-      throw new Error(`[ZarrOssStore] failed to parse JSON at ${key}: ${(e as Error).message}`)
+      throw new Error(
+        `[ZarrStore] failed to parse JSON at ${relativePath}: ${(e as Error).message}`,
+      )
     }
   }
 
@@ -875,67 +838,77 @@ export class ZarrOssStore {
     return meta
   }
 
+  /** 读取一个组的 zarr.json；组不存在（404）返回 null，其余错误照常抛出 */
+  private async readGroup(path: string): Promise<ZarrV3GroupMetadata | null> {
+    try {
+      return await this.readJson<ZarrV3GroupMetadata>(`${path}/zarr.json`)
+    } catch (e) {
+      if (e instanceof ZarrFetchError && e.code === 'not_found') return null
+      throw e
+    }
+  }
+
   /**
-   * Read the main data group attributes and set {@link dataPath}.
+   * 判定主数据组（决定数据模式与行轴），以及有没有可按像素读 continuous 谱的
+   * spectra 组。
    *
-   * v1.1 stores ion_image/ (ion-major → continuous) and/or spectra/
-   * (pixel-major). The first candidate group present wins; a candidate that
-   * is simply absent (not_found) falls through, while a group that exists but
-   * lacks row_axis + encoding is a hard error. Neither group present means an
-   * unsupported layout (v1.0 kept everything in a single data/ group).
+   * v1.1 的强度最多分两组：ion_image/（离子主序）只有 continuous 才有；spectra/
+   * （像素主序）两种模式都有，它的 encoding 就是整个数据集的编码。两组都在时
+   * ion_image/ 为主数据组。
+   *
+   * 所以先看 spectra/：processed 数据没有共享 m/z 轴，不会有 ion_image/，读到
+   * encoding=processed 即可定案，不去请求一个必然 404、且 CDN 不缓存的
+   * ion_image/zarr.json。其余情况再读 ion_image/。spectra/ 读取出错只在它要当
+   * 主数据组时才致命：continuous 数据仍可用 ion_image/ 打开，只是没有像素谱。
+   * 两组都不存在即为不支持的布局（v1.0 把全部数据放在单个 data/ 组里）。
    */
-  private async readDataAttrs(): Promise<DataAttrs> {
-    const candidates = ['ion_image', 'spectra'] as const
-    for (const path of candidates) {
-      let meta: ZarrV3GroupMetadata
-      try {
-        meta = await this.readJson<ZarrV3GroupMetadata>(`${path}/zarr.json`)
-      } catch (e) {
-        if (e instanceof OssError && e.code === 'not_found') continue
-        throw e
+  private async resolveDataGroups(
+    spectra: GroupRead,
+  ): Promise<{ path: 'ion_image' | 'spectra'; attrs: DataAttrs; pixelSpectra: boolean }> {
+    const spectraAttrs = spectra.meta?.attributes
+    if (spectra.meta && spectraAttrs?.encoding === 'processed') {
+      return {
+        path: 'spectra',
+        attrs: dataGroupAttrs('spectra', spectra.meta),
+        pixelSpectra: false,
       }
-      if (meta.attributes?.row_axis && meta.attributes?.encoding) {
-        // Validate enum values — a writer bug (e.g. encoding: "raw") used to
-        // slip through the truthiness check and make every
-        // `_dataMode === 'continuous'/'processed'` test silently false,
-        // leaving a blank result page with no error.
-        const { row_axis, encoding } = meta.attributes
-        if (row_axis !== 'pixel' && row_axis !== 'ion') {
-          throw new Error(
-            `[ZarrOssStore] ${path}/zarr.json invalid row_axis: ${JSON.stringify(row_axis)} (expected "pixel" | "ion")`,
-          )
-        }
-        if (encoding !== 'continuous' && encoding !== 'processed') {
-          throw new Error(
-            `[ZarrOssStore] ${path}/zarr.json invalid encoding: ${JSON.stringify(encoding)} (expected "continuous" | "processed")`,
-          )
-        }
-        this.dataPath = path
-        return { row_axis, encoding }
+    }
+    const pixelSpectra =
+      spectraAttrs?.row_axis === 'pixel' && spectraAttrs?.encoding === 'continuous'
+
+    const ionImage = await this.readGroup('ion_image')
+    if (ionImage) {
+      if (spectra.error && import.meta.env.DEV) {
+        console.warn(
+          '[ZarrStore] spectra/zarr.json unreadable, pixel spectra disabled:',
+          spectra.error,
+        )
       }
-      throw new Error(
-        `[ZarrOssStore] ${path}/zarr.json missing required attributes (row_axis, encoding)`,
-      )
+      return { path: 'ion_image', attrs: dataGroupAttrs('ion_image', ionImage), pixelSpectra }
+    }
+    if (spectra.error) throw spectra.error
+    if (spectra.meta) {
+      return { path: 'spectra', attrs: dataGroupAttrs('spectra', spectra.meta), pixelSpectra }
     }
     throw new ZarrIncompatibleError(
-      '[ZarrOssStore] no MassFlow MSI Zarr v1.1 data group found (tried ion_image/, spectra/)',
+      '[ZarrStore] no MassFlow MSI Zarr v1.1 data group found (tried spectra/, ion_image/)',
     )
   }
 
   private validateRootAttrs(attrs: RootAttrs): void {
     if (attrs.format !== 'massflow.msi_zarr') {
       throw new Error(
-        `[ZarrOssStore] unsupported format: ${attrs.format}, expected massflow.msi_zarr`,
+        `[ZarrStore] unsupported format: ${attrs.format}, expected massflow.msi_zarr`,
       )
     }
     if (attrs.write_state !== 'complete') {
       throw new Error(
-        `[ZarrOssStore] dataset write_state is "${attrs.write_state}", expected "complete"`,
+        `[ZarrStore] dataset write_state is "${attrs.write_state}", expected "complete"`,
       )
     }
     if (!attrs.spatial_shape || attrs.spatial_shape.length !== 2) {
       throw new Error(
-        `[ZarrOssStore] invalid spatial_shape: ${JSON.stringify(attrs.spatial_shape)}`,
+        `[ZarrStore] invalid spatial_shape: ${JSON.stringify(attrs.spatial_shape)}`,
       )
     }
   }
@@ -947,7 +920,7 @@ export class ZarrOssStore {
    * Uses chunk caching and in-flight deduplication.
    */
   private async readIntensitySlice(start: number, end: number): Promise<Float32Array> {
-    if (!this.intensityMeta) throw new Error('[ZarrOssStore] call init() first')
+    if (!this.intensityMeta) throw new Error('[ZarrStore] call init() first')
     return this.read1DSlice(
       this.intensityPath,
       this.intensityMeta,
@@ -962,7 +935,7 @@ export class ZarrOssStore {
    * Read a slice [start, end) from the 1D data/mz array.
    */
   private async readMzSlice(start: number, end: number): Promise<Float64Array> {
-    if (!this.dataMzMeta) throw new Error(`[ZarrOssStore] ${this.dataMzPath} not available`)
+    if (!this.dataMzMeta) throw new Error(`[ZarrStore] ${this.dataMzPath} not available`)
     return this.read1DSlice(
       this.dataMzPath,
       this.dataMzMeta,
@@ -1071,16 +1044,16 @@ export class ZarrOssStore {
     meta: ZarrV3ArrayMetadata,
     chunkIndex: number,
   ): Promise<Float32Array | Float64Array> {
-    const key = this.key(`${arrayPath}/${computeNDChunkKey(meta, [chunkIndex])}`)
+    const path = `${arrayPath}/${computeNDChunkKey(meta, [chunkIndex])}`
     let raw: ArrayBuffer
     try {
-      raw = await this.oss.getObjectArrayBuffer(key)
+      raw = await this.source.getObjectArrayBuffer(path)
     } catch (e) {
       // zarr v3 允许「整块等于 fill_value 的 chunk 不落盘」（稀疏导出）。
       // 导出器普遍这么写：背景/无信号区域所在的 chunk 从未存储，读取时
       // 404 是数据形态而非存储错误。按元数据的 fill_value 重建该 chunk，
       // 而不是让整次读取失败。
-      if (e instanceof OssError && e.code === 'not_found') {
+      if (e instanceof ZarrFetchError && e.code === 'not_found') {
         return this.fillValueChunk(meta, chunkIndex)
       }
       throw e
@@ -1135,7 +1108,7 @@ export class ZarrOssStore {
 
     if (actualBytes < expectedBytes) {
       throw new Error(
-        `[ZarrOssStore] corrupt chunk at chunkIndex=${chunkIndex}: expected ${expectedBytes} bytes, got ${actualBytes}`,
+        `[ZarrStore] corrupt chunk at chunkIndex=${chunkIndex}: expected ${expectedBytes} bytes, got ${actualBytes}`,
       )
     }
 
@@ -1157,7 +1130,7 @@ export class ZarrOssStore {
   private async fetchArrayFull(arrayPath: string, meta: ZarrV3ArrayMetadata): Promise<ArrayBuffer> {
     const out = await readFullArray(meta, arrayPath, async (coords) => {
       const chunkKey = computeNDChunkKey(meta, coords)
-      const raw = await this.oss.getObjectArrayBuffer(this.key(`${arrayPath}/${chunkKey}`))
+      const raw = await this.source.getObjectArrayBuffer(`${arrayPath}/${chunkKey}`)
       return decodePayload(meta, raw)
     })
     // readFullArray allocates with `new Uint8Array(totalBytes)`, so the
@@ -1260,8 +1233,9 @@ export class ZarrOssStore {
     // chunk from a shared cursor and accumulate it the moment it lands, so
     // downloads and accumulation pipeline. Each chunk is scheduled once even
     // when both regions overlap it (chunkOrder is deduped); the LRU cache
-    // (100MB) + in-flight map bound memory, and the worker pool bounds the
-    // number of concurrent OSS requests / decoded chunks in flight.
+    // (spectraChunkCacheSize chunks, ~1MB each) + in-flight map bound memory,
+    // and the worker pool bounds the number of concurrent requests / decoded
+    // chunks in flight.
     const cs = spectraMeta.chunk_grid.configuration.chunk_shape[0]!
 
     // chunk → the (region, pixel spectrum slice) reads it serves. A single
@@ -1393,10 +1367,10 @@ export class ZarrOssStore {
     binCount: number
   }> {
     if (this._dataMode !== 'processed') {
-      throw new Error('[ZarrOssStore] streamIonStatsProcessed only available in processed mode')
+      throw new Error('[ZarrStore] streamIonStatsProcessed only available in processed mode')
     }
     if (!this.intensityMeta || !this.offsetsMeta || !this.dataMzMeta) {
-      throw new Error('[ZarrOssStore] call init() first')
+      throw new Error('[ZarrStore] call init() first')
     }
     if (!masks.length) return { bins: [], binCount: 0 }
 

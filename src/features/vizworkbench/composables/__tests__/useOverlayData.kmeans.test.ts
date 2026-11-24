@@ -9,7 +9,7 @@ vi.mock('../useZarrIonImage', async () => {
   const { ref } = await import('vue')
   return { dataModeRef: ref(null) }
 })
-vi.mock('@/services/zarr/api/zarrAccessApi', () => ({ getZarrAccess: async () => ({}) }))
+vi.mock('@/services/zarr/api/zarrAccessApi', () => ({ getZarrUrl: async () => 'https://cdn.test/run.zarr/' }))
 vi.mock('@/services/clustering/clusteringZarrStore', () => ({
   ClusteringZarrStore: class {
     async init() {}

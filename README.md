@@ -28,7 +28,7 @@ SpatialXomics 是一个面向质谱成像（MSI）的 Web 数据管理与分析�
 | UI | Tailwind CSS v4、DaisyUI v5、reka-ui、离线 Iconify 图标子集 |
 | 可视化 | ECharts、Canvas、vue3-calendar-heatmap |
 | MSI / Zarr | 自研 Zarr v3 分块读取器、zstddec、`@zip.js/zip.js`、hash-wasm、ml-kmeans |
-| 网络与存储 | Axios、ali-oss（STS 临时凭证）、OPFS（助手会话） |
+| 网络与存储 | Axios、ali-oss（上传用 STS 临时凭证）、OPFS（助手会话） |
 | SXO-Harness | @deepseek-ai/cordis、AI SDK（`@ai-sdk/anthropic`）、comark、KaTeX、Shiki、Exa 联网搜索 |
 | 测试 | Vitest、Playwright |
 | 文档 | VitePress（中英文） |
@@ -55,7 +55,7 @@ src/
 │   └── workspace/               # 分析构建器和任务看板
 ├── i18n/                        # vue-i18n 实例与按命名空间拆分的语言包
 ├── router/                      # 路由与认证/管理员守卫
-├── services/                    # Zarr（含 OSS client）、聚类和 PubChem 服务
+├── services/                    # Zarr（含 HTTP 读取客户端）、聚类和 PubChem 服务
 ├── shared/                      # 跨业务共享的 API、认证、组件、配置和工具
 ├── views/                       # 路由页面
 └── workers/                     # 跨功能 Worker（上传 ZIP）；功能专用 Worker 与功能同目录

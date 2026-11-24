@@ -30,7 +30,7 @@ async function findVisualizableDatasetCard(page: Page): Promise<{ card: Locator;
 }
 
 /**
- * 真实下载（/mydatasets 与 /datasets 各跑一遍）：后端真实签发 + 浏览器真实访问 OSS，
+ * 真实下载（/mydatasets 与 /datasets 各跑一遍）：后端真实返回 CDN 直链 + 浏览器真实经 CDN 下载，
  * 只在 chromium 上跑。按钮、限流提示、资料校验这些前端行为在各浏览器上由
  * datasets.offline.spec.ts 确定地验证，这里不再重复，也不多耗账号的下载配额。
  */
@@ -55,7 +55,7 @@ async function expectRealDownloadStarts(page: Page, path: '/mydatasets' | '/data
   const cardName = (await card.locator('h3[aria-label^="Dataset name:"]').innerText()).replace('Dataset name: ', '').trim()
   expect(cardName).not.toBe('')
 
-  // 只验证下载已开始：不等文件下完，后面立刻取消，省 OSS 流量
+  // 只验证下载已开始：不等文件下完，后面立刻取消，省 CDN 流量
   const downloads = await startRawDownload(page, downloadBtns.nth(pick))
   test.skip(downloads === null, 'Account download quota exhausted (HTTP 403)')
   for (const download of downloads!) expect(download.suggestedFilename()).toContain(cardName)

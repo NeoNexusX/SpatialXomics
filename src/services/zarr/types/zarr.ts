@@ -1,34 +1,6 @@
 /**
- * Zarr OSS access types.
- *
- * Backend endpoint:
- *   GET /processes/{run_id}/zarr
- *
- * Returns an Alibaba Cloud OSS STS token + the zarr directory prefix.
- * The STS token is signed and issued by the backend; the frontend never
- * hardcodes it, and must never print the cleartext in logs.
+ * Domain types of the MassFlow MSI Zarr v1.1 store (see zarrStore.ts).
  */
-
-interface ZarrStsToken {
-  AccessKeyId: string
-  AccessKeySecret: string
-  SecurityToken: string
-  /** ISO 8601, e.g. "2026-06-02T09:06:20Z" */
-  Expiration: string
-}
-
-export interface ZarrAccessResponse {
-  /** OSS zarr directory prefix, e.g. "processed/run_45.zarr/" */
-  folder_path: string
-  bucket: string
-  /** OSS region, e.g. "cn-hangzhou" */
-  region: string
-  sts_token: ZarrStsToken
-  /** Token lifetime in seconds, as agreed with the backend. */
-  expires_in: number
-}
-
-// ── Zarr OSS store domain types ──
 
 export type DataMode = 'continuous' | 'processed'
 

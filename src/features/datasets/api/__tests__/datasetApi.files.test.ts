@@ -19,7 +19,6 @@ import {
   deleteFile,
   getDownloadMetadata,
   getDownloadRaw,
-  getDownloadRawNoauth,
   getFileMetadata,
   patchFileMetadata,
   rawConvertProcess,
@@ -90,16 +89,6 @@ describe('datasetApi file paths (public_id)', () => {
     expect(await patchFileMetadata(PID, patch)).toEqual(updated)
     expect(authPatch).toHaveBeenCalledWith(`/files/${PID}`, patch)
     expect(api.patch).not.toHaveBeenCalled()
-  })
-
-  it('switches to the anonymous client for public raw downloads', async () => {
-    anonGet.mockResolvedValue({ data: {} })
-
-    await getDownloadRaw(PID, true)
-    expect(anonGet).toHaveBeenCalledWith(`/files/${PID}/download_raw`)
-
-    await getDownloadRawNoauth(PID)
-    expect(anonGet).toHaveBeenCalledWith(`/files/${PID}/download_raw_noauth`)
   })
 
   it('creates processes with file_public_id and no numeric conversion', async () => {

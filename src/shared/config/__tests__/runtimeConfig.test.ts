@@ -22,7 +22,7 @@ describe('zarr tuning config', () => {
     await loadConfig()
 
     expect(getConfig().zarr).toEqual({
-      spectraChunkCacheSize: 100,
+      spectraChunkCacheSize: 20,
       spectraConcurrency: 16,
     })
   })
@@ -50,7 +50,7 @@ describe('zarr tuning config', () => {
     await loadConfig()
 
     expect(getConfig().zarr).toEqual({
-      spectraChunkCacheSize: 100,
+      spectraChunkCacheSize: 20,
       spectraConcurrency: 16,
     })
   })
