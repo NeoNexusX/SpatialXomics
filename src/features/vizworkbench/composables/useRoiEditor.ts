@@ -2,19 +2,34 @@ import { computed, reactive, shallowReactive, shallowRef, type Ref } from 'vue'
 import {
   intersectRoiMasks,
   isRoiContour,
+  isRoiDrawingTool,
   paintRoiShape,
   type DraftROI,
   type MaskOperation,
   type ROIContourType,
   type ROIPoint,
-  type ROIType,
+  type RoiTool,
+  type CollectKind,
 } from '@/features/vizworkbench/utils/roiMask'
 import { ROI_SHAPE_COLORS } from '@/features/vizworkbench/utils/regionPalette'
 import type { ConfirmedROI } from './useROI'
 import { buildRegionMask, type Region } from '@/features/vizworkbench/utils/region'
 
 type RegionSnapshot = Pick<Region, 'id' | 'label'> & { mask: Uint8Array }
-type Source = DraftROI | RegionSnapshot
+
+/** Pixels collected from the current image, labelled with what was collected. */
+export interface CollectSnapshot {
+  type: 'collect'
+  kind: CollectKind
+  label: string
+  mask: Uint8Array
+}
+
+type Source = DraftROI | RegionSnapshot | CollectSnapshot
+
+function isCollect(source: Source | undefined): source is CollectSnapshot {
+  return !!source && 'type' in source && source.type === 'collect'
+}
 
 interface Mark {
   source: Source
@@ -57,7 +72,7 @@ function useHistory<T>() {
 }
 
 export function useRoiEditor(width: Ref<number>, height: Ref<number>, runId: Ref<string>) {
-  const tool = shallowRef<ROIType | null>(null)
+  const tool = shallowRef<RoiTool | null>(null)
   const operation = shallowRef<MaskOperation>('union')
   const steps = useHistory<Step>()
   const contour = useHistory<Contour>()
@@ -72,14 +87,24 @@ export function useRoiEditor(width: Ref<number>, height: Ref<number>, runId: Ref
   const hasUnconfirmedShape = computed(() => hasPath.value || hasPendingShape.value)
   const pendingRegion = computed(() => {
     const source = pendingShape.value?.source
-    return source && 'mask' in source ? source : null
+    return source && 'id' in source ? source : null
   })
-  const canSelectRegion = computed(() => !hasUnconfirmedShape.value || pendingRegion.value !== null)
+  const pendingCollect = computed(() => {
+    const source = pendingShape.value?.source
+    return isCollect(source) ? source.kind : null
+  })
+  // A staged mask can be swapped for another one; a drawn shape is confirmed or discarded first.
+  const canSelectRegion = computed(() => {
+    const source = pendingShape.value?.source
+    return !hasUnconfirmedShape.value || (!!source && 'mask' in source)
+  })
   const hasDraft = computed(() => steps.entries.length > 0)
 
   const latestColor = computed(() => steps.latest.value?.color ?? null)
   const shapeMark = computed(() => pendingShape.value ?? steps.latest.value)
   const shapeColor = computed(() => shapeMark.value?.color ?? null)
+  // Collected masks are filled: their outline would trace every isolated pixel.
+  const shapeFill = computed(() => isCollect(shapeMark.value?.source))
   const contourColor = computed(() => contour.latest.value?.color ?? null)
   const currentColor = computed(
     () =>
@@ -151,6 +176,7 @@ export function useRoiEditor(width: Ref<number>, height: Ref<number>, runId: Ref
   )
   const canSave = computed(() => !hasUnconfirmedShape.value && previewCount.value > 0)
 
+  const drawing = computed(() => isRoiDrawingTool(tool.value))
   const editingPath = computed(() => !tool.value || isRoiContour(tool.value))
   const canUndo = computed(() => !hasPendingShape.value && (hasPath.value || hasDraft.value))
   const canRedoStep = computed(
@@ -172,8 +198,13 @@ export function useRoiEditor(width: Ref<number>, height: Ref<number>, runId: Ref
     const source = steps.latest.value?.source
     return steps.entries.length === 1 && source && 'type' in source ? source.type : 'composite'
   })
+  /** A lone collected mask names the ROI after its image; other drafts keep the default name. */
+  const label = computed(() => {
+    const source = steps.latest.value?.source
+    return steps.entries.length === 1 && isCollect(source) ? source.label : undefined
+  })
 
-  function selectTool(value: ROIType | null) {
+  function selectTool(value: RoiTool | null) {
     if (hasPendingShape.value) return
     if (isRoiContour(value)) {
       if (openPathType.value && value !== openPathType.value) return
@@ -268,16 +299,22 @@ export function useRoiEditor(width: Ref<number>, height: Ref<number>, runId: Ref
     operation.value = value
   }
 
+  function stageMask(source: RegionSnapshot | CollectSnapshot) {
+    pendingShape.value = { source, color: pendingShape.value?.color ?? takeColor() }
+  }
+
   function stageRegion(region: Region) {
     if (!canSelectRegion.value) return
     const mask = buildRegionMask([region], {
       runId: runId.value,
       shape: [height.value, width.value],
     })
-    if (!mask) return
-    pendingShape.value = {
-      source: { id: region.id, label: region.label, mask },
-      color: pendingShape.value?.color ?? takeColor(),
+    if (mask) stageMask({ id: region.id, label: region.label, mask })
+  }
+
+  function stageCollect(snapshot: CollectSnapshot) {
+    if (canSelectRegion.value && snapshot.mask.length === width.value * height.value) {
+      stageMask(snapshot)
     }
   }
 
@@ -293,17 +330,20 @@ export function useRoiEditor(width: Ref<number>, height: Ref<number>, runId: Ref
 
   return reactive({
     tool,
+    drawing,
     operation,
     path,
     hasPendingShape,
     hasUnconfirmedShape,
     pendingRegion,
+    pendingCollect,
     canSelectRegion,
     openPathType,
     hasDraft,
     previewMask,
     shapeMask,
     shapeColor,
+    shapeFill,
     latestColor,
     contourColor,
     nextColor,
@@ -320,6 +360,7 @@ export function useRoiEditor(width: Ref<number>, height: Ref<number>, runId: Ref
     editableBox,
     editableColor,
     type,
+    label,
     selectTool,
     selectOperation,
     stageShape,
@@ -329,6 +370,7 @@ export function useRoiEditor(width: Ref<number>, height: Ref<number>, runId: Ref
     confirmShape,
     discardShape,
     stageRegion,
+    stageCollect,
     undo,
     redo,
     reset,

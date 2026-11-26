@@ -4,7 +4,6 @@ import {
   buildMaskExport,
   crc32,
   importMask,
-  summarizeImportedMask,
   type EmbeddedMaskMeta,
   type MaskExportMeta,
 } from '../maskExport'
@@ -229,40 +228,5 @@ describe('importMask', () => {
         expectedDatasetName: 'another_dataset',
       }),
     ).rejects.toThrow('does not match current dataset')
-  })
-})
-
-describe('summarizeImportedMask', () => {
-  it('counts pixels and computes stats over the masked matrix values', async () => {
-    const exported = await buildMaskExport(maskOf(['010', '111']), 'csv', META)
-    const result = await importMask(new File([exported.bytes], exported.filename), {
-      expectedShape: [2, 3],
-    })
-    // masked values: 20, 40, 50, 60 → mean 42.5, std √218.75
-    const summary = summarizeImportedMask(
-      result,
-      'colon_mask.csv',
-      new Float32Array([10, 20, 30, 40, 50, 60]),
-    )
-
-    expect(summary.name).toBe('colon_mask.csv')
-    expect(summary.format).toBe('csv')
-    expect(summary.pixelCount).toBe(4)
-    expect(summary.stats?.mean).toBeCloseTo(42.5)
-    expect(summary.stats?.std).toBeCloseTo(Math.sqrt(218.75))
-    expect(summary.stats?.min).toBe(20)
-    expect(summary.stats?.max).toBe(60)
-  })
-
-  it('returns null stats when the matrix is missing or size-mismatched', async () => {
-    const exported = await buildMaskExport(maskOf(['010', '111']), 'csv', META)
-    const result = await importMask(new File([exported.bytes], exported.filename), {
-      expectedShape: [2, 3],
-    })
-
-    expect(summarizeImportedMask(result, 'm.csv', null).stats).toBeNull()
-    expect(summarizeImportedMask(result, 'm.csv', new Float32Array(3)).stats).toBeNull()
-    // 像素数来自掩膜本身，始终可得
-    expect(summarizeImportedMask(result, 'm.csv', null).pixelCount).toBe(4)
   })
 })

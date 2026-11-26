@@ -200,6 +200,7 @@ export class ZarrStore {
 
   // Fully loaded small arrays (cached after first load)
   private coordinates = new LoadOnce<Uint32Array>(() => this._disposed)
+  private acquiredRaster = new LoadOnce<Uint8Array>(() => this._disposed)
   private mzAxis: Float64Array | null = null
   private offsets = new LoadOnce<number[]>(() => this._disposed)
   private spectraOffsets = new LoadOnce<number[]>(() => this._disposed)
@@ -259,6 +260,7 @@ export class ZarrStore {
     this.inFlightMz.clear()
     this.inFlightSpectra.clear()
     this.coordinates.clear()
+    this.acquiredRaster.clear()
     this.mzAxis = null
     this.offsets.clear()
     this.spectraOffsets.clear()
@@ -414,6 +416,25 @@ export class ZarrStore {
     return this.coordinates.get(async () =>
       new Uint32Array(await this.fetchArrayFull('axes/coordinates', meta!)),
     )
+  }
+
+  /**
+   * Row-major H×W raster of the acquired grid cells (1 = the cell has a
+   * spectrum). Ion and TIC images hold 0 both where an ion is missing and where
+   * nothing was acquired, so only the coordinates tell the two apart.
+   */
+  async loadAcquiredRaster(): Promise<Uint8Array> {
+    return this.acquiredRaster.get(async () => {
+      const coords = await this.loadCoordinates()
+      const [height, width] = this.spatialShape
+      const raster = new Uint8Array(height * width)
+      for (let j = 0; j < coords.length / 3; j++) {
+        const col = coords[j * 3]! - this.coordinateBase
+        const row = coords[j * 3 + 1]! - this.coordinateBase
+        if (row >= 0 && row < height && col >= 0 && col < width) raster[row * width + col] = 1
+      }
+      return raster
+    })
   }
 
   /** Load shared m/z axis (continuous mode only). Returns null for processed mode. */

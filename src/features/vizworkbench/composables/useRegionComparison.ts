@@ -1,9 +1,8 @@
 /**
  * Region comparison composable.
  *
- * Compares two region GROUPS (each a non-empty set of KMeans clusters, ROIs,
- * and/or file-imported masks) by OR-combining the member masks into one
- * raster per side, then
+ * Compares two region GROUPS (each a non-empty set of KMeans clusters and/or
+ * ROIs) by OR-combining the member masks into one raster per side, then
  * streaming through the entire intensity array once and accumulating per-ion
  * statistics (sum, sum-of-squares, non-zero count) for each side. From these
  * it derives mean intensity, detection rate, both ratios (mean and detection),
@@ -418,7 +417,7 @@ export function useRegionComparison(deps: {
 
   /**
    * Build thumbnail-ready masks for the currently selected A/B group members.
-   * Reuses buildRaster (kmeans labels / ROI masks / imported masks -> Uint8Array
+   * Reuses buildRaster (kmeans labels / ROI masks -> Uint8Array
    * grid) so the preview works the moment a region is selected, before any
    * comparison run. Returns null when the zarr store (grid shape) isn't
    * available yet.
@@ -466,10 +465,6 @@ export function useRegionComparison(deps: {
       : lastRegionIds.includes(`roi:${id}`)
   }
 
-  function involvesImportedMask(id: string): boolean {
-    return lastRegionIds.includes(`imported:${id}`)
-  }
-
   function reset() {
     currentRun++
     results.value = []
@@ -502,7 +497,6 @@ export function useRegionComparison(deps: {
     cancel,
     reset,
     involvesRoi,
-    involvesImportedMask,
     selectMz,
     buildThumbnailRegions,
   }

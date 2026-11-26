@@ -6,7 +6,7 @@ import {
   paintRoiShape,
   summarizeRoiMask,
   type DraftROI,
-  type ROIType,
+  type RoiTool,
 } from '@/features/vizworkbench/utils/roiMask'
 
 export type { DraftROI, ROIPoint, ROIType } from '@/features/vizworkbench/utils/roiMask'
@@ -24,7 +24,8 @@ interface ROIStats {
 
 export interface ConfirmedROI {
   id: string
-  type: ROIType | 'composite'
+  /** Drawing or collect tool, a multi-step draft ('composite'), or an imported mask file. */
+  type: RoiTool | 'composite' | 'imported'
   label: string
   color: string
   mask: Uint8Array
@@ -76,7 +77,7 @@ export function useROI() {
   }
 
   function confirmMask(
-    matrix: Float32Array,
+    matrix: Float32Array | null,
     w: number,
     h: number,
     raster: Uint8Array,

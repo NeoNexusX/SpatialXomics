@@ -1,9 +1,13 @@
-import { computed, ref, watch, onBeforeUnmount, type Ref } from 'vue'
+import { computed, ref, shallowRef, watch, onBeforeUnmount, type Ref } from 'vue'
 import { getZarrUrl } from '@/services/zarr/api/zarrAccessApi'
 import { createClustering } from '@/services/clustering/api/clusteringApi'
 import type { ClusteringTaskResponse, UmapEmbedding } from '@/services/clustering/types/clustering'
 import { ClusteringZarrStore } from '@/services/clustering/clusteringZarrStore'
-import { computeKmeansFromUmap, preloadKmeans } from '@/features/vizworkbench/utils/kmeans'
+import {
+  computeKmeansFromUmap,
+  embeddingWithin,
+  preloadKmeans,
+} from '@/features/vizworkbench/utils/kmeans'
 import type { Region, RegionGrid } from '@/features/vizworkbench/utils/region'
 import { kmeansColor, rgbCss } from '@/features/vizworkbench/utils/regionPalette'
 import { dataModeRef } from '@/features/vizworkbench/composables/useZarrIonImage'
@@ -22,6 +26,12 @@ export interface KmeansCluster {
   color: [number, number, number]
   /** Number of foreground pixels in this cluster. */
   count: number
+}
+
+/** Restricts a KMeans run to the pixels set in `mask` (row-major, ion-image grid). */
+export interface KmeansScope {
+  mask: Uint8Array
+  label: string
 }
 
 /**
@@ -118,6 +128,8 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
   const kmeansK = ref<number | null>(null)
   /** True while a local KMeans computation is in flight. */
   const kmeansComputing = ref(false)
+  /** The region the current result was restricted to (null = every tissue pixel). */
+  const kmeansScope = shallowRef<KmeansScope | null>(null)
   /** Selected cluster ids: drives both the overlay mask and the export mask.
    *  null = show all (default); an empty Set = explicitly hide all. */
   const selectedKmeansIds = ref<Set<number> | null>(null)
@@ -200,6 +212,7 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     kmeansClusters.value = []
     kmeansLabelsAvailable.value = false
     kmeansK.value = null
+    kmeansScope.value = null
     selectedKmeansIds.value = null
     clusteringReady.value = false
   }
@@ -429,10 +442,11 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
   /**
    * Run KMeans locally with a user-chosen k over the raw float32 UMAP
    * embedding, cache the resulting labels + rendered RGB, and show the KMeans
-   * overlay. Deterministic (fixed seed): same k → same clusters. Re-running
-   * with a different k replaces the previous result.
+   * overlay. Deterministic (fixed seed): same k and scope → same clusters.
+   * Re-running with a different k or scope replaces the previous result. With
+   * a scope, only its pixels are clustered; the rest stay unlabelled.
    */
-  async function runKmeans(k: number): Promise<boolean> {
+  async function runKmeans(k: number, scope: KmeansScope | null = null): Promise<boolean> {
     if (kmeansComputing.value) return false
     const forRun = runId.value
     const request = ++kmeansRequest
@@ -442,7 +456,14 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
       if (!ok || request !== kmeansRequest || forRun !== runId.value || !umapEmbedding || !dims)
         return false
       const { height, width } = dims
-      const result = await computeKmeansFromUmap(umapEmbedding, height, width, k, 42, 30)
+      if (scope && scope.mask.length !== height * width)
+        throw new Error('[useOverlayData] the ROI grid does not match the UMAP grid')
+      const input = scope ? embeddingWithin(umapEmbedding, scope.mask, width) : umapEmbedding
+      if (scope && input.count < 2) {
+        showToast(t('vizworkbench.overlay.kmeansScopeTooSmall'), 'warning')
+        return false
+      }
+      const result = await computeKmeansFromUmap(input, height, width, k, 42, 30)
       if (request !== kmeansRequest || forRun !== runId.value) return false
       kmeansRgb = result.rgb
       kmeansLabels = result.labels
@@ -452,6 +473,7 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
       kmeansLabelsAvailable.value = true
       selectedKmeansIds.value = null // default: show all clusters
       kmeansK.value = k
+      kmeansScope.value = scope
       // Show the result (mutually exclusive with UMAP).
       kmeansVisible.value = true
       umapVisible.value = false
@@ -657,6 +679,8 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     kmeansLabelsAvailable,
     /** The k of the current KMeans result (null = never run). */
     kmeansK,
+    /** The region the current KMeans result was restricted to (null = all pixels). */
+    kmeansScope,
     /** True while a local KMeans computation is in flight. */
     kmeansComputing,
     /** Selected cluster ids (null = all); drives overlay + export mask. */

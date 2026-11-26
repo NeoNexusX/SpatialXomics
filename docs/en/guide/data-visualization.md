@@ -86,16 +86,14 @@ Gamma correction is always available; UMAP / KMeans clustering is only available
 
 ### Mask Import & Export
 
-Export ROI masks and KMeans clusters as a binary mask file, or import one and use it as a display filter.
+Export ROI masks and KMeans clusters as a binary mask file, or import mask files as ROIs.
 
 | Control | Description |
 |---|---|
 | **Format** | Choose the mask file format. |
 | **ROI masks / KMeans clusters** | Pick which regions to include. Checked regions are merged into a single binary mask. |
 | **Export mask** | Download one mask file. Each file embeds the dataset name, shape, pixel size, and a SHA-256 digest over the pixel payload. |
-| **Import mask** | Load a mask and apply it as a filter on the ion image. |
-| **Apply Mask / Show Original** | Re-apply the imported mask, or suspend it and show the full image (appears after importing a mask). |
-| **Clear imported mask** | Remove the imported mask. |
+| **Import mask** | Load mask files. Each one becomes an entry in the ROI list (tagged “Imported”) and works like a drawn ROI. |
 
 ![Mask import & export](https://cdn.neonexus.top/docs/20261008182213629.jpg_view)
 

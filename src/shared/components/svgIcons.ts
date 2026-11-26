@@ -39,6 +39,7 @@ export const ICON_MAP = {
   square: 'lucide:square',
   ellipse: 'lucide:ellipse',
   waypoints: 'lucide:waypoints',
+  'grid-2x2-check': 'lucide:grid-2x2-check',
   upload: 'heroicons:arrow-up-tray',
   download: 'heroicons:arrow-down-tray',
   refresh: 'heroicons:arrow-path',

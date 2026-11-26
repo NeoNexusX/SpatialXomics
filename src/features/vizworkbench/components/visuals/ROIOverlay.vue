@@ -3,8 +3,8 @@
     ref="surface"
     data-testid="roi-overlay"
     class="absolute inset-0 overflow-hidden"
-    :class="editor.tool ? 'cursor-crosshair touch-none' : 'pointer-events-none'"
-    :tabindex="editor.tool ? 0 : -1"
+    :class="editor.drawing ? 'cursor-crosshair touch-none' : 'pointer-events-none'"
+    :tabindex="editor.drawing ? 0 : -1"
     :aria-label="$t('vizworkbench.roi.tools')"
     @pointerdown="start"
     @pointermove="move"
@@ -14,6 +14,17 @@
     @lostpointercapture="cancelPointer"
     @keydown="onKeydown"
   >
+    <canvas
+      v-if="fill"
+      ref="fillCanvas"
+      data-testid="roi-shape-fill"
+      class="absolute pointer-events-none"
+      style="image-rendering: pixelated"
+      :style="imageStyle"
+      :width="imageWidth"
+      :height="imageHeight"
+      aria-hidden="true"
+    />
     <svg
       v-if="outline || shapeOutline"
       class="absolute pointer-events-none overflow-visible"
@@ -121,10 +132,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import type { RoiEditor } from '@/features/vizworkbench/composables/useRoiEditor'
+import { hexToRgb } from '@/features/vizworkbench/utils/regionPalette'
 import {
   isRoiContour,
+  isRoiDrawingTool,
   roiBoxBounds,
   roiMaskOutline,
   type ROIBox,
@@ -172,8 +185,43 @@ const outline = computed(() => {
 })
 const shapeOutline = computed(() => {
   const mask = props.editor.shapeMask
-  return mask ? roiMaskOutline(mask, props.imageWidth, props.imageHeight) : ''
+  return mask && !props.editor.shapeFill
+    ? roiMaskOutline(mask, props.imageWidth, props.imageHeight)
+    : ''
 })
+
+const fillCanvas = useTemplateRef<HTMLCanvasElement>('fillCanvas')
+// Saved ROIs default to 0.4, which barely shows over viridis or in the darker shape colors.
+const FILL_OPACITY = 0.6
+/** Collected masks are painted instead of outlined. */
+const fill = computed(() => {
+  const { shapeFill, shapeMask, shapeColor } = props.editor
+  const rgb = shapeFill && shapeColor ? hexToRgb(shapeColor) : null
+  return rgb && shapeMask?.length === props.imageWidth * props.imageHeight
+    ? { mask: shapeMask, rgb }
+    : null
+})
+
+watch(
+  [fill, fillCanvas],
+  ([value, canvas]) => {
+    const context = value && canvas?.getContext('2d')
+    if (!value || !context) return
+    const image = context.createImageData(props.imageWidth, props.imageHeight)
+    const alpha = Math.round(FILL_OPACITY * 255)
+    const { mask, rgb } = value
+    for (let i = 0; i < mask.length; i++) {
+      if (!mask[i]) continue
+      const offset = i * 4
+      image.data[offset] = rgb.r
+      image.data[offset + 1] = rgb.g
+      image.data[offset + 2] = rgb.b
+      image.data[offset + 3] = alpha
+    }
+    context.putImageData(image, 0, 0)
+  },
+  { flush: 'post' },
+)
 const pathColor = computed(
   () => props.editor.contourColor ?? props.editor.gestureColor ?? props.editor.nextColor,
 )
@@ -230,7 +278,7 @@ function point(event: PointerEvent, clip = false): ROIPoint | null {
 
 function start(event: PointerEvent, handle?: Handle) {
   if (
-    !props.editor.tool ||
+    !props.editor.drawing ||
     event.button !== 0 ||
     gesture ||
     (props.editor.hasPendingShape && !handle)
@@ -341,7 +389,7 @@ function finish(event: PointerEvent) {
     } else if (tool === 'freehand' && stroke.value.length > 1) {
       props.editor.addSegment([...stroke.value])
     }
-  } else if (tool && dragBox.value) {
+  } else if (isRoiDrawingTool(tool) && dragBox.value) {
     const shape = { type: tool, rect: dragBox.value, path: [] }
     if (handle) props.editor.replaceBox(shape)
     else props.editor.stageShape(shape)

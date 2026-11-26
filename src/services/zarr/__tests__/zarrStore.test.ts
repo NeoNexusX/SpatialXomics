@@ -193,6 +193,25 @@ describe('ZarrStore', () => {
     expect(await store.findPixelByPosition(1, 1)).toBe(4)
   })
 
+  it('rasterizes the acquired cells, leaving background and out-of-grid coordinates out', async () => {
+    putContinuous()
+    const store = await openStore()
+    // 2×3 网格，(3, 2) 没有采集
+    expect(Array.from(await store.loadAcquiredRaster())).toEqual([1, 1, 1, 1, 1, 0])
+
+    // 第 3 个像素的坐标落在网格外（x = 4），不占任何格子
+    const coords = COORDS.map(([x, y], i) => (i === 2 ? [4, y] : [x, y]))
+    putArray(
+      'axes/coordinates',
+      'uint32',
+      [N_PIXELS, 3],
+      [N_PIXELS, 3],
+      Uint32Array.from(coords.flatMap(([x, y]) => [x!, y!, 1])),
+    )
+    const shifted = await openStore()
+    expect(Array.from(await shifted.loadAcquiredRaster())).toEqual([1, 1, 0, 1, 1, 0])
+  })
+
   it('requires the spectra group for continuous pixel spectra', async () => {
     putContinuous({ spectra: false })
     const store = await openStore()

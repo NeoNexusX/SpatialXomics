@@ -60,61 +60,6 @@
         {{ $t('vizworkbench.mask.import') }}
       </button>
     </div>
-
-    <div v-if="importedMasks?.length" class="mt-3 border-t border-base-content/15 pt-3">
-      <h3 class="kawaru-text-75 font-semibold text-base-content mb-2">
-        {{ $t('vizworkbench.mask.imported') }}
-        <span class="font-mono font-normal text-base-content/60"
-          >{{ activeCount }}/{{ importedMasks.length }}</span
-        >
-      </h3>
-      <div class="space-y-2 max-h-64 overflow-y-auto scrollbar-thin [scrollbar-gutter:stable]">
-        <RegionSummaryCard
-          v-for="m in importedMasks"
-          :key="m.id"
-          :color="m.color"
-          :stats="m.summary.stats"
-          dashed
-        >
-          <div class="flex items-center gap-1.5">
-            <label
-              class="flex items-center gap-1.5 min-w-0 cursor-pointer select-none"
-              :title="
-                m.active
-                  ? $t('vizworkbench.mask.showOriginalHint')
-                  : $t('vizworkbench.mask.applyMaskHint')
-              "
-            >
-              <input
-                type="checkbox"
-                class="checkbox checkbox-xs checkbox-primary shrink-0"
-                :checked="m.active"
-                @change="emit('toggle-imported-mask', m.id)"
-              />
-              <span class="font-semibold truncate" :style="{ color: m.color }" :title="m.name">
-                {{ m.name }}
-              </span>
-            </label>
-            <span
-              class="card-tag shrink-0 rounded border border-base-content/20 px-1 kawaru-text-56 text-base-content/60 uppercase"
-              :class="{ 'opacity-50': !m.active }"
-              >{{ m.format }}</span
-            >
-            <span class="ml-auto shrink-0 font-mono kawaru-text-62 text-base-content/60">{{
-              $t('vizworkbench.roi.pixelCount', { n: m.summary.pixelCount.toLocaleString('en-US') })
-            }}</span>
-            <button
-              type="button"
-              class="shrink-0 text-base-content hover:text-error"
-              :title="$t('vizworkbench.mask.removeImport')"
-              @click="emit('remove-imported-mask', m.id)"
-            >
-              <SvgIcon type="trash" />
-            </button>
-          </div>
-        </RegionSummaryCard>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -122,8 +67,6 @@
 import { computed, shallowRef, useTemplateRef } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 import SectionHelp from '@/features/vizworkbench/components/SectionHelp.vue'
-import RegionSummaryCard from './RegionSummaryCard.vue'
-import type { ImportedMask } from '@/features/vizworkbench/composables/useImportedMasks'
 import type { ConfirmedROI } from '@/features/vizworkbench/composables/useROI'
 import type { KmeansCluster } from '@/features/vizworkbench/composables/useOverlayData'
 import type { ExportFormat, MaskExportPayload } from '@/features/vizworkbench/utils/maskExport'
@@ -138,14 +81,12 @@ const props = defineProps<{
   kmeansVisible: boolean
   /** Shared KMeans selection (null = all) - the same state the overlay draws. */
   selectedKmeansIds: Set<number> | null
-  importedMasks?: ImportedMask[]
 }>()
 
 const emit = defineEmits<{
   (e: 'export-masks', payload: MaskExportPayload): void
+  /** Picked mask files; the parent adds each valid one as an ROI. */
   (e: 'import-masks', files: File[]): void
-  (e: 'remove-imported-mask', id: string): void
-  (e: 'toggle-imported-mask', id: string): void
 }>()
 
 const FORMATS: { value: ExportFormat; label: string }[] = [
@@ -155,7 +96,6 @@ const FORMATS: { value: ExportFormat; label: string }[] = [
 
 const format = shallowRef<ExportFormat>('npz')
 const importInput = useTemplateRef<HTMLInputElement>('importInput')
-const activeCount = computed(() => props.importedMasks?.filter((mask) => mask.active).length ?? 0)
 
 // Export what the image shows: highlighted ROIs, plus the drawn clusters while
 // KMeans is visible. Filter the ROI list (never read Set.size) - the selection

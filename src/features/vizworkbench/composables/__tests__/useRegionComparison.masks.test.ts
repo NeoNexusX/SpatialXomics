@@ -4,10 +4,10 @@ import { mzAxisRef, resetZarrSharedState, setZarrStore } from '@/services/zarr/z
 import type { Region } from '@/features/vizworkbench/utils/region'
 import { useRegionComparison } from '../useRegionComparison'
 
-function makeImportedMask(id: string, name: string): Region {
+function makeRoi(id: string, name: string): Region {
   return {
-    id: `imported:${id}`,
-    kind: 'imported',
+    id: `roi:${id}`,
+    kind: 'roi',
     sourceId: id,
     label: name,
     pixelCount: 1,
@@ -17,12 +17,12 @@ function makeImportedMask(id: string, name: string): Region {
   }
 }
 
-function setup(importedMasks: Region[]) {
+function setup(rois: Region[]) {
   let api!: ReturnType<typeof useRegionComparison>
   // onScopeDispose 在无活动 scope 时会告警，套一层 effectScope 消掉
   effectScope().run(() => {
     api = useRegionComparison({
-      regions: ref(importedMasks),
+      regions: ref(rois),
       runId: ref('test-run'),
       dataMode: ref(null),
       onSelectMzIndex: () => {},
@@ -31,40 +31,31 @@ function setup(importedMasks: Region[]) {
   return api
 }
 
-describe('useRegionComparison · imported masks', () => {
-  it('lists every imported mask as a selectable region', () => {
-    const api = setup([
-      makeImportedMask('import-1', 'tumor.npz'),
-      makeImportedMask('import-2', 'normal.npz'),
-    ])
+describe('useRegionComparison · ROI masks', () => {
+  it('lists every ROI as a selectable region', () => {
+    const api = setup([makeRoi('roi-1', 'tumor'), makeRoi('roi-2', 'normal')])
 
     const regions = api.availableRegions.value
-    const imported = regions.filter((r) => r.kind === 'imported')
-    expect(imported.map((r) => r.id)).toEqual(['imported:import-1', 'imported:import-2'])
-    expect(imported.map((r) => r.label)).toEqual(['tumor.npz', 'normal.npz'])
-    expect(imported.every((r) => r.color === 'rgb(86,180,233)')).toBe(true)
+    const rois = regions.filter((r) => r.kind === 'roi')
+    expect(rois.map((r) => r.id)).toEqual(['roi:roi-1', 'roi:roi-2'])
+    expect(rois.map((r) => r.label)).toEqual(['tumor', 'normal'])
+    expect(rois.every((r) => r.color === 'rgb(86,180,233)')).toBe(true)
   })
 
-  it('allows comparing one imported mask against another', () => {
-    const api = setup([
-      makeImportedMask('import-1', 'tumor.npz'),
-      makeImportedMask('import-2', 'normal.npz'),
-    ])
+  it('allows comparing one ROI against another', () => {
+    const api = setup([makeRoi('roi-1', 'tumor'), makeRoi('roi-2', 'normal')])
 
-    api.regionAIds.value = ['imported:import-1']
-    api.regionBIds.value = ['imported:import-2']
+    api.regionAIds.value = ['roi:roi-1']
+    api.regionBIds.value = ['roi:roi-2']
     expect(api.canCompare.value).toBe(true)
 
     // 同一区域不能同时进 A/B 两组（与 ROI / KMeans 一致的规则）
-    api.regionBIds.value = ['imported:import-1']
+    api.regionBIds.value = ['roi:roi-1']
     expect(api.canCompare.value).toBe(false)
   })
 
-  it('drops selections of removed masks instead of keeping stale ids', async () => {
-    const masks = ref<Region[]>([
-      makeImportedMask('import-1', 'tumor.npz'),
-      makeImportedMask('import-2', 'normal.npz'),
-    ])
+  it('drops selections of removed ROIs instead of keeping stale ids', async () => {
+    const masks = ref<Region[]>([makeRoi('roi-1', 'tumor'), makeRoi('roi-2', 'normal')])
     let api!: ReturnType<typeof useRegionComparison>
     effectScope().run(() => {
       api = useRegionComparison({
@@ -75,14 +66,14 @@ describe('useRegionComparison · imported masks', () => {
       })
     })
 
-    api.regionAIds.value = ['imported:import-1']
-    api.regionBIds.value = ['imported:import-2']
+    api.regionAIds.value = ['roi:roi-1']
+    api.regionBIds.value = ['roi:roi-2']
 
-    // 删除一个掩膜后，指向它的选择应被清理；未删除的保留
-    masks.value = masks.value.filter((m) => m.id !== 'imported:import-1')
+    // 删除一个 ROI 后，指向它的选择应被清理；未删除的保留
+    masks.value = masks.value.filter((m) => m.id !== 'roi:roi-1')
     await nextTick()
     expect(api.regionAIds.value).toEqual([])
-    expect(api.regionBIds.value).toEqual(['imported:import-2'])
+    expect(api.regionBIds.value).toEqual(['roi:roi-2'])
   })
 
   describe('cancelling', () => {
@@ -108,9 +99,9 @@ describe('useRegionComparison · imported masks', () => {
         ) => new Promise((finish) => scans.push({ finish, cancelled })),
       } as never)
       mzAxisRef.value = Float64Array.of(100)
-      const api = setup([makeImportedMask('a', 'A'), makeImportedMask('b', 'B')])
-      api.regionAIds.value = ['imported:a']
-      api.regionBIds.value = ['imported:b']
+      const api = setup([makeRoi('a', 'A'), makeRoi('b', 'B')])
+      api.regionAIds.value = ['roi:a']
+      api.regionBIds.value = ['roi:b']
 
       const abandoned = api.compare()
       await vi.waitFor(() => expect(scans).toHaveLength(1))

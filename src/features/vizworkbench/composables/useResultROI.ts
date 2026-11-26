@@ -2,6 +2,7 @@ import { computed, ref, watch, type Ref } from 'vue'
 import { DEFAULT_ROI_OPACITY, useROI } from '@/features/vizworkbench/composables/useROI'
 import { useRoiEditor } from './useRoiEditor'
 import { hexToRgb } from '@/features/vizworkbench/utils/regionPalette'
+import { importMask } from '@/features/vizworkbench/utils/maskExport'
 
 export function useResultROI(
   ionMatrix: Ref<Float32Array | null>,
@@ -91,12 +92,36 @@ export function useResultROI(
   })
 
   function roiConfirm() {
-    if (!ionMatrix.value || !editor.canSave || !editor.previewMask) return
-    if (
-      confirmMask(ionMatrix.value, ionCols.value, ionRows.value, editor.previewMask, editor.type)
-    ) {
+    const matrix = ionMatrix.value
+    const mask = editor.previewMask
+    if (!matrix || !editor.canSave || !mask) return
+    if (confirmMask(matrix, ionCols.value, ionRows.value, mask, editor.type, editor.label)) {
       editor.reset()
     }
+  }
+
+  /**
+   * Add mask files exported by this app as ROIs named after the file. Each file
+   * is independent: a bad one is reported without blocking the rest.
+   */
+  async function importRois(files: File[], datasetName: string) {
+    const imported: string[] = []
+    const failed: { name: string; error: string }[] = []
+    for (const file of files) {
+      try {
+        const { mask } = await importMask(file, {
+          expectedShape: [ionRows.value, ionCols.value],
+          expectedDatasetName: datasetName,
+        })
+        const label = file.name.replace(/\.(npz|npy|csv)$/i, '') || file.name
+        if (!confirmMask(ionMatrix.value, ionCols.value, ionRows.value, mask, 'imported', label))
+          throw new Error('Invalid mask file: the mask selects no pixels')
+        imported.push(file.name)
+      } catch (err) {
+        failed.push({ name: file.name, error: err instanceof Error ? err.message : String(err) })
+      }
+    }
+    return { imported, failed }
   }
 
   function roiClearAll() {
@@ -124,6 +149,7 @@ export function useResultROI(
     roiUnionMask,
     roiHighlightOverlay,
     roiConfirm,
+    importRois,
     roiDelete,
     roiClearAll,
   }

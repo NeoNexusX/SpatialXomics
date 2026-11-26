@@ -54,6 +54,9 @@ vi.mock('@/services/zarr/zarrStore', async (importOriginal) => {
     async getSummedIonImageByMzIndices() {
       return new Float32Array(4)
     }
+    async loadAcquiredRaster() {
+      return new Uint8Array(4).fill(1)
+    }
     async loadMeanSpectrum() {
       return mocks.meanSpectrum ?? new Float32Array([1, 0, 3])
     }

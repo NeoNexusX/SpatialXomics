@@ -13,7 +13,7 @@ interface RegionIdentity {
 
 export type Region = RegionIdentity &
   (
-    | { kind: 'roi' | 'imported'; sourceId: string; mask: Uint8Array }
+    | { kind: 'roi'; sourceId: string; mask: Uint8Array }
     | { kind: 'kmeans'; clusterId: number; labels: Int32Array }
   )
 

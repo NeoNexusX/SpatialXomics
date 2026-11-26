@@ -1,9 +1,23 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { useOverlayData } from '../useOverlayData'
+import type { KmeansEmbeddingInput } from '@/features/vizworkbench/utils/kmeans'
 
-const kmeans = vi.hoisted(() => ({ finish: null as ((result: unknown) => void) | null }))
+// UMAP grid is 1 × width; `points` are the embedded (x, y) cells.
+const kmeans = vi.hoisted(() => ({
+  finish: null as ((result: unknown) => void) | null,
+  input: null as KmeansEmbeddingInput | null,
+  width: 2,
+  points: [[0, 0]] as [number, number][],
+}))
+
+beforeEach(() => {
+  kmeans.finish = null
+  kmeans.input = null
+  kmeans.width = 2
+  kmeans.points = [[0, 0]]
+})
 
 vi.mock('../useZarrIonImage', async () => {
   const { ref } = await import('vue')
@@ -16,21 +30,26 @@ vi.mock('@/services/clustering/clusteringZarrStore', () => ({
   ClusteringZarrStore: class {
     async init() {}
     async loadUmap() {
+      const { width, points } = kmeans
       return {
-        image: { data: new Uint8Array(6), height: 1, width: 2, channels: 3 },
+        image: { data: new Uint8Array(width * 3), height: 1, width, channels: 3 },
         embedding: {
-          coordinates: new Uint32Array(2),
-          scaledEmbedding: new Float32Array(3),
-          count: 1,
+          coordinates: Uint32Array.from(points.flat()),
+          scaledEmbedding: new Float32Array(points.length * 3),
+          count: points.length,
         },
       }
     }
     dispose() {}
   },
 }))
-vi.mock('@/features/vizworkbench/utils/kmeans', () => ({
+vi.mock('@/features/vizworkbench/utils/kmeans', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/vizworkbench/utils/kmeans')>()),
   preloadKmeans: () => {},
-  computeKmeansFromUmap: () => new Promise((finish) => (kmeans.finish = finish)),
+  computeKmeansFromUmap: (input: KmeansEmbeddingInput) => {
+    kmeans.input = input
+    return new Promise((finish) => (kmeans.finish = finish))
+  },
 }))
 
 describe('useOverlayData local KMeans', () => {
@@ -95,5 +114,42 @@ describe('useOverlayData local KMeans', () => {
     expect(api.kmeansLabelsAvailable.value).toBe(false)
     expect(api.kmeansClusters.value).toEqual([])
     expect(api.kmeansVisible.value).toBe(false)
+  })
+
+  it('clusters only the points inside the chosen ROI and remembers that scope', async () => {
+    kmeans.width = 3
+    kmeans.points = [
+      [0, 0],
+      [1, 0],
+      [2, 0],
+    ]
+    let api!: ReturnType<typeof useOverlayData>
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          api = useOverlayData(ref('run-a'), ref(1), ref(3))
+          return () => null
+        },
+      }),
+    )
+    try {
+      // A single point cannot be clustered, so the worker is never asked.
+      expect(await api.runKmeans(2, { mask: Uint8Array.of(1, 0, 0), label: 'ROI 1' })).toBe(false)
+      expect(kmeans.input).toBeNull()
+      expect(api.kmeansScope.value).toBeNull()
+
+      const scope = { mask: Uint8Array.of(0, 1, 1), label: 'ROI 2' }
+      const running = api.runKmeans(2, scope)
+      await vi.waitFor(() => expect(kmeans.finish).not.toBeNull())
+      expect(kmeans.input!.count).toBe(2)
+      expect(Array.from(kmeans.input!.coordinates)).toEqual([1, 0, 2, 0])
+      kmeans.finish!({ rgb: new Uint8Array(9), labels: Int32Array.of(-1, 0, 1) })
+
+      expect(await running).toBe(true)
+      expect(api.kmeansScope.value).toBe(scope)
+      expect(api.kmeansClusters.value.map((cluster) => cluster.count)).toEqual([1, 1])
+    } finally {
+      wrapper.unmount()
+    }
   })
 })

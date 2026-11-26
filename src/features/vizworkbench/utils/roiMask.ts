@@ -1,5 +1,10 @@
 export type ROIContourType = 'polygon' | 'freehand'
 export type ROIType = 'rectangle' | 'ellipse' | ROIContourType
+/** Drawing tools plus collecting the current ion image's pixels by signal. */
+export type RoiTool = ROIType | 'collect'
+export type SignalPresence = 'present' | 'absent'
+/** What the collect tool selects: acquired pixels with or without signal, or all of them. */
+export type CollectKind = SignalPresence | 'all'
 export type MaskOperation = 'union' | 'difference' | 'intersection'
 
 export interface ROIPoint {
@@ -20,8 +25,47 @@ export interface DraftROI {
   path: ROIPoint[]
 }
 
-export function isRoiContour(type: ROIType | null): type is ROIContourType {
+export function isRoiContour(type: RoiTool | null): type is ROIContourType {
   return type === 'polygon' || type === 'freehand'
+}
+
+/** Drawing tools take pointer input on the image; collecting is driven from the panel. */
+export function isRoiDrawingTool(tool: RoiTool | null): tool is ROIType {
+  return !!tool && tool !== 'collect'
+}
+
+/** Signal is a finite intensity above zero, i.e. a pixel the ion image paints. */
+function hasSignal(value: number) {
+  return Number.isFinite(value) && value > 0
+}
+
+/**
+ * Select acquired pixels with or without signal. Ion images hold 0 in cells that
+ * were never acquired, so `acquired` keeps those cells out of both results.
+ */
+export function signalMask(
+  matrix: Float32Array,
+  acquired: Uint8Array,
+  presence: SignalPresence,
+): Uint8Array {
+  const mask = new Uint8Array(acquired.length)
+  const present = presence === 'present'
+  for (let i = 0; i < mask.length; i++) {
+    if (acquired[i] && hasSignal(matrix[i]!) === present) mask[i] = 1
+  }
+  return mask
+}
+
+/** Acquired pixel counts of both {@link signalMask} results. */
+export function countSignal(matrix: Float32Array, acquired: Uint8Array) {
+  let present = 0
+  let absent = 0
+  for (let i = 0; i < acquired.length; i++) {
+    if (!acquired[i]) continue
+    if (hasSignal(matrix[i]!)) present++
+    else absent++
+  }
+  return { present, absent }
 }
 
 export function roiBoxBounds({ x0, y0, x1, y1 }: ROIBox) {

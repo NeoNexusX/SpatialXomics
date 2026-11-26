@@ -28,11 +28,11 @@ import { useDisplayRange } from '@/features/vizworkbench/composables/useDisplayR
 import { useOverlayData } from '@/features/vizworkbench/composables/useOverlayData'
 import { roiToRegion } from '@/features/vizworkbench/composables/useROI'
 import { useResultROI } from '@/features/vizworkbench/composables/useResultROI'
+import { useRoiCollect } from '@/features/vizworkbench/composables/useRoiCollect'
 import { useIonChannels } from '@/features/vizworkbench/composables/useIonChannels'
 import { MAX_ION_CHANNELS } from '@/features/vizworkbench/utils/ionChannelBlend'
 import { useResultMeta } from '@/features/vizworkbench/composables/useResultMeta'
 import { useRegionComparison } from '@/features/vizworkbench/composables/useRegionComparison'
-import { useImportedMasks } from '@/features/vizworkbench/composables/useImportedMasks'
 import { ZARR_STORE } from '@/shared/config/defaults'
 import { rgbCss } from '@/features/vizworkbench/utils/regionPalette'
 import { exportMask, type MaskExportPayload } from '@/features/vizworkbench/utils/maskExport'
@@ -92,6 +92,8 @@ const {
   selectedMzIndex,
   mzTolerance,
   ionMatrix,
+  ionMatrixMz,
+  acquiredMask,
   ionCols,
   ionRows,
   loading,
@@ -206,51 +208,10 @@ const {
   roiUnionMask,
   roiHighlightOverlay,
   roiConfirm,
+  importRois,
   roiDelete,
   roiClearAll,
 } = useResultROI(displaySourceMatrix, ionCols, ionRows, runId)
-
-// File-imported masks are kept separate from drawn ROIs. The active ones act
-// as an additional display filter (their union), and every mask is also a
-// selectable comparison region — importing never mutates the user's
-// ROI/KMeans state.
-const {
-  importedMasks,
-  importMaskFiles,
-  removeImportedMask: removeImportedMaskEntry,
-  clearImportedMasks,
-  toggleImportedMask: toggleImportedMaskActive,
-  activeUnionMask,
-} = useImportedMasks({
-  ionCols,
-  ionRows,
-  datasetName,
-  matrix: displaySourceMatrix,
-})
-
-const visualMatrix = computed(() => {
-  const matrix = displayMatrix.value
-  const mask = activeUnionMask.value
-  const w = ionCols.value
-  const h = ionRows.value
-  if (!matrix || !mask || !w || !h || mask.length !== w * h) return matrix
-  const filtered = new Float32Array(matrix.length)
-  const n = Math.min(matrix.length, mask.length)
-  for (let i = 0; i < n; i++) if (mask[i]) filtered[i] = matrix[i] ?? 0
-  return filtered
-})
-
-/** Intersection of the active ROI-only filter and the active imported-mask union. */
-const effectiveRoiMask = computed<Uint8Array | null>(() => {
-  const imported = activeUnionMask.value
-  const roi = roiUnionMask.value
-  if (!imported) return roi
-  if (!roi) return imported
-  const n = Math.min(imported.length, roi.length)
-  const result = new Uint8Array(n)
-  for (let i = 0; i < n; i++) result[i] = imported[i]! && roi[i]! ? 1 : 0
-  return result
-})
 
 // ---- Multi-ion overlay ----
 
@@ -277,6 +238,15 @@ const {
   ready: zarrReady,
   runId,
   loadMatrix: loadIonMatrixByIndex,
+})
+
+// ROI collect tool: the current single image's pixels with or without signal.
+const roiCollect = useRoiCollect(roiEditor, {
+  matrix: displaySourceMatrix,
+  acquired: acquiredMask,
+  image: computed(() => (isProcessed.value ? 'TIC' : ionMatrixMz.value)),
+  available: computed(() => !channelsMode.value),
+  loading,
 })
 
 const batchAddMode = ref(false)
@@ -333,6 +303,7 @@ const {
   kmeansRegions,
   kmeansLabelsAvailable,
   kmeansK,
+  kmeansScope,
   kmeansComputing,
   selectedKmeansIds,
   getKmeansLabels,
@@ -356,24 +327,9 @@ const regionGrid = computed<RegionGrid>(() => ({
   runId: runId.value,
   shape: [ionRows.value, ionCols.value],
 }))
-const editableRegions = computed<Region[]>(() => [
+const regions = computed<Region[]>(() => [
   ...kmeansRegions.value,
   ...confirmedROIs.value.map((roi) => roiToRegion(roi, runId.value)),
-])
-const regions = computed<Region[]>(() => [
-  ...editableRegions.value,
-  ...importedMasks.value.map(
-    (entry): Region => ({
-      id: `imported:${entry.id}`,
-      kind: 'imported',
-      sourceId: entry.id,
-      label: entry.name,
-      color: entry.color,
-      pixelCount: entry.summary.pixelCount,
-      grid: { runId: runId.value, shape: entry.shape },
-      mask: entry.mask,
-    }),
-  ),
 ])
 
 // ---- Region comparison ----
@@ -399,7 +355,6 @@ const {
   selectMz: cmpSelectMz,
   reset: cmpReset,
   involvesRoi: cmpInvolvesRoi,
-  involvesImportedMask: cmpInvolvesImportedMask,
 } = useRegionComparison({
   regions,
   runId,
@@ -408,7 +363,6 @@ const {
 })
 
 watch(runId, () => {
-  clearImportedMasks()
   roiClearAll()
   cmpReset()
 })
@@ -428,12 +382,6 @@ function handleRoiDelete(id: string) {
   // an unrelated ROI (or any ROI when comparing KMeans-vs-KMeans) is harmless.
   if (cmpInvolvesRoi(id)) cmpReset()
   roiDelete(id)
-}
-
-/** 移除参与过比较的导入掩膜时作废比较结果；未参与的移除不影响结果。 */
-function handleRemoveImportedMask(id: string) {
-  if (cmpInvolvesImportedMask(id)) cmpReset()
-  removeImportedMaskEntry(id)
 }
 
 // ---- SXO-Harness上下文注册（selectedIon + kmeans + umap + datasetInfo） ----
@@ -496,7 +444,8 @@ registerContextProviders({
               ? confirmedROIs.value.length
               : confirmedROIs.value.filter((r) => selectedRoiIds.value!.has(r.id)).length,
         },
-        masks: { imported: importedMasks.value.length },
+        // 导入的掩膜就是 ROI，这里只统计其中来自文件的数量
+        masks: { imported: confirmedROIs.value.filter((r) => r.type === 'imported').length },
       },
     }
   },
@@ -567,7 +516,7 @@ async function handleExportMasks(payload: MaskExportPayload) {
 
   const roiIds = new Set(payload.roiIds)
   const clusterIds = new Set(payload.clusterIds)
-  const selected = editableRegions.value.filter((region) =>
+  const selected = regions.value.filter((region) =>
     region.kind === 'kmeans' ? clusterIds.has(region.clusterId) : roiIds.has(region.sourceId),
   )
   const mask = buildRegionMask(selected, grid)
@@ -596,8 +545,8 @@ async function handleImportMasks(files: File[]) {
     return
   }
   try {
-    // 每个文件独立导入：个别文件无效时其余仍然生效，失败逐个提示
-    const { imported, failed } = await importMaskFiles(files)
+    // 每个文件独立导入为 ROI：个别文件无效时其余仍然生效，失败逐个提示
+    const { imported, failed } = await importRois(files, datasetName.value)
     for (const f of failed) {
       console.error('[Mask] import failed:', f.name, f.error)
       showToast(
@@ -752,7 +701,7 @@ async function onSelectPixel(col: number, row: number) {
       <IonImageSection
         :is-stale="isStale"
         :ion-matrix="displaySourceMatrix"
-        :display-matrix="visualMatrix"
+        :display-matrix="displayMatrix"
         :selected-mz="selectedMz"
         :mz-tolerance="mzTolerance"
         :colormap="colormap"
@@ -777,7 +726,7 @@ async function onSelectPixel(col: number, row: number) {
         :has-tic="hasTic"
         :channels-mode="channelsMode"
         :channels="hoverChannels"
-        :roi-mask="effectiveRoiMask"
+        :roi-mask="roiUnionMask"
         :roi-highlight-data="roiHighlightOverlay"
         @update:mz-tolerance="mzTolerance = $event"
         @update:colormap="colormap = $event"
@@ -895,13 +844,15 @@ async function onSelectPixel(col: number, row: number) {
             :kmeans-clusters="kmeansClusters"
             :kmeans-labels-available="kmeansLabelsAvailable"
             :kmeans-k="kmeansK"
+            :kmeans-scope="kmeansScope"
             :kmeans-computing="kmeansComputing"
             :selected-kmeans-ids="selectedKmeansIds"
             :storage-mode="storageMode"
             :roi-editor="roiEditor"
+            :roi-collect="roiCollect"
             :viewing-roi="viewingROI"
             :confirmed-rois="confirmedROIs"
-            :editable-regions="editableRegions"
+            :editable-regions="regions"
             :roi-opacities="roiOpacities"
             :selected-roi-ids="selectedRoiIds"
             :channels-enabled="channelsEnabled"
@@ -911,7 +862,6 @@ async function onSelectPixel(col: number, row: number) {
             :selected-mz="selectedMz"
             :max-ion-channels="MAX_ION_CHANNELS"
             :batch-add-mode="batchAddMode"
-            :imported-masks="importedMasks"
             @toggle-overlay="toggleOverlay"
             @retry-clustering="retryClustering"
             @enable-clustering="createClusteringTask"
@@ -931,8 +881,6 @@ async function onSelectPixel(col: number, row: number) {
             @roi-deselect-all="clearRoiSelection"
             @export-masks="handleExportMasks"
             @import-masks="handleImportMasks"
-            @remove-imported-mask="handleRemoveImportedMask"
-            @toggle-imported-mask="toggleImportedMaskActive"
             @roi-clear-all="handleRoiClearAll"
             @update:channels-enabled="onChannelsEnabledChange"
             @add-current-channel="onAddCurrentChannel"

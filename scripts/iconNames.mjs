@@ -68,5 +68,5 @@ export const ICON_SETS = {
     'photo',
   ],
   'simple-icons': ['github', 'wechat', 'alibabacloud'],
-  lucide: ['lasso', 'square', 'ellipse', 'waypoints'],
+  lucide: ['lasso', 'square', 'ellipse', 'waypoints', 'grid-2x2-check'],
 }

@@ -6,12 +6,16 @@ import IonChannelPanel from '@/features/vizworkbench/components/visuals/IonChann
 import SectionHelp from '@/features/vizworkbench/components/SectionHelp.vue'
 import CollapsibleSection from '@/shared/components/CollapsibleSection.vue'
 import type { MaskExportPayload } from '@/features/vizworkbench/utils/maskExport'
-import type { ImportedMask } from '@/features/vizworkbench/composables/useImportedMasks'
 import type { IonChannel } from '@/features/vizworkbench/composables/useIonChannels'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
-import type { OverlayKind, KmeansCluster } from '@/features/vizworkbench/composables/useOverlayData'
+import type {
+  OverlayKind,
+  KmeansCluster,
+  KmeansScope,
+} from '@/features/vizworkbench/composables/useOverlayData'
 import type { RoiEditor } from '@/features/vizworkbench/composables/useRoiEditor'
+import type { RoiCollect } from '@/features/vizworkbench/composables/useRoiCollect'
 import type { Region } from '@/features/vizworkbench/utils/region'
 import type { ConfirmedROI } from '@/features/vizworkbench/composables/useROI'
 
@@ -37,6 +41,8 @@ const props = defineProps<{
   kmeansLabelsAvailable: boolean
   /** The k of the current KMeans result (null = never run). */
   kmeansK: number | null
+  /** The ROI the current KMeans result was restricted to (null = all pixels). */
+  kmeansScope: KmeansScope | null
   /** True while a local KMeans computation is in flight. */
   kmeansComputing: boolean
   /** Selected cluster ids (null = all). */
@@ -44,6 +50,7 @@ const props = defineProps<{
   /** 'continuous' | 'processed' — UMAP/KMeans only apply to continuous data */
   storageMode: string
   roiEditor: RoiEditor
+  roiCollect: RoiCollect
   viewingRoi: boolean
   confirmedRois: ConfirmedROI[]
   editableRegions: Region[]
@@ -58,8 +65,6 @@ const props = defineProps<{
   selectedMz: number
   maxIonChannels: number
   batchAddMode: boolean
-  /** 文件导入的掩膜列表，供区域掩膜模块管理。 */
-  importedMasks?: ImportedMask[]
 }>()
 
 const emit = defineEmits<{
@@ -76,8 +81,9 @@ const emit = defineEmits<{
   (e: 'kmeans-select-all'): void
   (e: 'kmeans-clear-all'): void
   /** Fired with the k from the inline stepper (KMeans button on first use, or
-   *  Compute) - the parent runs the local clustering over the UMAP raster. */
-  (e: 'run-kmeans', k: number): void
+   *  Compute) - the parent runs the local clustering over the UMAP raster,
+   *  only inside `scope` when one is chosen. */
+  (e: 'run-kmeans', k: number, scope: ConfirmedROI | null): void
   (e: 'export-umap'): void
   (e: 'export-kmeans'): void
   (e: 'update:viewingRoi', value: boolean): void
@@ -101,9 +107,8 @@ const emit = defineEmits<{
   (e: 'toggle-channel-visible', id: number): void
   (e: 'retry-channel', id: number): void
   (e: 'clear-channels'): void
+  /** Mask files picked for import; the parent adds each valid one as an ROI. */
   (e: 'import-masks', files: File[]): void
-  (e: 'remove-imported-mask', id: string): void
-  (e: 'toggle-imported-mask', id: string): void
 }>()
 
 // UMAP/KMeans overlays are opt-in: buttons stay grayed out until the user
@@ -136,10 +141,28 @@ const kTarget = computed(() => {
   return raw === '' || !Number.isFinite(raw) ? (props.kmeansK ?? K_DEFAULT) : clampK(raw)
 })
 
-// Re-running the applied k is disabled: the seed is fixed, so it would only
-// reset the region comparison and the cluster selection.
+/** ROI that the next run clusters inside; null (the default) clusters every pixel. */
+const kmeansScopeId = shallowRef<string | null>(null)
+const kmeansScopeRoi = computed(
+  () => props.confirmedRois.find((roi) => roi.id === kmeansScopeId.value) ?? null,
+)
+// ROI ids restart after "Clear all", so drop the choice once its ROI object is gone.
+watch(
+  () => props.confirmedRois,
+  (rois, previous) => {
+    const chosen = previous.find((roi) => roi.id === kmeansScopeId.value)
+    if (chosen && !rois.includes(chosen)) kmeansScopeId.value = null
+  },
+)
+
+// Re-running the applied k and scope is disabled: the seed is fixed, so it
+// would only reset the region comparison and the cluster selection.
 const canRunKmeans = computed(
-  () => kTarget.value !== props.kmeansK && !props.kmeansComputing && !props.overlayLoading,
+  () =>
+    (kTarget.value !== props.kmeansK ||
+      (kmeansScopeRoi.value?.mask ?? null) !== (props.kmeansScope?.mask ?? null)) &&
+    !props.kmeansComputing &&
+    !props.overlayLoading,
 )
 
 const kmeansRunClass = computed(() => {
@@ -163,7 +186,7 @@ function commitK() {
 
 function runKmeans() {
   commitK()
-  if (canRunKmeans.value) emit('run-kmeans', kTarget.value)
+  if (canRunKmeans.value) emit('run-kmeans', kTarget.value, kmeansScopeRoi.value)
 }
 
 function onKmeansClick() {
@@ -345,64 +368,87 @@ function cancelEnable() {
           {{ $t('common.action.refresh') }}
         </button>
       </div>
-      <!-- KMeans k: rose like the KMeans button -->
+      <!-- KMeans k and scope: rose like the KMeans button -->
       <div
         v-else-if="computationEnabled && clusteringReady"
-        class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-rose-50 dark:bg-rose-950/40"
+        class="flex flex-col gap-1.5 rounded-lg px-2.5 py-1.5 bg-rose-50 dark:bg-rose-950/40"
       >
-        <div class="flex flex-1 min-w-0 items-center gap-1">
-          <span class="truncate text-rose-900/80 dark:text-rose-100/80">
-            {{ $t('vizworkbench.overlay.kLabel') }}
-          </span>
-          <SectionHelp :label="$t('vizworkbench.overlay.kLabel')">
-            {{ $t('vizworkbench.overlay.kHint', { min: K_MIN, max: K_MAX }) }}
-          </SectionHelp>
-        </div>
-        <div class="join shrink-0">
+        <div class="flex items-center gap-2">
+          <div class="flex flex-1 min-w-0 items-center gap-1">
+            <span class="truncate text-rose-900/80 dark:text-rose-100/80">
+              {{ $t('vizworkbench.overlay.kLabel') }}
+            </span>
+            <SectionHelp :label="$t('vizworkbench.overlay.kLabel')">
+              {{ $t('vizworkbench.overlay.kHint', { min: K_MIN, max: K_MAX }) }}
+            </SectionHelp>
+          </div>
+          <div class="join shrink-0">
+            <button
+              type="button"
+              :class="K_STEP_CLASS"
+              :aria-label="$t('vizworkbench.overlay.kDecrease')"
+              :disabled="kmeansComputing || kTarget <= K_MIN"
+              @click="stepK(-1)"
+            >
+              <SvgIcon type="minus" />
+            </button>
+            <!-- daisyUI 的 .input-xs 给隐藏的微调箭头留了 -0.75rem 右外边距，px-0 时会把
+                 数字挤偏右，所以箭头的外边距要清零 -->
+            <input
+              v-model.number="kDraft"
+              type="number"
+              inputmode="numeric"
+              :min="K_MIN"
+              :max="K_MAX"
+              step="1"
+              class="input input-xs join-item w-10 px-0 text-center font-mono kawaru-text-68 border-rose-200 dark:border-rose-800 focus:outline-rose-400 focus:outline-offset-0 [appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              :aria-label="$t('vizworkbench.overlay.kLabel')"
+              :disabled="kmeansComputing"
+              @change="commitK"
+              @keydown.enter.prevent="runKmeans"
+            />
+            <button
+              type="button"
+              :class="K_STEP_CLASS"
+              :aria-label="$t('vizworkbench.overlay.kIncrease')"
+              :disabled="kmeansComputing || kTarget >= K_MAX"
+              @click="stepK(1)"
+            >
+              <SvgIcon type="plus" />
+            </button>
+          </div>
           <button
             type="button"
-            :class="K_STEP_CLASS"
-            :aria-label="$t('vizworkbench.overlay.kDecrease')"
-            :disabled="kmeansComputing || kTarget <= K_MIN"
-            @click="stepK(-1)"
+            class="btn btn-xs shrink-0 shadow-none kawaru-text-62"
+            :class="kmeansRunClass"
+            :disabled="!canRunKmeans"
+            @click="runKmeans"
           >
-            <SvgIcon type="minus" />
+            <span v-if="kmeansComputing" class="loading loading-spinner loading-xs"></span>
+            {{ $t('vizworkbench.overlay.compute') }}
           </button>
-          <!-- daisyUI 的 .input-xs 给隐藏的微调箭头留了 -0.75rem 右外边距，px-0 时会把
-               数字挤偏右，所以箭头的外边距要清零 -->
-          <input
-            v-model.number="kDraft"
-            type="number"
-            inputmode="numeric"
-            :min="K_MIN"
-            :max="K_MAX"
-            step="1"
-            class="input input-xs join-item w-10 px-0 text-center font-mono kawaru-text-68 border-rose-200 dark:border-rose-800 focus:outline-rose-400 focus:outline-offset-0 [appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-            :aria-label="$t('vizworkbench.overlay.kLabel')"
+        </div>
+        <div v-if="confirmedRois.length" class="flex items-center gap-2">
+          <div class="flex flex-1 min-w-0 items-center gap-1">
+            <span class="truncate text-rose-900/80 dark:text-rose-100/80">
+              {{ $t('vizworkbench.overlay.kmeansScope') }}
+            </span>
+            <SectionHelp :label="$t('vizworkbench.overlay.kmeansScope')">
+              {{ $t('vizworkbench.overlay.kmeansScopeHint') }}
+            </SectionHelp>
+          </div>
+          <select
+            v-model="kmeansScopeId"
+            class="select select-xs w-34 shrink-0 kawaru-text-62 border-rose-200 dark:border-rose-800 focus:outline-rose-400 focus:outline-offset-0"
+            :aria-label="$t('vizworkbench.overlay.kmeansScope')"
             :disabled="kmeansComputing"
-            @change="commitK"
-            @keydown.enter.prevent="runKmeans"
-          />
-          <button
-            type="button"
-            :class="K_STEP_CLASS"
-            :aria-label="$t('vizworkbench.overlay.kIncrease')"
-            :disabled="kmeansComputing || kTarget >= K_MAX"
-            @click="stepK(1)"
           >
-            <SvgIcon type="plus" />
-          </button>
+            <option :value="null">{{ $t('vizworkbench.overlay.kmeansScopeAll') }}</option>
+            <option v-for="roi in confirmedRois" :key="roi.id" :value="roi.id">
+              {{ roi.label }}
+            </option>
+          </select>
         </div>
-        <button
-          type="button"
-          class="btn btn-xs shrink-0 shadow-none kawaru-text-62"
-          :class="kmeansRunClass"
-          :disabled="!canRunKmeans"
-          @click="runKmeans"
-        >
-          <span v-if="kmeansComputing" class="loading loading-spinner loading-xs"></span>
-          {{ $t('vizworkbench.overlay.compute') }}
-        </button>
       </div>
 
       <div
@@ -457,6 +503,14 @@ function cancelEnable() {
         </span>
         <span class="font-mono font-normal">{{ Math.round(kmeansAlpha / 2.55) }}%</span>
       </div>
+      <p
+        v-if="kmeansScope"
+        data-testid="kmeans-scope"
+        class="-mt-0.5 mb-1 truncate text-base-content/60"
+        :title="kmeansScope.label"
+      >
+        {{ $t('vizworkbench.overlay.kmeansScope') }} · {{ kmeansScope.label }}
+      </p>
       <input
         type="range"
         :min="0"
@@ -530,6 +584,7 @@ function cancelEnable() {
   <CollapsibleSection :title="$t('vizworkbench.overlay.roi')" class="mt-5">
     <ROIPanel
       :editor="roiEditor"
+      :collect="roiCollect"
       :regions="editableRegions"
       :rois="confirmedRois"
       :opacities="roiOpacities"
@@ -553,11 +608,8 @@ function cancelEnable() {
       :kmeans-clusters="kmeansClusters"
       :kmeans-visible="kmeansVisible"
       :selected-kmeans-ids="selectedKmeansIds"
-      :imported-masks="importedMasks"
       @export-masks="(payload) => emit('export-masks', payload)"
       @import-masks="(files) => emit('import-masks', files)"
-      @remove-imported-mask="emit('remove-imported-mask', $event)"
-      @toggle-imported-mask="emit('toggle-imported-mask', $event)"
     />
   </CollapsibleSection>
 

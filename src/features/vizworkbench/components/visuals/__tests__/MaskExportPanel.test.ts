@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import MaskExportPanel from '../MaskExportPanel.vue'
-import type { ImportedMask } from '@/features/vizworkbench/composables/useImportedMasks'
 import type { ConfirmedROI } from '@/features/vizworkbench/composables/useROI'
 import type { KmeansCluster } from '@/features/vizworkbench/composables/useOverlayData'
 import { i18n, loadCoreMessages, loadFeatureMessages } from '@/i18n'
@@ -79,29 +78,13 @@ describe('MaskExportPanel', () => {
     ])
   })
 
-  it('manages imported masks independently of the export list', async () => {
-    const imported: ImportedMask = {
-      id: 'import-1',
-      name: 'tissue.npz',
-      format: 'npz',
-      color: '#56b4e9',
-      mask: new Uint8Array([1]),
-      shape: [1, 1],
-      summary: { name: 'tissue.npz', pixelCount: 1, format: 'npz', stats: null },
-      active: true,
-    }
-    const w = mountPanel({ importedMasks: [imported], kmeansVisible: false })
-    expect(names(w)).toEqual(['ROI 1', 'ROI 2'])
-    expect(w.text()).toContain('tissue.npz')
-    expect(w.text()).toContain('1/1')
-
-    await w.get('input[type="checkbox"]').setValue(false)
-    expect(w.emitted('toggle-imported-mask')).toEqual([['import-1']])
-    await w.setProps({ importedMasks: [{ ...imported, active: false }] })
-    expect(w.text()).toContain('0/1')
-
-    await w.get('button[title="Remove this mask"]').trigger('click')
-    expect(w.emitted('remove-imported-mask')).toEqual([['import-1']])
+  it('hands the picked mask files to the parent, which adds them as ROIs', async () => {
+    const w = mountPanel()
+    const files = [new File(['x'], 'tumor.npz'), new File(['y'], 'normal.csv')]
+    const input = w.get<HTMLInputElement>('input[type="file"]')
+    Object.defineProperty(input.element, 'files', { value: files })
+    await input.trigger('change')
+    expect(w.emitted('import-masks')).toEqual([[files]])
   })
 
   it('disables export when the list is empty', () => {

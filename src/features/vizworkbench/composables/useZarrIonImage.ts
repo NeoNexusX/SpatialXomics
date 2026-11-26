@@ -238,6 +238,10 @@ export function useZarrIonImage() {
   const selectedMzIndex = ref(0)
   const mzTolerance = ref<number>(ZARR_STORE.defaultMzTolerance)
   const ionMatrix = ref<Float32Array | null>(null)
+  /** m/z of the loaded ionMatrix. selectedMz moves before the new image arrives, and a failed load keeps the old one. */
+  const ionMatrixMz = shallowRef<number | null>(null)
+  /** Acquired grid cells (1 = has a spectrum), from axes/coordinates. */
+  const acquiredMask = shallowRef<Uint8Array | null>(null)
   const normalizationFactors = shallowRef<Float32Array | null>(null)
   const normalizationLoading = ref(false)
   const normalizationError = ref<string | null>(null)
@@ -284,6 +288,7 @@ export function useZarrIonImage() {
       // Ignore a stale response after another peak/run has been selected.
       if (requestId !== ionImageRequestId || store !== requestStore) return
       ionMatrix.value = matrix
+      ionMatrixMz.value = mzAxisRef.value?.[idx] ?? null
     } catch (e) {
       if (requestId !== ionImageRequestId || store !== requestStore) return
       // UI 只说「什么问题」，底层原因留在控制台
@@ -400,6 +405,8 @@ export function useZarrIonImage() {
     normalizationFactors.value = null
     normalizationError.value = null
     ionMatrix.value = null
+    ionMatrixMz.value = null
+    acquiredMask.value = null
 
     /** True while this init is still the latest lifecycle (no dispose/re-init since). */
     const isCurrent = () => gen === initGeneration
@@ -439,6 +446,13 @@ export function useZarrIonImage() {
       // Set spatial dimensions
       const [height, width] = s.spatialShape
       ionDims.value = { width, height }
+      // Only the ROI collect tool reads it, and the coordinates behind it load with the first image anyway.
+      s.loadAcquiredRaster().then(
+        (raster) => {
+          if (isCurrent() && store === s) acquiredMask.value = raster
+        },
+        (e: unknown) => console.warn('[useZarrIonImage] acquired pixels unavailable:', e),
+      )
 
       if (s.dataMode === 'continuous') {
         // Load shared m/z axis
@@ -476,6 +490,8 @@ export function useZarrIonImage() {
     selectedMz,
     mzTolerance,
     ionMatrix,
+    ionMatrixMz,
+    acquiredMask,
     ionCols,
     ionRows,
     totalPeaks,

@@ -1,9 +1,8 @@
 <template>
   <div
     class="stat-card rounded-lg border px-2 py-1.5"
-    :class="{ 'border-dashed': dashed }"
     :style="{
-      borderColor: cssWithAlpha(color, dashed ? 0.4 : 0.25),
+      borderColor: cssWithAlpha(color, 0.25),
       background: cssWithAlpha(color, 0.03),
     }"
   >
@@ -29,7 +28,7 @@ interface RegionStats {
   max: number
 }
 
-defineProps<{ color: string; stats: RegionStats | null; dashed?: boolean }>()
+defineProps<{ color: string; stats: RegionStats | null }>()
 
 function fmt(v: number): string {
   if (v === 0) return '0'

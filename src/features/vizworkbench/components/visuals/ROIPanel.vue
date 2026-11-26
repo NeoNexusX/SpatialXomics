@@ -21,7 +21,7 @@
           :title="$t('vizworkbench.roi.strokeColor')"
         />
       </div>
-      <div class="grid grid-cols-4 gap-1" role="group" :aria-label="$t('vizworkbench.roi.tools')">
+      <div class="grid grid-cols-5 gap-1" role="group" :aria-label="$t('vizworkbench.roi.tools')">
         <button
           v-for="type in tools"
           :key="type"
@@ -29,16 +29,39 @@
           class="btn btn-sm min-w-0 px-0"
           :class="editor.tool === type ? 'btn-primary' : 'btn-ghost'"
           :aria-label="labels[type]"
-          :title="labels[type]"
+          :title="toolTitle(type)"
           :aria-pressed="editor.tool === type"
-          :disabled="
-            editor.hasPendingShape ||
-            (!!editor.openPathType && isRoiContour(type) && editor.openPathType !== type)
-          "
+          :disabled="toolDisabled(type)"
           @click="editor.selectTool(editor.tool === type ? null : type)"
         >
           <SvgIcon :type="toolIcons[type]" class="h-5 w-5" />
         </button>
+      </div>
+
+      <div
+        v-if="editor.tool === 'collect'"
+        class="space-y-1"
+        role="group"
+        :aria-label="labels.collect"
+      >
+        <p data-testid="roi-collect-source" class="truncate font-mono text-base-content/60">
+          {{ collect.source }}
+        </p>
+        <div class="grid grid-cols-3 gap-1">
+          <button
+            v-for="kind in collectKinds"
+            :key="kind"
+            type="button"
+            class="btn btn-sm h-auto min-w-0 flex-col gap-0 px-1 py-1 kawaru-text-68"
+            :class="editor.pendingCollect === kind ? 'btn-primary' : 'btn-ghost'"
+            :aria-pressed="editor.pendingCollect === kind"
+            :disabled="collectDisabled(kind)"
+            @click="collect.stage(kind)"
+          >
+            <span class="max-w-full truncate">{{ collectKindLabel(kind) }}</span>
+            <span class="font-mono kawaru-text-62 opacity-70">{{ collectCount(kind) }}</span>
+          </button>
+        </div>
       </div>
 
       <div v-if="hasDraftControls || regions.length" class="space-y-2">
@@ -236,9 +259,12 @@
                 :checked="isSelected(roi.id)"
                 @change="$emit('toggle-selection', roi.id)"
               />
-              <span class="font-semibold truncate" :style="{ color: roi.color }">{{
-                roi.label
-              }}</span>
+              <span
+                class="font-semibold truncate"
+                :style="{ color: roi.color }"
+                :title="roi.label"
+                >{{ roi.label }}</span
+              >
             </label>
             <span :class="TAG_CLASS">{{ labels[roi.type] }}</span>
             <span class="ml-auto shrink-0 font-mono kawaru-text-62 text-base-content/60">{{
@@ -295,13 +321,19 @@ import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import SectionHelp from '@/features/vizworkbench/components/SectionHelp.vue'
 import RegionSummaryCard from './RegionSummaryCard.vue'
 import type { RoiEditor } from '@/features/vizworkbench/composables/useRoiEditor'
+import {
+  collectKindLabel,
+  type RoiCollect,
+} from '@/features/vizworkbench/composables/useRoiCollect'
 import { DEFAULT_ROI_OPACITY, type ConfirmedROI } from '@/features/vizworkbench/composables/useROI'
 import { t } from '@/i18n'
 import type { Region } from '@/features/vizworkbench/utils/region'
-import { isRoiContour } from '@/features/vizworkbench/utils/roiMask'
+import { isRoiContour, type CollectKind, type RoiTool } from '@/features/vizworkbench/utils/roiMask'
 
 const props = defineProps<{
   editor: RoiEditor
+  /** Collect tool source: the current ion image's signal and no-signal pixels. */
+  collect: RoiCollect
   rois: ConfirmedROI[]
   regions: Region[]
   opacities: ReadonlyMap<string, number>
@@ -354,6 +386,8 @@ const labels = computed(() => ({
   freehand: t('vizworkbench.roi.lasso'),
   polygon: t('vizworkbench.roi.polygon'),
   ellipse: t('vizworkbench.roi.ellipse'),
+  collect: t('vizworkbench.roi.collect'),
+  imported: t('vizworkbench.roi.imported'),
   composite: t('vizworkbench.roi.composite'),
   union: t('vizworkbench.roi.add'),
   difference: t('vizworkbench.roi.difference'),
@@ -368,13 +402,14 @@ const operationHints = computed(() => ({
   intersection: t('vizworkbench.roi.intersectHint'),
 }))
 
-const tools = ['rectangle', 'ellipse', 'polygon', 'freehand'] as const
+const tools = ['rectangle', 'ellipse', 'polygon', 'freehand', 'collect'] as const
 
 const toolIcons = {
   rectangle: 'square',
   ellipse: 'ellipse',
   polygon: 'waypoints',
   freehand: 'lasso',
+  collect: 'grid-2x2-check',
 } as const
 
 const toolHints = computed(() => ({
@@ -382,7 +417,32 @@ const toolHints = computed(() => ({
   ellipse: t('vizworkbench.roi.ellipseHint'),
   polygon: t('vizworkbench.roi.polygonHint'),
   freehand: t('vizworkbench.roi.pathHint'),
+  collect: t('vizworkbench.roi.collectHint'),
 }))
+
+function toolDisabled(type: RoiTool) {
+  const { editor, collect } = props
+  if (editor.hasPendingShape) return true
+  if (isRoiContour(type)) return !!editor.openPathType && editor.openPathType !== type
+  return type === 'collect' && editor.tool !== type && (!collect.available || !collect.counts)
+}
+
+function toolTitle(type: RoiTool) {
+  return type === 'collect' && !props.collect.available
+    ? t('vizworkbench.roi.collectUnavailable')
+    : labels.value[type]
+}
+
+const collectKinds = ['present', 'absent', 'all'] as const satisfies readonly CollectKind[]
+
+function collectDisabled(kind: CollectKind) {
+  const { editor, collect } = props
+  return !collect.ready || !editor.canSelectRegion || !collect.counts?.[kind]
+}
+
+function collectCount(kind: CollectKind) {
+  return (props.collect.counts?.[kind] ?? 0).toLocaleString('en-US')
+}
 
 const roiRegions = computed(() => props.regions.filter((region) => region.kind === 'roi'))
 const clusterRegions = computed(() => props.regions.filter((region) => region.kind === 'kmeans'))

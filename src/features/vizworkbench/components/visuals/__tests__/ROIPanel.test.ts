@@ -1,7 +1,9 @@
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { afterEach, beforeAll, expect, it } from 'vitest'
-import { nextTick, ref } from 'vue'
+import { nextTick, ref, type Ref } from 'vue'
 import { useResultROI } from '@/features/vizworkbench/composables/useResultROI'
+import { useRoiCollect } from '@/features/vizworkbench/composables/useRoiCollect'
+import type { RoiEditor } from '@/features/vizworkbench/composables/useRoiEditor'
 import { roiToRegion } from '@/features/vizworkbench/composables/useROI'
 import type { Region } from '@/features/vizworkbench/utils/region'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -11,10 +13,29 @@ import ROIPanel from '../ROIPanel.vue'
 beforeAll(() => Promise.all([loadCoreMessages('en'), loadFeatureMessages('vizworkbench')]))
 enableAutoUnmount(afterEach)
 
-function mountPanel(state: ReturnType<typeof useResultROI>) {
+function collectFrom(
+  editor: RoiEditor,
+  matrix: Ref<Float32Array | null>,
+  acquired: Uint8Array | null,
+  available = true,
+) {
+  return useRoiCollect(editor, {
+    matrix,
+    acquired: ref(acquired),
+    image: ref(100),
+    available: ref(available),
+    loading: ref(false),
+  })
+}
+
+function mountPanel(
+  state: ReturnType<typeof useResultROI>,
+  collect = collectFrom(state.editor, ref(null), null),
+) {
   const panel = mount(ROIPanel, {
     props: {
       editor: state.editor,
+      collect,
       rois: state.confirmedROIs.value,
       regions: state.confirmedROIs.value.map((roi) => roiToRegion(roi, '')),
       opacities: state.roiOpacities.value,
@@ -178,4 +199,55 @@ it('keeps the selected cluster mask when a new result replaces the label map', a
   await button('Redo').trigger('click')
   await button('Save ROI').trigger('click')
   expect(Array.from(state.confirmedROIs.value[0]!.mask)).toEqual([1, 0, 0, 1])
+})
+
+it('collects the signal pixels of the current image into a named ROI', async () => {
+  const matrix = ref<Float32Array | null>(Float32Array.of(5, 0, 2, 0))
+  const state = useResultROI(matrix, ref(4), ref(1))
+  // A saved ROI keeps the region select on screen while collecting.
+  stageRectangle(state.editor, 3, 3)
+  state.editor.confirmShape()
+  state.roiConfirm()
+  const collect = collectFrom(state.editor, matrix, Uint8Array.of(1, 1, 1, 0))
+  const { panel, button } = mountPanel(state, collect)
+
+  await panel.get('button[aria-label="Collect"]').trigger('click')
+  expect(panel.get('[data-testid="roi-collect-source"]').text()).toBe('m/z 100.0000')
+  const options = panel.findAll('[role="group"][aria-label="Collect"] button')
+  expect(options.map((option) => option.get('.font-mono').text())).toEqual(['2', '1', '3'])
+  expect(options[2]!.text()).toContain('All acquired')
+  const signal = options[0]!
+
+  await signal.trigger('click')
+  expect(signal.attributes('aria-pressed')).toBe('true')
+  const select = panel.get<HTMLSelectElement>('select[aria-label="Use an existing region"]')
+  expect(select.element.value).toBe('')
+  expect(select.text()).not.toContain('previous result')
+
+  await button('Confirm shape').trigger('click')
+  await button('Save ROI').trigger('click')
+  const roi = state.confirmedROIs.value[1]!
+  expect(roi).toMatchObject({ type: 'collect', label: '100.0000 Signal' })
+  expect(Array.from(roi.mask)).toEqual([1, 0, 1, 0])
+  await panel.setProps({ rois: state.confirmedROIs.value })
+  expect(panel.findAll('.card-tag').map((tag) => tag.text())).toEqual(['Rect', 'Collect'])
+})
+
+it('disables a collect option that has no pixels', async () => {
+  const matrix = ref<Float32Array | null>(Float32Array.of(5, 3))
+  const state = useResultROI(matrix, ref(2), ref(1))
+  const { panel } = mountPanel(state, collectFrom(state.editor, matrix, Uint8Array.of(1, 1)))
+  await panel.get('button[aria-label="Collect"]').trigger('click')
+  const [signal, noSignal] = panel.findAll('[role="group"][aria-label="Collect"] button')
+  expect(signal!.attributes('disabled')).toBeUndefined()
+  expect(noSignal!.attributes('disabled')).toBeDefined()
+})
+
+it('disables the Collect tool under the multi-ion overlay', () => {
+  const matrix = ref<Float32Array | null>(Float32Array.of(5, 0))
+  const state = useResultROI(matrix, ref(2), ref(1))
+  const collect = collectFrom(state.editor, matrix, Uint8Array.of(1, 1), false)
+  const tool = mountPanel(state, collect).panel.get('button[aria-label="Collect"]')
+  expect(tool.attributes('disabled')).toBeDefined()
+  expect(tool.attributes('title')).toBe('Unavailable with the multi-ion overlay')
 })

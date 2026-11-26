@@ -20,7 +20,6 @@
  * 0/1, H×W — so the .npz and .csv of one mask share the same digest.
  */
 
-import { summarizeRoiMask } from './roiMask'
 import { createSHA256 } from 'hash-wasm'
 import { downloadBlob } from '@/shared/utils/download'
 import {
@@ -308,27 +307,6 @@ export async function importMask(
     }
   } else throw importError('mask metadata/SHA-256 is missing; import an exported MassVision mask')
   return { mask: parsed.data, shape: [parsed.shape[0]!, parsed.shape[1]!], format, meta }
-}
-
-/**
- * 区域掩膜模块展示的导入掩膜摘要：name/format 来自导入结果，统计在导入时定格
- * （与手绘 ROI confirm 时计算一次的口径一致，不随后续 m/z 切换重算）。
- */
-export interface ImportedMaskSummary {
-  /** 源文件名（用户认得的标识） */
-  name: string
-  format: MaskImportFormat
-  pixelCount: number
-  stats: { mean: number; std: number; min: number; max: number } | null
-}
-
-export function summarizeImportedMask(
-  result: MaskImportResult,
-  name: string,
-  matrix: Float32Array | null,
-): ImportedMaskSummary {
-  const { pixelCount, stats } = summarizeRoiMask(result.mask, matrix)
-  return { name, format: result.format, pixelCount, stats }
 }
 
 // ── pixel payload (the canonical bytes every format shares) ───────
