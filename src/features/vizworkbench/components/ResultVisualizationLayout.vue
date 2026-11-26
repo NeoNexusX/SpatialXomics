@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { shallowRef } from 'vue'
+import CollapsibleSidePanel from './CollapsibleSidePanel.vue'
+
 withDefaults(
   defineProps<{
     /** 左侧面板（Annotation）是否收起；收起时左列不占弹性份额，中列占满 */
@@ -8,6 +11,8 @@ withDefaults(
     leftPanelCollapsed: false,
   },
 )
+
+const rightPanelExpanded = shallowRef(false)
 </script>
 
 <template>
@@ -44,12 +49,18 @@ withDefaults(
           <slot name="compare"></slot>
         </div>
       </div>
-      <!-- 右列：桌面下是弹性列（1 份）、封顶 340px，内部字号/图标用 em 等比缩放 -->
-      <div
-        class="kawaru-text-75 w-full scrollbar-thin lg:min-w-0 lg:flex-[1_1_0%] lg:max-w-[340px] lg:min-h-0 lg:overflow-y-auto"
+      <CollapsibleSidePanel
+        v-model:expanded="rightPanelExpanded"
+        side="right"
+        :title="$t('vizworkbench.panel.title')"
+        :expand-label="$t('vizworkbench.panel.expand')"
+        :collapse-label="$t('vizworkbench.panel.collapse')"
+        class="kawaru-text-75"
+        :class="{ 'lg:flex-[1_1_0%] lg:max-w-[340px]': rightPanelExpanded }"
+        content-class="overflow-x-hidden px-3 pb-4 scrollbar-thin lg:overflow-y-auto"
       >
-        <slot name="side-panel"></slot>
-      </div>
+        <slot name="side-panel" />
+      </CollapsibleSidePanel>
     </div>
   </div>
 </template>
@@ -59,14 +70,6 @@ withDefaults(
    给栏内「没自带字号类」的 em 布局盒子（VizInfoPanel 的 w-[2em]/w-[4em]/h-[5em]、
    IonImageSection 的 w-[3em] 等）一个确定的继承参照。文字字号都是绝对档位，不靠这层。 */
 
-/* 给本页原本透明的 ghost 按钮补一道自适应细边框，使其与 New/Confirm 等实心按钮
-   一样具备清晰轮廓（亮色模式深边、暗色模式浅边）。DaisyUI 的 .btn-ghost 只是把
-   --btn-border 设成 #0000，边框本身一直在；真正读取它的只有 .btn 里的
-   border-color: var(--btn-border)，所以这里覆盖 border-color 一次即可覆盖全部
-   状态（hover / focus-visible / active）。已有边框的 outline / filled 按钮、
-   带动态彩色边框的 UMAP/KMeans 开关不受影响。
-   按钮分布在 AnnotationPanel / OverlayControls 等子组件中，需要 :deep() 才能
-   跨过 scoped 样式的组件边界。 */
 .result-page :deep(.btn-ghost) {
   border-color: color-mix(in oklch, var(--color-base-content) 25%, transparent);
 }

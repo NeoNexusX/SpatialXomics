@@ -11,10 +11,6 @@
       />
     </label>
 
-    <div class="text-base-content/60 mb-2">
-      {{ $t('vizworkbench.channels.hint') }}
-    </div>
-
     <!-- Channel list -->
     <div v-if="channels.length" class="space-y-0.5 mb-2">
       <div

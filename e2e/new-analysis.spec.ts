@@ -275,6 +275,9 @@ test.describe.serial('Peak Alignment journey', { tag: '@chromium-only' }, () => 
     await expect(page.getByText(/peaks/)).toBeVisible()
 
     // 右侧信息栏元数据（zarr 加载可能较慢）
+    const toolbox = page.getByRole('button', { name: 'Toolbox', exact: true })
+    await expect(toolbox).toHaveAttribute('aria-expanded', 'false')
+    await toolbox.click()
     await expect(page.getByText('Polarity')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByText('Analyzer')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByText('Ionisation Source')).toBeVisible({ timeout: 10_000 })
@@ -325,15 +328,22 @@ test.describe.serial('Peak Alignment journey', { tag: '@chromium-only' }, () => 
     await completedRow.getByRole('button', { name: 'View' }).click()
     await expect(page).toHaveURL(/\/vizworkbench/)
     await expect(page.getByText(/^Loading ion image/)).not.toBeVisible({ timeout: 30_000 })
+    await page.getByRole('button', { name: 'Toolbox', exact: true }).click()
 
-    // Gamma 滑块（Visualization 区，min/max 组合在页面唯一）；Display Range 的
-    // Max/Min 两个输入框：按区头按钮的下一个兄弟节点（CollapsibleSection 的
-    // 内容 div）收窄，避免误中其它面板的 input
-    const gammaSlider = page.locator('input[type="range"][min="0.5"][max="1.5"]')
-    const displayRangeInputs = page
-      .getByRole('button', { name: 'Display range' })
-      .locator('xpath=following-sibling::div[1]')
-      .locator('input')
+    const overlayToggle = page.getByRole('button', { name: 'Multi-ion overlay', exact: true })
+    const overlayHelp = page.getByRole('button', { name: 'About Multi-ion overlay', exact: true })
+    await overlayHelp.click()
+    const helpText = page.getByRole('dialog', { name: 'Multi-ion overlay', exact: true })
+    await expect(helpText).toContainText('Each channel is normalized on its own range')
+    await expect(overlayToggle).toHaveAttribute('aria-expanded', 'true')
+    await page.keyboard.press('Escape')
+    await expect(helpText).toBeHidden()
+
+    // Max/Min 文本框位于 Intensity 标题后面的区块中。
+    const gammaSlider = page.getByRole('slider', { name: 'Gamma' })
+    const intensityToggle = page.getByRole('button', { name: 'Intensity', exact: true })
+    const intensityId = await intensityToggle.getAttribute('aria-controls')
+    const displayRangeInputs = page.locator(`#${intensityId} input[type="text"]`)
     await expect(gammaSlider).toBeVisible()
     await expect(displayRangeInputs).toHaveCount(2)
 

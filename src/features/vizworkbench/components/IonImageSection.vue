@@ -116,7 +116,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <!-- 移动端保留 360px 可用高度；桌面端在首屏剩余空间内与谱图按 5:2 分高。 -->
+  <!-- 移动端保留 360px 可用高度；桌面端在首屏剩余空间内与谱图按 4:3 分高。 -->
   <div
     data-testid="ion-image-section"
     :data-loading="ionLoading ? 'true' : 'false'"

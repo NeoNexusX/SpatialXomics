@@ -11,6 +11,7 @@
  */
 import { computed, inject, watch } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
+import SectionHelp from '@/features/vizworkbench/components/SectionHelp.vue'
 import { useCopyToClipboard } from '@/shared/composables/useCopyToClipboard'
 import AnnotationScoreBreakdown from './AnnotationScoreBreakdown.vue'
 import OriginBadge from './OriginBadge.vue'
@@ -149,10 +150,13 @@ const { copy } = useCopyToClipboard()
 
     <!-- 关键数：q / 总分 / 质量误差 -->
     <div class="mt-3 grid grid-cols-3 gap-2 rounded-md bg-base-200/60 py-2 text-center">
-      <div :title="$t('vizworkbench.annotation.qLevelHint')">
+      <div>
         <div class="font-mono kawaru-text-95" :class="qLevelClass(ion.q)">{{ fmtQ(ion.q) }}</div>
-        <div class="kawaru-text-68 text-base-content/50">
+        <div class="flex items-center justify-center gap-1 kawaru-text-68 text-base-content/50">
           {{ $t('vizworkbench.annotation.qLevelLabel') }}
+          <SectionHelp :label="$t('vizworkbench.annotation.qLevelLabel')">
+            {{ $t('vizworkbench.annotation.qLevelHint') }}
+          </SectionHelp>
         </div>
       </div>
       <div>

@@ -10,7 +10,7 @@
  * ResizeObservers (e.g. the Statistic histogram), and unmounting those on
  * collapse would drop the observer/render state on reopen.
  */
-import { ref } from 'vue'
+import { ref, useId } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 
 const props = withDefaults(
@@ -23,23 +23,32 @@ const props = withDefaults(
 )
 
 const open = ref(props.defaultOpen)
+const contentId = useId()
 </script>
 
 <template>
   <div class="pt-3 border-t border-base-content/40">
-    <button
-      type="button"
-      class="group flex w-full items-center justify-between gap-2 py-1 text-left cursor-pointer select-none kawaru-text-75"
-      :aria-expanded="open"
-      @click="open = !open"
-    >
-      <span class="kawaru-text-75 font-semibold text-base-content">{{ title }}</span>
-      <SvgIcon
-        :type="open ? 'chevron_up' : 'chevron_down'"
-        class="w-[1.1em] h-[1.1em] shrink-0 text-base-content/60 group-hover:text-base-content"
-      />
-    </button>
-    <div v-show="open" class="pb-1">
+    <div class="relative flex items-center gap-1 pr-6">
+      <h2 class="min-w-0 kawaru-text-87 font-semibold text-base-content">
+        <button
+          type="button"
+          class="group block py-1 text-left cursor-pointer select-none after:absolute after:inset-0"
+          :aria-expanded="open"
+          :aria-controls="contentId"
+          @click="open = !open"
+        >
+          {{ title }}
+          <SvgIcon
+            :type="open ? 'chevron_up' : 'chevron_down'"
+            class="absolute right-0 top-1/2 -translate-y-1/2 w-[1.1em] h-[1.1em] text-base-content/60 group-hover:text-base-content"
+          />
+        </button>
+      </h2>
+      <span v-if="$slots['title-help']" class="relative z-10 flex shrink-0">
+        <slot name="title-help" />
+      </span>
+    </div>
+    <div v-show="open" :id="contentId" class="pb-1">
       <slot />
     </div>
   </div>

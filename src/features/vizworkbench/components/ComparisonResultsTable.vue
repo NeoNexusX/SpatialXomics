@@ -8,6 +8,7 @@
  */
 import { ref, computed, watch, nextTick } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
+import SectionHelp from '@/features/vizworkbench/components/SectionHelp.vue'
 import type { IconType } from '@/shared/components/svgIcons'
 import type {
   IonComparison,
@@ -307,25 +308,27 @@ watch(
     :class="expanded ? 'h-full' : 'h-auto self-start'"
   >
     <!-- Collapsible header bar -->
-    <div
-      class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-base-200/60 select-none kawaru-text-87"
-      @click.stop="toggle"
-    >
-      <SvgIcon :type="expanded ? 'chevron_down' : 'chevron_right'" class="text-base-content/60" />
-      <span class="font-semibold text-base-content whitespace-nowrap shrink-0 kawaru-text-87">
-        {{ $t('vizworkbench.compare.results') }}
-      </span>
-      <span class="kawaru-text-81 text-base-content whitespace-nowrap shrink-0">
-        {{ $t('vizworkbench.compare.ionCount', { count: results.length }) }}
-      </span>
-      <span
-        v-if="filterStats.filtered > 0"
-        class="kawaru-text-81 text-base-content whitespace-nowrap overflow-hidden text-ellipsis min-w-0"
-        :title="$t('vizworkbench.compare.filteredFrom', filterStats)"
+    <h2 class="kawaru-text-87 font-semibold text-base-content">
+      <button
+        type="button"
+        class="flex w-full items-center gap-2 px-3 py-2 text-left cursor-pointer hover:bg-base-200/60 select-none"
+        :aria-expanded="expanded"
+        @click.stop="toggle"
       >
-        {{ $t('vizworkbench.compare.filteredFrom', filterStats) }}
-      </span>
-    </div>
+        <SvgIcon :type="expanded ? 'chevron_down' : 'chevron_right'" class="text-base-content/60" />
+        <span class="whitespace-nowrap shrink-0">{{ $t('vizworkbench.compare.results') }}</span>
+        <span class="kawaru-text-81 font-normal whitespace-nowrap shrink-0">
+          {{ $t('vizworkbench.compare.ionCount', { count: results.length }) }}
+        </span>
+        <span
+          v-if="filterStats.filtered > 0"
+          class="kawaru-text-81 font-normal truncate min-w-0"
+          :title="$t('vizworkbench.compare.filteredFrom', filterStats)"
+        >
+          {{ $t('vizworkbench.compare.filteredFrom', filterStats) }}
+        </span>
+      </button>
+    </h2>
 
     <!-- Expanded content -->
     <div v-if="expanded" class="border-t border-base-300 px-3 py-3 flex flex-1 min-h-0 flex-col">
@@ -439,17 +442,18 @@ watch(
                     class="inline text-base-content/40"
                   />
                 </th>
-                <th
-                  :class="TH_SORT"
-                  @click="setSort('detRatio')"
-                  :title="$t('vizworkbench.compare.detRatioHint')"
-                >
-                  {{ $t('vizworkbench.compare.detRatio')
-                  }}<SvgIcon
-                    v-if="sortIcon('detRatio')"
-                    :type="sortDir === 'desc' ? 'chevron_down' : 'chevron_up'"
-                    class="inline text-base-content/40"
-                  />
+                <th :class="TH_SORT" @click="setSort('detRatio')">
+                  <span class="inline-flex items-center gap-1">
+                    {{ $t('vizworkbench.compare.detRatio') }}
+                    <SvgIcon
+                      v-if="sortIcon('detRatio')"
+                      :type="sortDir === 'desc' ? 'chevron_down' : 'chevron_up'"
+                      class="text-base-content/40"
+                    />
+                    <SectionHelp :label="$t('vizworkbench.compare.detRatio')" @click.stop>
+                      {{ $t('vizworkbench.compare.detRatioHint') }}
+                    </SectionHelp>
+                  </span>
                 </th>
                 <th :class="TH_SORT" @click="setSort('meanA')">
                   <span class="inline-flex items-center gap-1 whitespace-nowrap"
@@ -477,17 +481,18 @@ watch(
                     class="inline text-base-content/40"
                   />
                 </th>
-                <th
-                  :class="TH_SORT"
-                  @click="setSort('ratio')"
-                  :title="$t('vizworkbench.compare.meanRatioHint')"
-                >
-                  {{ $t('vizworkbench.compare.meanRatio')
-                  }}<SvgIcon
-                    v-if="sortIcon('ratio')"
-                    :type="sortDir === 'desc' ? 'chevron_down' : 'chevron_up'"
-                    class="inline text-base-content/40"
-                  />
+                <th :class="TH_SORT" @click="setSort('ratio')">
+                  <span class="inline-flex items-center gap-1">
+                    {{ $t('vizworkbench.compare.meanRatio') }}
+                    <SvgIcon
+                      v-if="sortIcon('ratio')"
+                      :type="sortDir === 'desc' ? 'chevron_down' : 'chevron_up'"
+                      class="text-base-content/40"
+                    />
+                    <SectionHelp :label="$t('vizworkbench.compare.meanRatio')" @click.stop>
+                      {{ $t('vizworkbench.compare.meanRatioHint') }}
+                    </SectionHelp>
+                  </span>
                 </th>
                 <th class="whitespace-nowrap">{{ $t('vizworkbench.compare.category') }}</th>
               </tr>

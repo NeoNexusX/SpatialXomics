@@ -1,11 +1,12 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import VizInfoPanel from '../VizInfoPanel.vue'
 import { mapItemToDataset } from '@/features/datasets/mappers/datasetMapper'
 import { deriveAcquisition } from '@/features/vizworkbench/utils/acquisition'
 import type { MetadataAttrs } from '@/services/zarr/types/zarr'
 import type { File } from '@/features/datasets/types/dataset'
-import { i18n, loadCoreMessages, loadFeatureMessages } from '@/i18n'
+import { i18n, loadActiveFeatureMessages, loadCoreMessages, loadFeatureMessages } from '@/i18n'
 
 // 直方图画布挂载时会建 ResizeObserver，jsdom 没有
 vi.stubGlobal(
@@ -24,6 +25,10 @@ beforeAll(() =>
     loadFeatureMessages('datasets'),
   ]),
 )
+
+afterEach(() => {
+  i18n.global.locale.value = 'en'
+})
 
 function sourceFile(over: Record<string, unknown> = {}) {
   return mapItemToDataset({
@@ -83,5 +88,52 @@ describe('VizInfoPanel source file metadata', () => {
     const text = mountPanel(sourceFile({ mz: null })).text()
     expect(text).toContain('70000')
     expect(text).not.toContain('at m/z')
+  })
+})
+
+describe('VizInfoPanel sections', () => {
+  const headers = (w: ReturnType<typeof mountPanel>) =>
+    w.findAll('h2 > button[aria-expanded]').map((b) => b.text())
+
+  it('keeps instrument info, sample and preprocessing as sub-items of Info', async () => {
+    const w = mountPanel(sourceFile(), zarrPositive)
+    await w.setProps({ methods: ['tic'], info: { pixels: '120 × 80' } })
+    expect(headers(w)).toEqual(['Info', 'Intensity'])
+    const subheads = w.findAll('h3').map((h) => h.text())
+    expect(subheads).toEqual(['Instrument Info', 'Biological & Sample Info', 'Preprocessing'])
+    expect(w.text()).toContain('120 × 80')
+
+    const infoToggle = w.get('h2 > button')
+    const infoContent = w.get<HTMLDivElement>(`#${infoToggle.attributes('aria-controls')}`).element
+    await infoToggle.trigger('click')
+    expect(infoToggle.attributes('aria-expanded')).toBe('false')
+    expect(infoContent.style.display).toBe('none')
+    await infoToggle.trigger('click')
+    expect(infoToggle.attributes('aria-expanded')).toBe('true')
+    expect(infoContent.style.display).toBe('')
+
+    await Promise.all([loadCoreMessages('zh-CN'), loadActiveFeatureMessages('zh-CN')])
+    i18n.global.locale.value = 'zh-CN'
+    await nextTick()
+    expect(w.get('h3').text()).toBe('仪器信息')
+    w.unmount()
+  })
+
+  it('puts gamma next to the display range in Intensity', async () => {
+    const w = mountPanel(null, zarrPositive)
+    const slider = w.find('input[type="range"]')
+    const help = w.get('button[aria-label="About Gamma"]')
+    expect(help.attributes('aria-expanded')).toBe('false')
+    expect(w.text()).not.toContain('brighten weak signals')
+    await help.trigger('click')
+    expect(help.attributes('aria-expanded')).toBe('true')
+    expect(
+      document.body.querySelector('[role="dialog"][aria-label="Gamma"]')?.textContent,
+    ).toContain('brighten weak signals')
+    await slider.setValue('1.3')
+    expect(w.emitted('update:gamma')).toEqual([[1.3]])
+    await w.setProps({ channelsMode: true })
+    expect(slider.attributes('disabled')).toBeDefined()
+    w.unmount()
   })
 })

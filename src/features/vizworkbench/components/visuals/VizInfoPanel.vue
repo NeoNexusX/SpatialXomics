@@ -1,123 +1,140 @@
 <template>
-  <div
-    class="flex flex-col select-none lg:h-full lg:overflow-y-auto scrollbar-thin overflow-x-hidden pr-4 lg:pr-[1em] kawaru-text-75"
-  >
-    <!-- ─── Info ─── -->
-    <CollapsibleSection :title="$t('vizworkbench.info.info')">
-      <div class="space-y-1.5 select-text text-base-content">
-        <!-- 长值保持单行，超出部分截断，悬停查看完整内容。 -->
-        <div v-for="row in infoRows" :key="row.label" class="flex min-w-0 gap-3 items-baseline">
-          <span class="shrink-0 whitespace-nowrap kawaru-text-75">{{ row.label }}</span>
-          <span
-            class="min-w-0 flex-1 truncate text-right font-mono kawaru-text-56"
-            :title="row.value"
-            >{{ row.value }}</span
-          >
-        </div>
-      </div>
-    </CollapsibleSection>
-
-    <!-- ─── Sample（只在源数据集记录里有，zarr 不带） ─── -->
+  <div class="flex flex-col select-none kawaru-text-75">
+    <!-- Info：仪器信息 / 生物与样本信息 / 预处理 -->
     <CollapsibleSection
-      v-if="sampleRows.length"
-      :title="$t('datasets.overview.sampleInfo')"
-      class="mt-5"
+      v-if="rowGroups.length || methods.length"
+      :title="$t('vizworkbench.info.info')"
     >
-      <div class="space-y-1.5 kawaru-text-68 text-base-content">
-        <div v-for="row in sampleRows" :key="row.label" class="flex min-w-0 gap-3">
-          <span class="shrink-0 whitespace-nowrap">{{ row.label }}</span>
-          <span
-            class="min-w-0 flex-1 truncate text-right font-mono text-base-content"
-            :title="row.value"
-            >{{ row.value }}</span
-          >
-        </div>
+      <div class="divide-y divide-base-content/10 select-text text-base-content">
+        <section v-for="group in rowGroups" :key="group.key" class="py-3 first:pt-1 last:pb-0">
+          <h3 :class="SUBHEAD_CLASS">{{ group.title }}</h3>
+          <!-- 长值保持单行，超出部分截断，悬停查看完整内容。 -->
+          <dl class="space-y-1.5">
+            <div
+              v-for="row in group.rows"
+              :key="row.label"
+              class="flex min-w-0 gap-3 items-baseline"
+            >
+              <dt class="shrink-0 whitespace-nowrap kawaru-text-68">{{ row.label }}</dt>
+              <dd
+                class="min-w-0 flex-1 truncate text-right font-mono kawaru-text-62"
+                :title="row.value"
+              >
+                {{ row.value }}
+              </dd>
+            </div>
+          </dl>
+        </section>
+        <section v-if="methods.length" class="py-3 first:pt-1 last:pb-0">
+          <h3 :class="SUBHEAD_CLASS">{{ $t('common.preprocessing.title') }}</h3>
+          <ul class="space-y-1">
+            <li
+              v-for="m in methods"
+              :key="m"
+              :title="methodLabel(m)"
+              class="kawaru-text-62 flex items-center gap-1.5 min-w-0"
+            >
+              <span class="shrink-0 w-[0.25em] h-[0.25em] rounded-full bg-blue-400"></span>
+              <span class="truncate">{{ methodLabel(m) }}</span>
+            </li>
+          </ul>
+        </section>
       </div>
     </CollapsibleSection>
 
-    <!-- ─── Display Range ─── -->
-    <CollapsibleSection :title="$t('vizworkbench.info.displayRange')" class="mt-5">
-      <!-- 标签列宽度使用容器字号，避免与标签自身字号叠加缩放。 -->
-      <div class="space-y-2">
-        <div class="flex items-center gap-2">
-          <div class="w-[2em] text-right">
-            <span class="kawaru-text-68 text-base-content">{{ $t('vizworkbench.info.max') }}</span>
+    <!-- ─── 强度：直方图、显示上下限与 Gamma 都在调「强度 → 颜色」的映射，
+         多离子叠加时一起置灰（同一句提示） ─── -->
+    <CollapsibleSection :title="$t('vizworkbench.info.intensity')" class="mt-5">
+      <div class="space-y-3 text-base-content">
+        <div>
+          <div class="relative h-[5em] rounded border border-base-content/50 bg-base-200">
+            <canvas ref="histCanvasRef" class="absolute inset-0 w-full h-full" />
+            <div
+              class="absolute top-0 bottom-0 w-[2px] bg-red-500/80 z-10"
+              :style="{ left: markerLeft(displayMin) + '%' }"
+            />
+            <div
+              class="absolute top-0 bottom-0 w-[2px] bg-red-500/80 z-10"
+              :style="{ left: markerLeft(displayMax) + '%' }"
+            />
+          </div>
+          <div
+            v-if="statRows.length"
+            class="mt-1 flex flex-wrap justify-between gap-x-3 kawaru-text-62 text-base-content/60"
+          >
+            <span v-for="row in statRows" :key="row.label"
+              >{{ row.label }}
+              <span class="font-mono text-base-content">{{ row.value }}</span></span
+            >
+          </div>
+        </div>
+
+        <!-- 标签列宽度使用容器字号，避免与标签自身字号叠加缩放。 -->
+        <div class="space-y-2">
+          <div class="flex items-center gap-2">
+            <div class="w-[2em] text-right">
+              <span class="kawaru-text-68">{{ $t('vizworkbench.info.max') }}</span>
+            </div>
+            <input
+              type="text"
+              class="input input-sm input-bordered flex-1 kawaru-text-68 font-mono"
+              :class="{ 'opacity-50': channelsMode }"
+              :disabled="channelsMode"
+              :title="channelsMode ? $t('vizworkbench.ionImage.rangeDisabled') : undefined"
+              :value="formatValue(localMax)"
+              @change="onMaxInput($event)"
+            />
+            <div class="w-[4em] text-right">
+              <span class="kawaru-text-68 font-bold">{{ pctLabel(displayMax) }}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="w-[2em] text-right">
+              <span class="kawaru-text-68">{{ $t('vizworkbench.info.min') }}</span>
+            </div>
+            <input
+              type="text"
+              class="input input-sm input-bordered flex-1 kawaru-text-68 font-mono"
+              :class="{ 'opacity-50': channelsMode }"
+              :disabled="channelsMode"
+              :title="channelsMode ? $t('vizworkbench.ionImage.rangeDisabled') : undefined"
+              :value="formatValue(localMin)"
+              @change="onMinInput($event)"
+            />
+            <div class="w-[4em] text-right">
+              <span class="kawaru-text-68 font-bold">{{ pctLabel(displayMin) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1 kawaru-text-68">
+            <div class="flex items-center gap-1">
+              <label :for="gammaId">{{ $t('vizworkbench.overlay.gamma') }}</label>
+              <SectionHelp :label="$t('vizworkbench.overlay.gamma')">
+                {{ $t('vizworkbench.overlay.gammaHint') }}
+              </SectionHelp>
+            </div>
+            <span class="font-mono">{{ gamma.toFixed(1) }}</span>
           </div>
           <input
-            type="text"
-            class="input input-sm input-bordered flex-1 kawaru-text-68 font-mono"
+            :id="gammaId"
+            type="range"
+            class="range range-xs range-primary"
             :class="{ 'opacity-50': channelsMode }"
             :disabled="channelsMode"
             :title="channelsMode ? $t('vizworkbench.ionImage.rangeDisabled') : undefined"
-            :value="formatValue(localMax)"
-            @change="onMaxInput($event)"
+            min="0.5"
+            max="1.5"
+            step="0.1"
+            :value="gamma"
+            @input="emit('update:gamma', +($event.target as HTMLInputElement).value)"
           />
-          <div class="w-[4em] text-right">
-            <span class="kawaru-text-68 text-base-content font-bold">{{
-              pctLabel(displayMax)
-            }}</span>
+          <div class="flex justify-between mt-0.5 kawaru-text-62 text-base-content/60">
+            <span>0.5</span>
+            <span>1.0</span>
+            <span>1.5</span>
           </div>
-        </div>
-        <div class="flex items-center gap-2">
-          <div class="w-[2em] text-right">
-            <span class="kawaru-text-68 text-base-content">{{ $t('vizworkbench.info.min') }}</span>
-          </div>
-          <input
-            type="text"
-            class="input input-sm input-bordered flex-1 kawaru-text-68 font-mono"
-            :class="{ 'opacity-50': channelsMode }"
-            :disabled="channelsMode"
-            :title="channelsMode ? $t('vizworkbench.ionImage.rangeDisabled') : undefined"
-            :value="formatValue(localMin)"
-            @change="onMinInput($event)"
-          />
-          <div class="w-[4em] text-right">
-            <span class="kawaru-text-68 text-base-content font-bold">{{
-              pctLabel(displayMin)
-            }}</span>
-          </div>
-        </div>
-      </div>
-    </CollapsibleSection>
-
-    <!-- ─── Statistic ─── -->
-    <CollapsibleSection :title="$t('vizworkbench.info.statistic')" class="mt-5">
-      <div class="space-y-2 p-2">
-        <div class="relative h-[5em] rounded border border-base-content/50 bg-base-200">
-          <canvas ref="histCanvasRef" class="absolute inset-0 w-full h-full" />
-          <div
-            class="absolute top-0 bottom-0 w-[2px] bg-red-500/80 z-10"
-            :style="{ left: markerLeft(displayMin) + '%' }"
-          />
-          <div
-            class="absolute top-0 bottom-0 w-[2px] bg-red-500/80 z-10"
-            :style="{ left: markerLeft(displayMax) + '%' }"
-          />
-        </div>
-        <div class="space-y-1.5 kawaru-text-75 text-base-content">
-          <div v-for="row in statisticRows" :key="row.label" class="flex justify-between">
-            <span>{{ row.label }}</span>
-            <span class="font-mono text-base-content">{{ row.value }}</span>
-          </div>
-        </div>
-      </div>
-    </CollapsibleSection>
-
-    <!-- ─── Preprocessing ─── -->
-    <CollapsibleSection
-      v-if="methods.length"
-      :title="$t('common.preprocessing.title')"
-      class="mt-5"
-    >
-      <div class="space-y-1">
-        <div
-          v-for="m in methods"
-          :key="m"
-          :title="methodLabel(m)"
-          class="kawaru-text-62 text-base-content flex items-center gap-1.5 min-w-0"
-        >
-          <span class="shrink-0 w-[0.25em] h-[0.25em] rounded-full bg-blue-400"></span>
-          <span class="truncate">{{ methodLabel(m) }}</span>
         </div>
       </div>
     </CollapsibleSection>
@@ -127,8 +144,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount, watch, type PropType } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, useId, watch, type PropType } from 'vue'
 import CollapsibleSection from '@/shared/components/CollapsibleSection.vue'
+import SectionHelp from '@/features/vizworkbench/components/SectionHelp.vue'
 import { upperBound } from '@/shared/utils/bisect'
 import { methodLabel } from '@/shared/utils/methodsNormalize'
 import { vocabLabel } from '@/features/datasets/constants/vocabLabels'
@@ -157,14 +175,20 @@ const props = defineProps({
   sourceFile: { type: Object as PropType<File | null>, default: null },
   methods: { type: Array as PropType<string[]>, default: () => [] },
   sortedValues: { type: Array as PropType<number[]>, default: () => [] },
-  /** 多离子叠加激活：Display Range 不参与叠加渲染，输入框置灰（与工具栏 Colormap 同一语义） */
+  gamma: { type: Number, default: 1 },
+  /** 多离子叠加激活：显示上下限与 Gamma 不参与叠加渲染，置灰（与工具栏 Colormap 同一语义） */
   channelsMode: { type: Boolean, default: false },
 })
 
 const emit = defineEmits<{
   (e: 'update:displayMin', v: number): void
   (e: 'update:displayMax', v: number): void
+  (e: 'update:gamma', v: number): void
 }>()
+
+/** 「信息」里各子项的小标题 */
+const SUBHEAD_CLASS = 'mb-1.5 kawaru-text-75 font-semibold text-base-content/70'
+const gammaId = useId()
 
 const localMin = computed(() => props.displayMin)
 const localMax = computed(() => props.displayMax)
@@ -182,17 +206,16 @@ function pctLabel(v: number): string {
   return pct.toFixed(2) + '%'
 }
 
-const statisticRows = computed(() => {
+/** 直方图下方的一行：当前离子图的非零像素数与 TIC */
+const statRows = computed(() => {
   const items: { label: string; value: string }[] = []
-  if (props.info.pixels)
-    items.push({ label: t('vizworkbench.info.dimensions'), value: props.info.pixels })
   if (props.info.nonZero)
     items.push({ label: t('vizworkbench.info.nonZero'), value: props.info.nonZero })
   if (props.info.totalIon) items.push({ label: 'TIC', value: props.info.totalIon })
   return items
 })
 
-const infoRows = computed(() => {
+const acquisitionRows = computed(() => {
   const items: { label: string; value: string }[] = []
   const a = props.acquisition
   // zarr 属性里的极性可能是小写（positive），词表按首字母大写的原值查显示文字
@@ -202,6 +225,8 @@ const infoRows = computed(() => {
   if (a?.ionSource) items.push({ label: t('common.meta.ionisationSource'), value: a.ionSource })
   if (props.info.pixelSize)
     items.push({ label: t('common.meta.pixelSize'), value: props.info.pixelSize })
+  if (props.info.pixels)
+    items.push({ label: t('vizworkbench.info.dimensions'), value: props.info.pixels })
   const resolvingPower = formatResolvingPower(a?.resolvingPower, a?.resolvingPowerMz)
   if (resolvingPower) items.push({ label: t('common.meta.resolvingPower'), value: resolvingPower })
   // 基质名、溶剂表达式按 vocabLabel 的规则原样显示，涂布方式显示「中文 (English)」
@@ -234,6 +259,18 @@ const sampleRows = computed(() => {
     .filter((row) => row.value)
     .map((row) => ({ label: row.label, value: vocabLabel(row.value) }))
 })
+
+/** 「信息」里的键值子项；空的子项不显示（样本信息只在源数据集记录里有，zarr 不带） */
+const rowGroups = computed(() =>
+  [
+    {
+      key: 'acquisition',
+      title: t('vizworkbench.info.instrumentInfo'),
+      rows: acquisitionRows.value,
+    },
+    { key: 'sample', title: t('datasets.overview.sampleInfo'), rows: sampleRows.value },
+  ].filter((group) => group.rows.length),
+)
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)

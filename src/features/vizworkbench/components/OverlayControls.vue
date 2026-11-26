@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import ROIPanel from '@/features/vizworkbench/components/visuals/ROIPanel.vue'
 import MaskExportPanel from '@/features/vizworkbench/components/visuals/MaskExportPanel.vue'
 import IonChannelPanel from '@/features/vizworkbench/components/visuals/IonChannelPanel.vue'
+import SectionHelp from '@/features/vizworkbench/components/SectionHelp.vue'
 import CollapsibleSection from '@/shared/components/CollapsibleSection.vue'
 import type { MaskExportPayload } from '@/features/vizworkbench/utils/maskExport'
 import type { ImportedMask } from '@/features/vizworkbench/composables/useImportedMasks'
@@ -44,11 +45,8 @@ const props = defineProps<{
   draftReady: boolean
   viewingRoi: boolean
   confirmedRois: ConfirmedROI[]
-  /** 共享的 ROI 选中集（null = 全选）。同时驱动主图高亮与导出勾选，语义对齐 selectedKmeansIds。 */
+  /** 共享的 ROI 选中集（null = 全选）。同时驱动主图高亮与导出内容，语义对齐 selectedKmeansIds。 */
   selectedRoiIds: Set<string> | null
-  gamma: number
-  /** 多离子叠加激活（父组件的 overlayActive）：Gamma 不参与叠加渲染，滑块置灰 */
-  channelsMode: boolean
   /** Multi-ion overlay state (owned by the parent). */
   channelsEnabled: boolean
   ionChannels: IonChannel[]
@@ -74,8 +72,8 @@ const emit = defineEmits<{
   (e: 'toggle-kmeans-cluster', id: number): void
   (e: 'kmeans-select-all'): void
   (e: 'kmeans-clear-all'): void
-  /** Fired when the user confirms a k in the KMeans dialog - the parent runs
-   *  the local clustering over the UMAP raster. */
+  /** Fired with the k from the inline stepper (KMeans button on first use, or
+   *  Compute) - the parent runs the local clustering over the UMAP raster. */
   (e: 'run-kmeans', k: number): void
   (e: 'export-umap'): void
   (e: 'export-kmeans'): void
@@ -91,7 +89,6 @@ const emit = defineEmits<{
   (e: 'roi-deselect-all'): void
   (e: 'export-masks', payload: MaskExportPayload): void
   (e: 'roi-clear-all'): void
-  (e: 'update:gamma', value: number): void
   /** Multi-ion overlay events (state lives in the parent). */
   (e: 'update:channelsEnabled', value: boolean): void
   (e: 'add-current-channel'): void
@@ -116,12 +113,56 @@ const toggleRef = ref<HTMLInputElement | null>(null)
 
 const isContinuous = computed(() => props.storageMode === 'continuous')
 
-// KMeans is computed locally: the button opens a k-input dialog the first
-// time, and toggles the cached result afterwards. "Re-run" reopens the dialog.
-const showKmeansDialog = ref(false)
-const kInput = ref(5)
+// KMeans is computed locally with the k from the inline stepper: the KMeans
+// button computes on first use and toggles the cached result afterwards;
+// choosing another k goes through the stepper's Compute button.
 const K_MIN = 2
 const K_MAX = 20
+const K_DEFAULT = 5
+
+/** Raw stepper value; '' while the number field is cleared. */
+const kDraft = shallowRef<number | ''>(K_DEFAULT)
+
+function clampK(k: number): number {
+  return Math.min(K_MAX, Math.max(K_MIN, Math.round(k)))
+}
+
+/** The k a run would use: the draft snapped into range, or the applied k
+ *  while the field is empty. */
+const kTarget = computed(() => {
+  const raw = kDraft.value
+  return raw === '' || !Number.isFinite(raw) ? (props.kmeansK ?? K_DEFAULT) : clampK(raw)
+})
+
+// Re-running the applied k is disabled: the seed is fixed, so it would only
+// reset the region comparison and the cluster selection.
+const canRunKmeans = computed(
+  () => kTarget.value !== props.kmeansK && !props.kmeansComputing && !props.overlayLoading,
+)
+
+const kmeansRunClass = computed(() => {
+  if (props.kmeansComputing) return 'bg-rose-400 text-white border-rose-400'
+  return canRunKmeans.value
+    ? 'bg-rose-500 hover:bg-rose-600 text-white border-rose-500 hover:border-rose-600'
+    : 'bg-transparent text-rose-900/40 dark:text-rose-100/40 border-transparent'
+})
+
+const K_STEP_CLASS =
+  'btn btn-xs btn-square join-item shadow-none bg-base-100 border-rose-200 text-rose-700 hover:bg-rose-100 dark:border-rose-800 dark:text-rose-200 dark:hover:bg-rose-900/50 disabled:opacity-40'
+
+function stepK(delta: number) {
+  kDraft.value = clampK(kTarget.value + delta)
+}
+
+/** Blur / Enter: show the k that would actually run. */
+function commitK() {
+  kDraft.value = kTarget.value
+}
+
+function runKmeans() {
+  commitK()
+  if (canRunKmeans.value) emit('run-kmeans', kTarget.value)
+}
 
 function onKmeansClick() {
   if (props.kmeansVisible || props.kmeansK !== null) {
@@ -129,28 +170,8 @@ function onKmeansClick() {
     emit('toggle-overlay', 'kmeans')
     return
   }
-  kInput.value = 5
-  showKmeansDialog.value = true
+  runKmeans()
 }
-
-function openKmeansDialog() {
-  kInput.value = props.kmeansK ?? 5
-  showKmeansDialog.value = true
-}
-
-function onKmeansConfirm() {
-  const k = Math.round(kInput.value)
-  if (!(k >= K_MIN && k <= K_MAX)) return
-  emit('run-kmeans', k)
-}
-
-// Close the dialog once a run succeeds (kmeansK gets set).
-watch(
-  () => props.kmeansK,
-  (v) => {
-    if (v !== null) showKmeansDialog.value = false
-  },
-)
 
 // Recover the enable state when the task turns out ready - either from the
 // page-entry probe (a finished task already existed) or from a Refresh that
@@ -209,6 +230,11 @@ function cancelEnable() {
 <template>
   <!-- Multi-ion overlay：仅 continuous 数据可用（processed 整块不渲染） -->
   <CollapsibleSection v-if="isContinuous" :title="$t('vizworkbench.overlay.multiIon')" class="mt-5">
+    <template #title-help>
+      <SectionHelp :label="$t('vizworkbench.overlay.multiIon')">
+        {{ $t('vizworkbench.channels.hint') }}
+      </SectionHelp>
+    </template>
     <IonChannelPanel
       :enabled="channelsEnabled"
       :channels="ionChannels"
@@ -229,35 +255,19 @@ function cancelEnable() {
     />
   </CollapsibleSection>
 
-  <CollapsibleSection :title="$t('vizworkbench.overlay.visualization')" class="mt-5">
-    <div class="mb-3">
-      <div class="flex items-center justify-between mb-1">
-        <span class="text-base-content">{{ $t('vizworkbench.overlay.gamma') }}</span>
-        <span class="font-mono text-base-content">{{ gamma.toFixed(1) }}</span>
-      </div>
-      <input
-        type="range"
-        class="range range-xs range-primary"
-        :class="{ 'opacity-50': channelsMode }"
-        :disabled="channelsMode"
-        :title="channelsMode ? $t('vizworkbench.ionImage.rangeDisabled') : undefined"
-        min="0.5"
-        max="1.5"
-        step="0.1"
-        :value="gamma"
-        @input="emit('update:gamma', +($event.target as HTMLInputElement).value)"
-      />
-      <div class="flex justify-between text-base-content mt-0.5">
-        <span>0.5</span>
-        <span>1.0</span>
-        <span>1.5</span>
-      </div>
-    </div>
-
-    <!-- UMAP / KMeans: only available for continuous storage -->
-    <div v-if="isContinuous" class="mt-2">
+  <!-- UMAP / KMeans: only available for continuous storage, so the whole
+       section is hidden for processed data. -->
+  <CollapsibleSection
+    v-if="isContinuous"
+    :title="$t('vizworkbench.overlay.clustering')"
+    class="mt-5"
+  >
+    <!-- The task status and the KMeans k row share the slot under the buttons,
+         so a finished UMAP task swaps one strip for the other without shifting
+         the panel. -->
+    <div class="mt-1 flex flex-col gap-2">
       <label
-        class="flex items-center justify-between mb-2 cursor-pointer select-none kawaru-text-75"
+        class="flex items-center justify-between cursor-pointer select-none kawaru-text-75"
         :class="{ 'opacity-60 pointer-events-none': clusteringCreating }"
       >
         <span class="text-base-content">{{ $t('vizworkbench.overlay.enable') }}</span>
@@ -270,26 +280,6 @@ function cancelEnable() {
           @change="onToggleComputation"
         />
       </label>
-
-      <div v-if="clusteringCreating" class="text-base-content/60 mt-1.5 flex items-center gap-1">
-        <span class="loading loading-spinner loading-xs"></span>
-        {{ $t('vizworkbench.overlay.creating') }}
-      </div>
-      <div
-        v-else-if="clusteringComputing && !clusteringReady"
-        class="text-base-content/60 mt-1.5 flex items-center gap-2"
-      >
-        <span class="loading loading-spinner loading-xs"></span>
-        <span class="flex-1">{{ $t('vizworkbench.overlay.computing') }}</span>
-        <button
-          class="btn btn-ghost btn-xs kawaru-text-56"
-          :disabled="clusteringRefreshing"
-          @click="emit('refresh-clustering')"
-        >
-          <span v-if="clusteringRefreshing" class="loading loading-spinner loading-xs"></span>
-          {{ $t('common.action.refresh') }}
-        </button>
-      </div>
 
       <div class="flex gap-2">
         <button
@@ -330,15 +320,98 @@ function cancelEnable() {
         </button>
       </div>
 
+      <!-- UMAP task status: teal like the UMAP button -->
+      <div
+        v-if="clusteringCreating || (clusteringComputing && !clusteringReady)"
+        class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-200"
+      >
+        <span class="loading loading-spinner loading-xs shrink-0"></span>
+        <span class="flex-1 min-w-0 truncate">{{
+          clusteringCreating
+            ? $t('vizworkbench.overlay.creating')
+            : $t('vizworkbench.overlay.computing')
+        }}</span>
+        <button
+          v-if="!clusteringCreating"
+          type="button"
+          class="btn btn-ghost btn-xs gap-1 shrink-0 kawaru-text-62 text-teal-700 hover:bg-teal-100 hover:border-transparent dark:text-teal-200 dark:hover:bg-teal-900/60"
+          :disabled="clusteringRefreshing"
+          @click="emit('refresh-clustering')"
+        >
+          <span v-if="clusteringRefreshing" class="loading loading-spinner loading-xs"></span>
+          <SvgIcon v-else type="refresh" />
+          {{ $t('common.action.refresh') }}
+        </button>
+      </div>
+      <!-- KMeans k: rose like the KMeans button -->
+      <div
+        v-else-if="computationEnabled && clusteringReady"
+        class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-rose-50 dark:bg-rose-950/40"
+      >
+        <div class="flex flex-1 min-w-0 items-center gap-1">
+          <span class="truncate text-rose-900/80 dark:text-rose-100/80">
+            {{ $t('vizworkbench.overlay.kLabel') }}
+          </span>
+          <SectionHelp :label="$t('vizworkbench.overlay.kLabel')">
+            {{ $t('vizworkbench.overlay.kHint', { min: K_MIN, max: K_MAX }) }}
+          </SectionHelp>
+        </div>
+        <div class="join shrink-0">
+          <button
+            type="button"
+            :class="K_STEP_CLASS"
+            :aria-label="$t('vizworkbench.overlay.kDecrease')"
+            :disabled="kmeansComputing || kTarget <= K_MIN"
+            @click="stepK(-1)"
+          >
+            <SvgIcon type="minus" />
+          </button>
+          <!-- daisyUI 的 .input-xs 给隐藏的微调箭头留了 -0.75rem 右外边距，px-0 时会把
+               数字挤偏右，所以箭头的外边距要清零 -->
+          <input
+            v-model.number="kDraft"
+            type="number"
+            inputmode="numeric"
+            :min="K_MIN"
+            :max="K_MAX"
+            step="1"
+            class="input input-xs join-item w-10 px-0 text-center font-mono kawaru-text-68 border-rose-200 dark:border-rose-800 focus:outline-rose-400 focus:outline-offset-0 [appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            :aria-label="$t('vizworkbench.overlay.kLabel')"
+            :disabled="kmeansComputing"
+            @change="commitK"
+            @keydown.enter.prevent="runKmeans"
+          />
+          <button
+            type="button"
+            :class="K_STEP_CLASS"
+            :aria-label="$t('vizworkbench.overlay.kIncrease')"
+            :disabled="kmeansComputing || kTarget >= K_MAX"
+            @click="stepK(1)"
+          >
+            <SvgIcon type="plus" />
+          </button>
+        </div>
+        <button
+          type="button"
+          class="btn btn-xs shrink-0 shadow-none kawaru-text-62"
+          :class="kmeansRunClass"
+          :disabled="!canRunKmeans"
+          @click="runKmeans"
+        >
+          <span v-if="kmeansComputing" class="loading loading-spinner loading-xs"></span>
+          {{ $t('vizworkbench.overlay.compute') }}
+        </button>
+      </div>
+
       <div
         v-if="overlayLoading && computationEnabled"
-        class="text-base-content/60 mt-1.5 flex items-center gap-1"
+        class="text-base-content/60 flex items-center gap-1"
       >
         <span class="loading loading-spinner loading-xs"></span>
         {{ $t('vizworkbench.overlay.loading') }}
       </div>
 
-      <div v-if="overlayError" class="text-error mt-1.5 flex items-center gap-2">
+      <div v-if="overlayError" class="text-error flex items-center gap-2">
         <span class="flex-1">{{ $t('vizworkbench.overlay.unavailable') }}</span>
         <button
           class="btn btn-ghost btn-sm text-error kawaru-text-62"
@@ -401,12 +474,12 @@ function cancelEnable() {
 
       <!-- Cluster picker: also drives the export mask -->
       <div v-if="kmeansClusters.length" class="mt-2 pt-2 border-t border-base-content/15">
-        <div class="font-semibold text-base-content mb-1">
+        <h3 class="kawaru-text-75 font-semibold text-base-content mb-1">
           {{ $t('vizworkbench.overlay.clusters') }}
           <span class="font-mono font-normal text-base-content/60">
             {{ selectedClusterCount }}/{{ kmeansClusters.length }}
           </span>
-        </div>
+        </h3>
         <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 max-h-48 overflow-y-auto">
           <label
             v-for="c in kmeansClusters"
@@ -428,21 +501,17 @@ function cancelEnable() {
             }}</span>
           </label>
         </div>
-        <div v-if="selectedClusterCount === 0" class="text-base-content/50 mt-1">
-          {{ $t('vizworkbench.overlay.noClusters') }}
-        </div>
-        <div class="flex gap-1 mt-2">
+        <div class="flex gap-2 mt-2">
           <button
-            class="btn btn-ghost btn-sm kawaru-text-62"
-            :title="$t('vizworkbench.overlay.rerunHint')"
-            @click="openKmeansDialog"
+            class="btn btn-ghost btn-sm flex-1 kawaru-text-62"
+            @click="emit('kmeans-select-all')"
           >
-            {{ $t('vizworkbench.overlay.rerun') }}
-          </button>
-          <button class="btn btn-ghost btn-sm kawaru-text-62" @click="emit('kmeans-select-all')">
             {{ $t('vizworkbench.mask.all') }}
           </button>
-          <button class="btn btn-ghost btn-sm kawaru-text-62" @click="emit('kmeans-clear-all')">
+          <button
+            class="btn btn-ghost btn-sm flex-1 kawaru-text-62"
+            @click="emit('kmeans-clear-all')"
+          >
             {{ $t('common.action.clear') }}
           </button>
         </div>
@@ -476,34 +545,18 @@ function cancelEnable() {
       @remove-imported-mask="emit('remove-imported-mask', $event)"
       @toggle-imported-mask="emit('toggle-imported-mask', $event)"
     />
-  </CollapsibleSection>
-
-  <CollapsibleSection :title="$t('vizworkbench.overlay.export')" class="mt-5">
-    <!-- One group per export kind; today only the ROI/cluster mask export -->
-    <div>
-      <div class="kawaru-text-68 font-semibold text-base-content mb-2 tracking-wide">
-        {{ $t('vizworkbench.overlay.roiExport') }}
-      </div>
-      <MaskExportPanel
-        :rois="confirmedRois"
-        :selected-roi-ids="selectedRoiIds"
-        :kmeans-clusters="kmeansClusters"
-        :kmeans-labels-available="kmeansLabelsAvailable"
-        :kmeans-k="kmeansK"
-        :selected-kmeans-ids="selectedKmeansIds"
-        :imported-masks="importedMasks"
-        @toggle-imported-mask="emit('toggle-imported-mask', $event)"
-        @export-masks="(payload) => emit('export-masks', payload)"
-        @import-masks="(files) => emit('import-masks', files)"
-        @remove-imported-mask="emit('remove-imported-mask', $event)"
-        @toggle-roi-selection="emit('toggle-roi-selection', $event)"
-        @roi-select-all="emit('roi-select-all')"
-        @roi-deselect-all="emit('roi-deselect-all')"
-        @toggle-kmeans-cluster="emit('toggle-kmeans-cluster', $event)"
-        @kmeans-select-all="emit('kmeans-select-all')"
-        @kmeans-clear-all="emit('kmeans-clear-all')"
-      />
-    </div>
+    <!-- Mask import/export. Regions are picked in the ROI list above and the
+         KMeans cluster picker; this block only names what will be exported. -->
+    <MaskExportPanel
+      class="mt-3 pt-3 border-t border-base-content/15"
+      :rois="confirmedRois"
+      :selected-roi-ids="selectedRoiIds"
+      :kmeans-clusters="kmeansClusters"
+      :kmeans-visible="kmeansVisible"
+      :selected-kmeans-ids="selectedKmeansIds"
+      @export-masks="(payload) => emit('export-masks', payload)"
+      @import-masks="(files) => emit('import-masks', files)"
+    />
   </CollapsibleSection>
 
   <!-- Opt-in confirmation: first-time enable starts a backend clustering task -->
@@ -515,28 +568,4 @@ function cancelEnable() {
     @confirm="confirmEnable"
     @cancel="cancelEnable"
   />
-
-  <!-- KMeans: local clustering with a user-chosen k -->
-  <ConfirmDialog
-    :open="showKmeansDialog"
-    :title="$t('vizworkbench.overlay.kmeansTitle')"
-    :confirm-label="$t('vizworkbench.overlay.compute')"
-    :loading="kmeansComputing"
-    @confirm="onKmeansConfirm"
-    @cancel="showKmeansDialog = false"
-  >
-    <div class="flex items-center gap-3">
-      <span>{{ $t('vizworkbench.overlay.kLabel') }}</span>
-      <input
-        v-model.number="kInput"
-        type="number"
-        :min="K_MIN"
-        :max="K_MAX"
-        class="input input-sm input-bordered w-20 kawaru-text-62"
-      />
-    </div>
-    <p class="text-base-content/60 mt-2">
-      {{ $t('vizworkbench.overlay.kHint', { min: K_MIN, max: K_MAX }) }}
-    </p>
-  </ConfirmDialog>
 </template>

@@ -410,15 +410,6 @@ function handleRunKmeans(k: number) {
   return runKmeans(k)
 }
 
-function handleToggleKmeansCluster(id: number) {
-  toggleKmeansCluster(id)
-  // The export panel lets the user pick clusters before the KMeans overlay is
-  // shown; a click there should also surface the selection on the ion image.
-  // (The overlay's own cluster picker only renders while KMeans is visible, so
-  // this is a no-op when the toggle came from there.)
-  if (!kmeansVisible.value) toggleOverlay('kmeans')
-}
-
 function handleRoiClearAll() {
   if (cmpInvolvesRoi()) cmpReset()
   roiClearAll()
@@ -883,7 +874,6 @@ async function onSelectPixel(col: number, row: number) {
 
     <template #side-panel>
       <VizInfoPanel
-        class="shrink-0 py-4 w-full"
         :global-min="globalMin"
         :global-max="globalMax"
         :display-min="displayMin"
@@ -895,8 +885,10 @@ async function onSelectPixel(col: number, row: number) {
         :source-file="sourceFile"
         :methods="methods"
         :sorted-values="sortedNonZero"
+        :gamma="gamma"
         @update:display-min="onDisplayMinChange"
         @update:display-max="onDisplayMaxChange"
+        @update:gamma="gamma = $event"
       >
         <template #actions>
           <OverlayControls
@@ -921,8 +913,6 @@ async function onSelectPixel(col: number, row: number) {
             :viewing-roi="viewingROI"
             :confirmed-rois="confirmedROIs as any"
             :selected-roi-ids="selectedRoiIds"
-            :gamma="gamma"
-            :channels-mode="channelsMode"
             :channels-enabled="channelsEnabled"
             :ion-channels="ionChannels"
             :can-add-channel="canAddChannel"
@@ -935,7 +925,7 @@ async function onSelectPixel(col: number, row: number) {
             @retry-clustering="retryClustering"
             @enable-clustering="createClusteringTask"
             @refresh-clustering="refreshClusteringStatus"
-            @toggle-kmeans-cluster="handleToggleKmeansCluster"
+            @toggle-kmeans-cluster="toggleKmeansCluster"
             @kmeans-select-all="selectAllKmeansClusters"
             @kmeans-clear-all="clearKmeansClusters"
             @run-kmeans="handleRunKmeans"
@@ -954,7 +944,6 @@ async function onSelectPixel(col: number, row: number) {
             @remove-imported-mask="handleRemoveImportedMask"
             @toggle-imported-mask="toggleImportedMaskActive"
             @roi-clear-all="handleRoiClearAll"
-            @update:gamma="gamma = $event"
             @update:channels-enabled="onChannelsEnabledChange"
             @add-current-channel="onAddCurrentChannel"
             @toggle-batch-add="toggleBatchAdd"

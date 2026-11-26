@@ -14,6 +14,7 @@ import {
 } from 'reka-ui'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 import AdductMultiSelect, { type AdductOption } from './AdductMultiSelect.vue'
+import SectionHelp from '@/features/vizworkbench/components/SectionHelp.vue'
 import { ANNOTATION_KEY } from '@/features/vizworkbench/composables/useAnnotation'
 import { DATABASE_SOURCES } from '@/features/databases/sources'
 import { adductDisplay, fmtScoreRatio } from '@/features/vizworkbench/utils/annotation/format'
@@ -22,6 +23,7 @@ import {
   DEFAULT_SCORE_RATIO,
   MAX_SCORE_RATIO,
   MIN_SCORE_RATIO,
+  SCORE_RATIO_TOTAL,
 } from '@/features/vizworkbench/utils/annotation/score'
 import {
   adductReasonText,
@@ -248,20 +250,28 @@ function onScoreRatioInput(key: keyof ScoreWeights, e: Event): void {
 
 <template>
   <section class="min-w-0 rounded-lg border border-base-content/20 kawaru-text-68">
-    <button
-      class="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-base-200/60"
-      @click="open = !open"
-    >
-      <SvgIcon
-        type="chevron_down"
-        class="h-3.5 w-3.5 shrink-0 transition-transform"
-        :class="{ '-rotate-90': !open }"
-      />
-      <span class="shrink-0 font-medium">{{ $t('vizworkbench.annotation.conditions') }}</span>
-      <span v-if="!open" class="min-w-0 truncate text-base-content/50" :title="summaryLine">
-        {{ summaryLine }}
-      </span>
-    </button>
+    <h3 class="kawaru-text-75 font-semibold">
+      <button
+        type="button"
+        class="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-base-200/60"
+        :aria-expanded="open"
+        @click="open = !open"
+      >
+        <SvgIcon
+          type="chevron_down"
+          class="h-3.5 w-3.5 shrink-0 transition-transform"
+          :class="{ '-rotate-90': !open }"
+        />
+        <span class="shrink-0">{{ $t('vizworkbench.annotation.conditions') }}</span>
+        <span
+          v-if="!open"
+          class="min-w-0 truncate kawaru-text-68 font-normal text-base-content/50"
+          :title="summaryLine"
+        >
+          {{ summaryLine }}
+        </span>
+      </button>
+    </h3>
 
     <div v-show="open" class="flex min-w-0 flex-col gap-3 border-t border-base-content/20 p-3">
       <!-- 数据集采集条件 -->
@@ -388,21 +398,21 @@ function onScoreRatioInput(key: keyof ScoreWeights, e: Event): void {
         }}</span>
         <div class="flex min-w-0 flex-1 basis-40 flex-col gap-2">
           <template v-if="meanState === 'ready'">
-            <div
-              class="cursor-help"
-              :title="
-                $t('vizworkbench.annotation.peaksHint', {
-                  axis: peakStats.axis,
-                  zero: peakStats.axis - peakStats.nonZero,
-                })
-              "
-            >
+            <div class="flex items-center gap-1">
               {{
                 $t('vizworkbench.annotation.peaksKept', {
                   kept: keptDraft,
                   total: peakStats.nonZero,
                 })
               }}
+              <SectionHelp :label="$t('vizworkbench.annotation.peaks')">
+                {{
+                  $t('vizworkbench.annotation.peaksHint', {
+                    axis: peakStats.axis,
+                    zero: peakStats.axis - peakStats.nonZero,
+                  })
+                }}
+              </SectionHelp>
             </div>
             <div class="flex flex-wrap items-center gap-2">
               <input
@@ -467,12 +477,16 @@ function onScoreRatioInput(key: keyof ScoreWeights, e: Event): void {
         </div>
       </div>
 
-      <!-- 空间计算：100% 覆盖全部匹配项 -->
+      <!-- 空间计算：100% 覆盖全部匹配项。说明按钮放在控件区开头而不是标签列里：
+           英文标签（Spatial scoring / Score weights）已占满 6rem 的标签列，再加图标会压到输入框 -->
       <div class="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-2">
         <span class="min-w-24 w-[28%] shrink-0 whitespace-nowrap text-base-content/50">{{
           $t('vizworkbench.annotation.spatialCalculation')
         }}</span>
         <div class="flex min-w-0 flex-1 basis-44 items-baseline gap-2">
+          <SectionHelp :label="$t('vizworkbench.annotation.spatialCalculation')">
+            <p>{{ $t('vizworkbench.annotation.spatialCalculationHelp') }}</p>
+          </SectionHelp>
           <input
             :value="spatialPct"
             type="number"
@@ -516,6 +530,12 @@ function onScoreRatioInput(key: keyof ScoreWeights, e: Event): void {
         }}</span>
         <div class="flex min-w-0 flex-1 basis-44 flex-col gap-2">
           <div class="flex min-w-0 items-baseline gap-1">
+            <!-- mr-1 补足到与空间计算行相同的 0.5rem 间距，两行输入框左缘对齐 -->
+            <SectionHelp class="mr-1" :label="$t('vizworkbench.annotation.scoreWeights')">
+              <p>
+                {{ $t('vizworkbench.annotation.scoreWeightsHelp', { total: SCORE_RATIO_TOTAL }) }}
+              </p>
+            </SectionHelp>
             <template v-for="(part, i) in weightParts" :key="part.key">
               <span v-if="i > 0" class="shrink-0 text-base-content/40" aria-hidden="true">:</span>
               <input
