@@ -48,7 +48,7 @@ src/
 ├── features/             # 业务模块：agent、auth、collections、databases、datasets、home、upload、users、vizworkbench、workspace
 ├── i18n/                 # vue-i18n 实例、类型定义和 locales/{locale}/{ns}.json 语言包
 ├── router/               # 路由与守卫
-├── services/             # Zarr（含 OSS client）、聚类和 PubChem 等跨模块服务
+├── services/             # Zarr（含 HTTP 读取客户端）、聚类和 PubChem 等跨模块服务
 ├── shared/               # HTTP、认证、指令、通用组件/composable/config/types
 ├── views/                # 路由页面，负责组装 feature
 └── workers/              # 上传 ZIP/MD5 Worker

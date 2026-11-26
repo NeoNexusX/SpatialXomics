@@ -134,6 +134,18 @@ describe('useCanvasRenderer ROI highlight layer', () => {
     expect(px(roi, 1)![3]).toBe(0)
   })
 
+  it('leaves the ion image blank outside the view mask', () => {
+    const r = makeRenderer()
+    r.roiMask.value = new Uint8Array([1, 0, 0, 0])
+
+    r.render()
+
+    const image = layers(2, 2)[0]!
+    const background = [0x0a, 0x0a, 0x0f, 255]
+    expect(px(image, 0)).not.toEqual(background)
+    expect([1, 2, 3].map((i) => px(image, i))).toEqual([background, background, background])
+  })
+
   it('includes the ROI layer on the transparent export path', () => {
     const r = makeRenderer()
     r.roiHighlightData.value = solid(4, 255, 0, 0, 100)

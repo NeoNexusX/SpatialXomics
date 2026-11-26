@@ -1,6 +1,6 @@
 <template>
   <div class="flex flex-wrap items-center gap-3 mb-1 pt-1">
-    <h3 class="kawaru-text-100 font-semibold">{{ title }}</h3>
+    <h2 class="kawaru-text-87 font-semibold">{{ title }}</h2>
     <!-- 右侧控件组统一 kawaru-text-81；daisyUI 的 select/btn 自带 font-size，
          不继承，仍需各自显式挂档位。 -->
     <div class="ml-auto flex flex-wrap items-center gap-2 kawaru-text-81">

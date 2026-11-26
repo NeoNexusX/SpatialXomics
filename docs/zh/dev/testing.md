@@ -38,7 +38,7 @@ Linux WebKit 没有 `navigator.storage`，应用在那里走内存存储。夹�
 | 文件 | 覆盖的行为 |
 | --- | --- |
 | `agent.offline.spec.ts` | 实际探测并排除不支持图片的模型；保存与恢复连接；二次确认清除；设置切换保留草稿；Shift+Enter 与单次发送；工具调用及结果回传；永久错误和重新生成；取消及迟到响应隔离；OPFS 恢复与跨标签页只读；图片传输和 artifact 恢复；OPFS 不可用时的临时会话 |
-| `datasets.offline.spec.ts` | 公开列表和我的数据集上的下载：签发一次并打开 imzML + ibd、冷却提示、服务端配额提示后可重试、资料不完整时拦截、未登录跳转登录页 |
+| `datasets.offline.spec.ts` | 公开列表和我的数据集上的下载：取一次 CDN 直链并打开 imzML + ibd、冷却提示、服务端拒绝（403 配额用完、503 未配置 CDN）的本地提示及重试、资料不完整时拦截、未登录跳转登录页 |
 | `workspace.offline.spec.ts` | 提交后才搜索、清空筛选和分页复位；每页数量；取消删除、确认删除、删除末页回退和统计刷新；删除失败后的提示及再次尝试；失败详情和运行中任务操作限制；401 清除登录状态并保留回跳路径；从数据集创建 Peak Alignment 任务并跟踪到完成 |
 
 目前是 20 个场景，默认在 Chromium 和 Firefox 执行，共 40 次；启用 WebKit 后共 60 次（Linux WebKit 跳过其中 2 次）。离线组还断言没有未配置的 API 请求及未捕获的页面错误，避免后端变化或浏览器异常悄悄被忽略。网络拦截严格匹配 API 路径，不能把 Vite 开发模块如 `/src/shared/api/httpClient.ts` 当成接口。

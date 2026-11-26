@@ -45,15 +45,15 @@ export function processRow(page: Page, id: number): Locator {
   })
 }
 
-/** 下载前的资料校验只等 GET /user，签发接口也是毫秒级，20s 没结果就不用再等了 */
-const SIGN_TIMEOUT_MS = 20_000
+/** 下载前的资料校验只等 GET /user，download_raw 也是毫秒级返回链接，20s 没结果就不用再等了 */
+const LINK_TIMEOUT_MS = 20_000
 
 /**
  * 点击真实下载按钮，等浏览器开始下载 imzML + ibd。
  *
- * 链路分三段：资料校验（拦截时只有 warning toast）→ GET download_raw 签发 → 隐藏 iframe 打开
- * OSS 链接。只等 download 事件的话，任何一段断掉都只能得到一句超时，所以这里逐段检查，
- * 失败信息写明卡在哪一段；OSS 那段会带上每个文件的响应状态（不含签名）。
+ * 链路分三段：资料校验（拦截时只有 warning toast）→ GET download_raw 取 CDN 直链 → 隐藏 iframe
+ * 打开链接。只等 download 事件的话，任何一段断掉都只能得到一句超时，所以这里逐段检查，
+ * 失败信息写明卡在哪一段；CDN 那段会带上每个文件的响应状态（只记路径，不含查询参数）。
  *
  * @returns 已开始的下载；账号下载配额用完（403）时返回 null，属于环境因素，由调用方 skip
  */
@@ -68,22 +68,22 @@ export async function startRawDownload(page: Page, trigger: Locator, timeout = 9
     if (!network.has(path)) network.set(path, request.failure()?.errorText ?? 'failed')
   })
 
-  const signed = page
-    .waitForResponse((r) => /\/files\/\w+\/download_raw$/.test(pathOf(r.url())), { timeout: SIGN_TIMEOUT_MS })
+  const linked = page
+    .waitForResponse((r) => /\/files\/\w+\/download_raw$/.test(pathOf(r.url())), { timeout: LINK_TIMEOUT_MS })
     .catch(() => null)
   const warning = page.locator('.toast .alert-warning').first()
-  const refused = warning.waitFor({ timeout: SIGN_TIMEOUT_MS }).then(() => 'refused' as const, () => null)
+  const refused = warning.waitFor({ timeout: LINK_TIMEOUT_MS }).then(() => 'refused' as const, () => null)
   await trigger.click()
 
-  const outcome = await Promise.race([signed, refused])
-  if (outcome === 'refused') throw new Error(`Download refused before signing: ${await warning.innerText()}`)
-  if (!outcome) throw new Error(`GET download_raw did not answer within ${SIGN_TIMEOUT_MS / 1000}s`)
+  const outcome = await Promise.race([linked, refused])
+  if (outcome === 'refused') throw new Error(`Download refused before requesting links: ${await warning.innerText()}`)
+  if (!outcome) throw new Error(`GET download_raw did not answer within ${LINK_TIMEOUT_MS / 1000}s`)
   if (outcome.status() === 403) return null
   if (!outcome.ok()) throw new Error(`GET download_raw → HTTP ${outcome.status()}: ${await outcome.text()}`)
 
   const { files } = (await outcome.json()) as { files: { filename: string; url: string }[] }
-  expect(files.length, 'download_raw should sign imzML + ibd').toBeGreaterThanOrEqual(2)
-  // toast 3s 后自动消失，OSS 响应可能更慢，要在等下载事件之前断言
+  expect(files.length, 'download_raw should return imzML + ibd links').toBeGreaterThanOrEqual(2)
+  // toast 3s 后自动消失，CDN 响应可能更慢，要在等下载事件之前断言
   await expect(page.getByText('Download started')).toBeVisible()
   try {
     await expect.poll(() => downloads.length, { timeout, intervals: [500, 1000, 2000] }).toBeGreaterThanOrEqual(files.length)

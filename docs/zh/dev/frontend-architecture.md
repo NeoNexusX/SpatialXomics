@@ -9,7 +9,7 @@
 - `src/shared`：不属于单一业务模块的 HTTP、认证、配置、通用组件、composable、类型和工具。
 - `src/features/<module>`：按业务拆分的模块，按需包含 `api`、`components`、`composables`、`constants`、`mappers`、`services`、`stores`、`types`、`utils`。当前模块：`agent`、`auth`、`collections`、`databases`、`datasets`、`home`、`upload`、`users`、`vizworkbench`、`workspace`。
 - `src/i18n`：全站 vue-i18n 实例、类型定义和语言包。语言包按 `locales/{locale}/{namespace}.json` 组织，core 命名空间（`common`、`auth`）启动时加载，feature 命名空间随路由懒加载。
-- `src/services`：多个 feature 共同使用、且与基础设施紧密相关的读取与客户端能力——Zarr（含 OSS client）、聚类和 PubChem。
+- `src/services`：多个 feature 共同使用、且与基础设施紧密相关的读取与客户端能力——Zarr（含 HTTP 读取客户端 zarrHttpClient）、聚类和 PubChem。
 - `src/router`：路由声明和认证/权限守卫。
 - `src/workers`：跨上传流程使用的 Worker；feature 专属 Worker 可以留在所属模块。
 
@@ -37,7 +37,8 @@
 
 - 上传 ZIP/MD5 在 `src/workers/zip-compress.worker.ts` 执行。
 - 注释（库 CSV 解析、特征峰匹配、打分、FDR、空间评分计算）和 KMeans 分别在 `vizworkbench` 的 Worker 中执行（`utils/annotation/annotation.worker.ts`、`kmeans.worker.ts`）；注释用到的离子图由主线程从 Zarr 读取后交给 Worker。
-- Zarr 通过 OSS client 按元数据和 chunk 读取完整对象（`client.get(key)`，没有发送 Range 请求），访问凭证过期时由 OSS client 刷新。
+- Zarr 由 `zarrHttpClient` 读取：`GET /processes/{run_id}/zarr` 返回 zarr 根目录的 CDN URL（`zarr_url`，域名取后端 `oss_cdn_domain`，与 RAW 下载共用，按环境配置），对象地址 = 根 URL + zarr 内相对路径，按元数据和 chunk 读取完整对象（普通 GET，不带凭证，没有发送 Range 请求）。`zarr.json` 每次回验（`cache: 'no-cache'`），chunk 走浏览器 HTTP 缓存；CDN 域名需配置 CORS（`Access-Control-Allow-Origin`）。
+- RAW 下载由 `downloadHelper` 完成：`GET /files/{public_id}/download_raw`（必须登录，只走 `auth_api`）返回 imzML + ibd 的免签 CDN 直链，每个链接在独立的隐藏 iframe 里打开，避免后一个下载打断前一个。下载靠 CDN 返回的 `Content-Disposition: attachment` 触发；CDN 返回错误页时 iframe 内静默失败，页面无法感知。
 - UMAP 由后端生成；KMeans 是基于 UMAP embedding 的本地计算。不要把两者描述为同一个后端任务。
 
 <ArchDiagram name="upload-architecture" title="上传与续传" />

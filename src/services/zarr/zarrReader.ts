@@ -3,12 +3,12 @@
  *
  * Handles single- and multi-chunk arrays of any dimensionality (1D/2D/3D+).
  * All chunks are fetched in parallel through the caller-supplied `fetchChunk`
- * (one OSS GET + decodePayload per chunk-grid coordinate), then reassembled;
+ * (one HTTP GET + decodePayload per chunk-grid coordinate), then reassembled;
  * edge chunks are read in either layout writers use - spec-compliant unpadded
  * (actual size) or padded to the full chunk_shape (detected by payload size;
  * last-dimension padding interleaves fill values with real data, so the
  * strides must match the stored layout). Pure (no instance state, no
- * network) - fetching stays in each store via the shared OssClient.
+ * network) - fetching stays in each store via the shared zarrHttpClient.
  */
 
 import { bytesPerElement } from './zarrDtype'

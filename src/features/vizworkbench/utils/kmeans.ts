@@ -35,6 +35,34 @@ export interface KmeansEmbeddingInput {
   count: number
 }
 
+/**
+ * The embedding points whose grid cell is set in `mask` (row-major, `width`
+ * columns), so a run clusters only that region and leaves the rest unlabelled.
+ */
+export function embeddingWithin(
+  embedding: KmeansEmbeddingInput,
+  mask: Uint8Array,
+  width: number,
+): KmeansEmbeddingInput {
+  const { coordinates, scaledEmbedding, count } = embedding
+  const kept = new Uint32Array(count)
+  let n = 0
+  for (let i = 0; i < count; i++) {
+    if (mask[coordinates[i * 2 + 1]! * width + coordinates[i * 2]!]) kept[n++] = i
+  }
+  const subset = {
+    coordinates: new Uint32Array(n * 2),
+    scaledEmbedding: new Float32Array(n * 3),
+    count: n,
+  }
+  for (let j = 0; j < n; j++) {
+    const i = kept[j]!
+    subset.coordinates.set(coordinates.subarray(i * 2, i * 2 + 2), j * 2)
+    subset.scaledEmbedding.set(scaledEmbedding.subarray(i * 3, i * 3 + 3), j * 3)
+  }
+  return subset
+}
+
 interface PendingRequest {
   id: number
   resolve: (r: KmeansResult) => void

@@ -13,7 +13,7 @@
  */
 
 import { ref, shallowRef } from 'vue'
-import type { ZarrOssStore } from './zarrOssStore'
+import type { ZarrStore } from './zarrStore'
 import type { MetadataAttrs, DataMode, PixelSpectrum } from './types/zarr'
 
 // ---- Module-level shared state ----
@@ -22,10 +22,10 @@ import type { MetadataAttrs, DataMode, PixelSpectrum } from './types/zarr'
  * Zarr store 实例。useZarrIonImage 在 init/dispose 时经 {@link setZarrStore} 维护；
  * 经 import 活绑定读取的代码始终拿到当前实例。
  */
-export let store: ZarrOssStore | null = null
+export let store: ZarrStore | null = null
 
 /** 替换 store 实例（init 建新会话 / dispose 释放）；旧实例的 dispose 由调用方负责 */
-export function setZarrStore(next: ZarrOssStore | null): void {
+export function setZarrStore(next: ZarrStore | null): void {
   store = next
 }
 
@@ -93,7 +93,7 @@ export function setSpectrumView(view: SpectrumView): void {
 // ---- Shared context snapshot ----
 
 export interface SharedZarrContext {
-  store: ZarrOssStore | null
+  store: ZarrStore | null
   mzAxis: Float64Array | null
   ionShape: { width: number; height: number } | null
   dataMode: DataMode | null

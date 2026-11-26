@@ -28,7 +28,7 @@ This repository contains the frontend application (Vue 3 + TypeScript + Vite) an
 | UI | Tailwind CSS v4, DaisyUI v5, reka-ui, offline Iconify subsets |
 | Visualization | ECharts, Canvas, vue3-calendar-heatmap |
 | MSI / Zarr | Custom chunked Zarr v3 reader, zstddec, `@zip.js/zip.js`, hash-wasm, ml-kmeans |
-| Network and storage | Axios, ali-oss with temporary STS credentials, OPFS for assistant sessions |
+| Network and storage | Axios, ali-oss with temporary STS credentials for uploads, OPFS for assistant sessions |
 | SXO-Harness | @deepseek-ai/cordis, AI SDK (`@ai-sdk/anthropic`), comark, KaTeX, Shiki, Exa web search |
 | Testing | Vitest, Playwright |
 | Documentation | Bilingual VitePress site |
@@ -55,7 +55,7 @@ src/
 │   └── workspace/               # Analysis builder and task dashboard
 ├── i18n/                        # vue-i18n instance and namespaced locale messages
 ├── router/                      # Routes and auth/admin guards
-├── services/                    # Zarr (with OSS client), clustering, PubChem
+├── services/                    # Zarr (with an HTTP reader), clustering, PubChem
 ├── shared/                      # Shared API, auth, components, config, utilities
 ├── views/                       # Route pages
 └── workers/                     # Cross-feature workers (upload ZIP); feature workers stay with their feature

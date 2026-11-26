@@ -1,54 +1,40 @@
 <script setup lang="ts">
-import { computed, ref, watch, onUnmounted, nextTick } from 'vue'
+import { computed, onUnmounted, ref, toRef } from 'vue'
 import VizInfoPanel from '@/features/vizworkbench/components/visuals/VizInfoPanel.vue'
 import ResultVisualizationLayout from '@/features/vizworkbench/components/ResultVisualizationLayout.vue'
 import ResultHeader from '@/features/vizworkbench/components/visuals/ResultHeader.vue'
 import IonImageSection from '@/features/vizworkbench/components/IonImageSection.vue'
 import SpectrumSection from '@/features/vizworkbench/components/SpectrumSection.vue'
-import OverlayControls from '@/features/vizworkbench/components/OverlayControls.vue'
+import IonChannelPanel from '@/features/vizworkbench/components/visuals/IonChannelPanel.vue'
+import ClusteringPanel from '@/features/vizworkbench/components/ClusteringPanel.vue'
+import ROIPanel from '@/features/vizworkbench/components/visuals/ROIPanel.vue'
+import MaskExportPanel from '@/features/vizworkbench/components/visuals/MaskExportPanel.vue'
+import SectionHelp from '@/features/vizworkbench/components/SectionHelp.vue'
+import CollapsibleSection from '@/shared/components/CollapsibleSection.vue'
 import AnnotationPanel from '@/features/vizworkbench/components/annotation/AnnotationPanel.vue'
-import CompareRegionsPanel from '@/features/vizworkbench/components/CompareRegionsPanel.vue'
-import ComparisonResultsTable from '@/features/vizworkbench/components/ComparisonResultsTable.vue'
-import RegionPreviewThumbnail from '@/features/vizworkbench/components/RegionPreviewThumbnail.vue'
+import RegionComparisonSection from '@/features/vizworkbench/components/RegionComparisonSection.vue'
 import {
   useZarrIonImage,
-  ticMatrix,
   pixelSpectrum,
   loadPixelSpectrum,
-  dataModeRef,
   mzAxisRef,
-  metadataAttrsRef,
-  spectrumView,
   getSharedZarrContext,
   disposeZarrState,
   loadIonMatrixByIndex,
   findClosestMzIndex,
 } from '@/features/vizworkbench/composables/useZarrIonImage'
-import { useDisplayRange } from '@/features/vizworkbench/composables/useDisplayRange'
+import { useIonImageDisplay } from '@/features/vizworkbench/composables/useIonImageDisplay'
 import { useOverlayData } from '@/features/vizworkbench/composables/useOverlayData'
-import { useResultROI } from '@/features/vizworkbench/composables/useResultROI'
+import { useROI } from '@/features/vizworkbench/composables/useROI'
+import { useRoiCollect } from '@/features/vizworkbench/composables/useRoiCollect'
 import { useIonChannels } from '@/features/vizworkbench/composables/useIonChannels'
-import { MAX_ION_CHANNELS } from '@/features/vizworkbench/utils/ionChannelBlend'
 import { useResultMeta } from '@/features/vizworkbench/composables/useResultMeta'
-import { useRegionComparison } from '@/features/vizworkbench/composables/useRegionComparison'
-import { useImportedMasks } from '@/features/vizworkbench/composables/useImportedMasks'
-import { ZARR_STORE } from '@/shared/config/defaults'
-import { rgbCss } from '@/features/vizworkbench/utils/regionPalette'
-import {
-  createMask,
-  exportMask,
-  labelsToUnionMask,
-  orMask,
-  type MaskExportPayload,
-} from '@/features/vizworkbench/utils/maskExport'
-import {
-  registerContextProviders,
-  unregisterContextProviders,
-} from '@/features/agent/bridge/analysisContext'
+import { useVizAgentContext } from '@/features/vizworkbench/composables/useVizAgentContext'
+import { exportMask, type ExportFormat } from '@/features/vizworkbench/utils/maskExport'
+import { buildRegionMask, type Region, type RegionGrid } from '@/features/vizworkbench/utils/region'
 import { setAgentDataset, markAgentDatasetReady } from '@/features/agent/bridge/datasetBinding'
 import { useToast } from '@/shared/composables/useToast'
 import { t } from '@/i18n'
-import type { DataMode } from '@/services/zarr/types/zarr'
 
 interface VizWorkbenchState {
   runId?: string
@@ -60,538 +46,97 @@ interface VizWorkbenchState {
   status?: string
 }
 
+// One page instance shows one run: both entries (the workspace list and Explore
+// on the datasets page) navigate here from another page with the run in
+// history.state, which is read once. Nothing below handles a run change.
 const state = history.state as VizWorkbenchState | null
-const runId = computed(() => (state?.runId != null ? String(state.runId) : ''))
-const isStale = computed(() => state?.runId == null)
-
-// ---- 元数据 ----
-
-const {
-  datasetName,
-  acquisition,
-  pixelSize,
-  pixelSizeUm,
-  spectrumMode,
-  storageMode,
-  status,
-  methods,
-  sourceFile,
-} = useResultMeta(runId)
-
-// ---- 可视化参数 ----
-
-const colormap = ref('inferno')
-const intensityScale = ref('linear')
-const gamma = ref(1)
-
-// ---- 注释面板（左侧） ----
-// 默认收起（桌面为细条，小屏为页面流里的一条按钮）
-const annotationExpanded = ref(false)
-
-// ---- Zarr 数据加载 ----
-
-const zarr = useZarrIonImage()
-const {
-  selectedMz,
-  selectedMzIndex,
-  mzTolerance,
-  ionMatrix,
-  ionCols,
-  ionRows,
-  loading,
-  error: ionError,
-  loadNormalization,
-  clearNormalization,
-  normalizationFactors,
-  normalizationLoading,
-  normalizationError,
-  hasTic,
-  ready: zarrReady,
-  onSpectrumClickByIndex,
-  isContinuous,
-  isProcessed,
-} = zarr
-
-// 当前数据模式
-const dataMode = computed<DataMode | null>(() => dataModeRef.value)
-
-// processed 模式下的图像矩阵（TIC）
-const currentIonMatrix = computed(() => (isProcessed.value ? ticMatrix.value : ionMatrix.value))
-
-// 当前显示强度标度对应的图像矩阵；TIC 仅在用户选择后按需计算
-const normalizedIonMatrix = computed(() => {
-  const matrix = currentIonMatrix.value
-  const factors = normalizationFactors.value
-  if (!matrix || !factors || intensityScale.value === 'linear' || intensityScale.value === 'log')
-    return matrix
-  // Processed 数据本身就是 TIC 图像，不重复对 TIC 做归一化
-  if (isProcessed.value) return matrix
-  const result = new Float32Array(matrix.length)
-  for (let i = 0; i < matrix.length; i++) {
-    const denominator = factors[i]!
-    result[i] = denominator > 0 ? matrix[i]! / denominator : 0
-  }
-  return result
-})
-
-const displaySourceMatrix = computed(() => normalizedIonMatrix.value)
-
-// 数据集没有 stats/tic（旧数据/processed）时归一化选项会被隐藏；
-// 若当前还停在 TIC，强制回到 Linear，避免值与选项不一致。
-watch(hasTic, (v) => {
-  if (!v && intensityScale.value === 'tic') {
-    intensityScale.value = 'linear'
-    clearNormalization()
-  }
-})
-
-// ---- 初始化 ----
-
-// init/dispose 的并发守卫（代次检查）在 useZarrIonImage 内部完成：
-// init() 期间发生 disposeZarrState() 或重新 init() 时，旧的 init 会自行
-// dispose 孤儿 store 并放弃写入模块状态。
-
-// The bridge contains only dataset identity and never imports the agent runtime.
-watch(
-  runId,
-  (id) => {
-    const generation = setAgentDataset(id)
-    void zarr.init(id).then(() => {
-      if (!zarr.error.value) markAgentDatasetReady(generation)
-    })
-  },
-  { immediate: true },
-)
-
-watch(runId, () => {
-  clearImportedMasks()
-})
-
-// 离开页面时释放模块级状态，避免大数组（mzAxis、meanChartData、ticMatrix 等）
-// 和 ZarrOssStore 缓存在 SPA 导航后仍驻留内存
-onUnmounted(() => {
-  setAgentDataset('', true)
-  unregisterContextProviders()
-  cmpReset()
-  resetChannels()
-  disposeZarrState()
-})
-
-// ---- 显示范围 ----
-
-const {
-  globalMin,
-  globalMax,
-  sortedNonZero,
-  displayMin,
-  displayMax,
-  stripRef,
-  gradientCSS,
-  intensityHistogram,
-  imageInfo,
-  getIntensityRange,
-  resetRange,
-  calcHandleTop,
-  clampPct,
-  onStripMouseDown,
-  startStripDrag,
-  formatVal,
-} = useDisplayRange(displaySourceMatrix, colormap, ionCols, ionRows)
-
-// ---- ROI ----
-
-const {
-  roiOverlayRef,
-  roiTool,
-  confirmedROIs,
-  selectedRoiIds,
-  toggleRoiSelection,
-  selectAllRois,
-  clearRoiSelection,
-  draftReady,
-  viewingROI,
-  displayMatrix,
-  roiUnionMask,
-  roiHighlightOverlay,
-  roiSelectTool,
-  roiConfirm,
-  roiCancel,
-  roiDelete,
-  roiClearAll,
-  onDraftUpdated,
-  onDraftCleared,
-} = useResultROI(displaySourceMatrix, ionCols, ionRows)
-
-// File-imported masks are kept separate from drawn ROIs. The active ones act
-// as an additional display filter (their union), and every mask is also a
-// selectable comparison region — importing never mutates the user's
-// ROI/KMeans state.
-const {
-  importedMasks,
-  importMaskFiles,
-  removeImportedMask: removeImportedMaskEntry,
-  clearImportedMasks,
-  toggleImportedMask: toggleImportedMaskActive,
-  activeUnionMask,
-} = useImportedMasks({
-  ionCols,
-  ionRows,
-  datasetName,
-  matrix: displaySourceMatrix,
-})
-
-const visualMatrix = computed(() => {
-  const matrix = displayMatrix.value
-  const mask = activeUnionMask.value
-  const w = ionCols.value
-  const h = ionRows.value
-  if (!matrix || !mask || !w || !h || mask.length !== w * h) return matrix
-  const filtered = new Float32Array(matrix.length)
-  const n = Math.min(matrix.length, mask.length)
-  for (let i = 0; i < n; i++) if (mask[i]) filtered[i] = matrix[i] ?? 0
-  return filtered
-})
-
-/** Intersection of the active ROI-only filter and the active imported-mask union. */
-const effectiveRoiMask = computed<Uint8Array | null>(() => {
-  const imported = activeUnionMask.value
-  const roi = roiUnionMask.value
-  if (!imported) return roi
-  if (!roi) return imported
-  const n = Math.min(imported.length, roi.length)
-  const result = new Uint8Array(n)
-  for (let i = 0; i < n; i++) result[i] = imported[i]! && roi[i]! ? 1 : 0
-  return result
-})
-
-// ---- Multi-ion overlay ----
-
-const {
-  enabled: channelsEnabled,
-  channels: ionChannels,
-  overlayActive: channelsMode,
-  channelsLoading,
-  canAdd: canAddChannel,
-  hoverChannels,
-  addCurrentMz: addIonChannel,
-  removeChannel,
-  toggleChannelVisible,
-  updateChannelColor,
-  updateChannelOpacity,
-  retryChannel,
-  clearChannels,
-  reset: resetChannels,
-} = useIonChannels({
-  currentMzIndex: selectedMzIndex,
-  currentMz: selectedMz,
-  tolerance: mzTolerance,
-  isContinuous,
-  ready: zarrReady,
-  runId,
-  loadMatrix: loadIonMatrixByIndex,
-})
-
-const batchAddMode = ref(false)
-
-function toggleBatchAdd() {
-  if (!channelsEnabled.value || !canAddChannel.value) {
-    batchAddMode.value = false
-    return
-  }
-  batchAddMode.value = !batchAddMode.value
-}
-
-function onChannelsEnabledChange(value: boolean) {
-  channelsEnabled.value = value
-  if (!value) batchAddMode.value = false
-}
-
-watch(canAddChannel, (canAdd) => {
-  if (!canAdd) batchAddMode.value = false
-})
-watch(channelsEnabled, (enabled) => {
-  if (!enabled) batchAddMode.value = false
-})
+const runId = state?.runId != null ? String(state.runId) : ''
+const isStale = state?.runId == null
 
 const { showToast } = useToast()
 
-function onAddCurrentChannel() {
-  const res = addIonChannel()
-  if (res.ok) return
-  const messages: Record<typeof res.reason, string> = {
-    'not-continuous': t('vizworkbench.page.channelNotContinuous'),
-    'not-ready': t('vizworkbench.page.channelNotReady'),
-    full: t('vizworkbench.page.channelFull', { max: MAX_ION_CHANNELS }),
-    duplicate: t('vizworkbench.page.channelDuplicate'),
-  }
-  showToast(messages[res.reason], 'warning')
-}
+// 注释面板（左侧）默认收起：桌面为细条，小屏为页面流里的一条按钮
+const annotationExpanded = ref(false)
 
-// ---- Overlay ----
+// ---- 数据集与元数据 ----
 
-const {
-  umapVisible,
-  kmeansVisible,
-  overlayData,
-  overlayLoading,
-  overlayError,
-  clusteringCreating,
-  clusteringComputing,
-  clusteringReady,
-  clusteringRefreshing,
-  umapAlpha,
-  kmeansAlpha,
-  kmeansClusters,
-  kmeansLabelsAvailable,
-  kmeansK,
-  kmeansComputing,
-  selectedKmeansIds,
-  getKmeansLabels,
-  getKmeansRgb,
-  getUmapRgb,
-  getOverlayDims,
-  getUmapOccupancyMask,
-  exportUmapPng,
-  exportKmeansPng,
-  toggleOverlay,
-  retryClustering,
-  createClusteringTask,
-  refreshClusteringStatus,
-  runKmeans,
-  toggleKmeansCluster,
-  selectAllKmeansClusters,
-  clearKmeansClusters,
-} = useOverlayData(runId, ionRows, ionCols)
+const meta = useResultMeta(runId)
+const zarr = useZarrIonImage()
 
-// ---- Region comparison ----
-
-const {
-  regionAIds: cmpRegionAIds,
-  regionBIds: cmpRegionBIds,
-  minDetectionRate: cmpMinDetectionRate,
-  noiseFloorPercentile: cmpNoiseFloorPercentile,
-  enrichmentRatio: cmpEnrichmentRatio,
-  comparing: cmpComparing,
-  progress: cmpProgress,
-  error: cmpError,
-  categorizedResults: cmpCategorizedResults,
-  filterStats: cmpFilterStats,
-  availableRegions: cmpAvailableRegions,
-  canCompare: cmpCanCompare,
-  colorA: cmpColorA,
-  colorB: cmpColorB,
-  buildThumbnailRegions: cmpBuildThumbnailRegions,
-  compare: cmpCompare,
-  cancel: cmpCancel,
-  selectMz: cmpSelectMz,
-  reset: cmpReset,
-  involvesRoi: cmpInvolvesRoi,
-  involvesImportedMask: cmpInvolvesImportedMask,
-} = useRegionComparison({
-  kmeansClusters,
-  kmeansLabelsAvailable,
-  getKmeansLabels,
-  confirmedROIs: confirmedROIs,
-  importedMasks,
-  ionCols,
-  ionRows,
-  dataMode,
-  onSelectMzIndex: handleSelectMzIndex,
+// init/dispose 的并发守卫（代次检查）在 useZarrIonImage 内部完成：离开页面时
+// disposeZarrState() 会让进行中的 init 自行 dispose 孤儿 store 并放弃写入模块状态。
+// The bridge contains only dataset identity and never imports the agent runtime.
+const agentGeneration = setAgentDataset(runId)
+void zarr.init(runId).then(() => {
+  if (!zarr.error) markAgentDatasetReady(agentGeneration)
 })
 
-const cmpThumbnail = computed(() => cmpBuildThumbnailRegions())
+// ---- 离子图显示 ----
 
-// Re-running KMeans always invalidates any existing comparison (clusters may
-// be renumbered), so reset unconditionally. Clearing/deleting ROIs only
-// invalidates the comparison when an ROI was actually one of the compared
-// regions — a KMeans-vs-KMeans comparison is unaffected and should survive.
-function handleRunKmeans(k: number) {
-  cmpReset()
-  return runKmeans(k)
-}
+const display = useIonImageDisplay(zarr)
+const displayMatrix = toRef(display, 'matrix')
 
-function handleToggleKmeansCluster(id: number) {
-  toggleKmeansCluster(id)
-  // The export panel lets the user pick clusters before the KMeans overlay is
-  // shown; a click there should also surface the selection on the ion image.
-  // (The overlay's own cluster picker only renders while KMeans is visible, so
-  // this is a no-op when the toggle came from there.)
-  if (!kmeansVisible.value) toggleOverlay('kmeans')
-}
+// ---- 工具箱：ROI、多离子叠加、UMAP/KMeans ----
 
-function handleRoiClearAll() {
-  if (cmpInvolvesRoi()) cmpReset()
-  roiClearAll()
-}
+/** The ion-image grid every region (ROI, KMeans cluster) is defined on. */
+const regionGrid = computed<RegionGrid>(() => ({ runId, shape: [zarr.ionRows, zarr.ionCols] }))
 
-function handleRoiDelete(id: string) {
-  // Only reset when the deleted ROI was one of the compared regions; deleting
-  // an unrelated ROI (or any ROI when comparing KMeans-vs-KMeans) is harmless.
-  if (cmpInvolvesRoi(id)) cmpReset()
-  roiDelete(id)
-}
+const roi = useROI(displayMatrix, regionGrid)
 
-/** 移除参与过比较的导入掩膜时作废比较结果；未参与的移除不影响结果。 */
-function handleRemoveImportedMask(id: string) {
-  if (cmpInvolvesImportedMask(id)) cmpReset()
-  removeImportedMaskEntry(id)
-}
-
-// ---- SXO-Harness上下文注册（selectedIon + kmeans + umap + datasetInfo） ----
-
-/** zarr attrs 的实时引用（provider 里展开为普通对象） */
-const metadataAttrs = computed(() => metadataAttrsRef.value)
-
-// 把实例级数据以惰性 getter 形式注册给 assistant 的分析上下文采集器；
-// 页面卸载时成对注销（采集器对缺失 provider 优雅降级）。
-registerContextProviders({
-  selectedIon: () => {
-    const matrix = currentIonMatrix.value
-    if (!matrix) return null
-    const selectedMzValue = isProcessed.value ? 0 : selectedMz.value
-    if (selectedMzValue == null) return null
-    return {
-      mz: selectedMzValue,
-      tolerance: isProcessed.value ? 0 : mzTolerance.value,
-      matrix,
-      width: ionCols.value,
-      height: ionRows.value,
-      // get_ion 的完整视图：显示参数 / 谱图区 / 通道列表 / ROI / 掩膜（实时值）
-      view: {
-        mz: selectedMzValue,
-        tolerance: isProcessed.value ? 0 : mzTolerance.value,
-        dataMode: dataModeRef.value ?? 'continuous',
-        display: {
-          colormap: colormap.value,
-          intensityScale: intensityScale.value,
-          gamma: gamma.value,
-          displayMin: displayMin.value,
-          displayMax: displayMax.value,
-          globalMin: globalMin.value,
-          globalMax: globalMax.value,
-        },
-        spectrum: {
-          view: spectrumView.value,
-          selectedPixel: pixelSpectrum.value
-            ? { x: pixelSpectrum.value.x, y: pixelSpectrum.value.y }
-            : null,
-        },
-        channels: {
-          enabled: channelsEnabled.value,
-          overlayActive: channelsMode.value,
-          list: ionChannels.value.map((c) => ({
-            id: c.id,
-            mz: c.mz,
-            color: [c.color.r, c.color.g, c.color.b],
-            visible: c.visible,
-            opacity: c.opacity ?? 1,
-            loading: c.loading,
-            error: c.error,
-          })),
-        },
-        roi: {
-          confirmed: confirmedROIs.value.length,
-          // selectedRoiIds: null = 全选；空 Set = 全不选
-          selected:
-            selectedRoiIds.value == null
-              ? confirmedROIs.value.length
-              : confirmedROIs.value.filter((r) => selectedRoiIds.value!.has(r.id)).length,
-        },
-        masks: { imported: importedMasks.value.length },
-      },
-    }
-  },
-  kmeans: () => {
-    const computing = kmeansComputing.value
-    if (kmeansClusters.value.length === 0 && kmeansK.value == null && !computing) return null
-    return {
-      k: kmeansK.value,
-      clusterSizes: kmeansClusters.value.map((c) => c.count),
-      selectedIds: [...(selectedKmeansIds.value ?? kmeansClusters.value.map((c) => c.id))],
-      // get_kmeans 的完整视图与叠加栅格
-      view: {
-        clusters: kmeansClusters.value.map((c) => ({
-          id: c.id,
-          color: [...c.color] as [number, number, number],
-          count: c.count,
-        })),
-        labelsAvailable: kmeansLabelsAvailable.value,
-        computing: kmeansComputing.value,
-        visible: kmeansVisible.value,
-        labels: () => getKmeansLabels(),
-        rgb: () => getKmeansRgb(),
-        dims: () => getOverlayDims(),
-      },
-    }
-  },
-  umap: () => ({
-    ready: clusteringReady.value,
-    visible: umapVisible.value,
-    computing: clusteringComputing.value,
-    error: overlayError.value,
-    grid: { width: ionCols.value, height: ionRows.value },
-    rgb: () => getUmapRgb(),
-    occupancyMask: () => getUmapOccupancyMask(),
-  }),
-  // 右侧数据集信息面板整体（get_dataset；bridge 侧做 raw 展开 + 双命名排除投影）
-  datasetInfo: () => {
-    if (!datasetName.value && !sourceFile.value) return null
-    return {
-      attrs: { ...(metadataAttrs.value ?? {}) },
-      acquisition: { ...acquisition.value },
-      sourceFile: sourceFile.value as unknown as Record<string, unknown> | null,
-      methods: [...methods.value],
-      displayRange: {
-        globalMin: globalMin.value,
-        globalMax: globalMax.value,
-        displayMin: displayMin.value,
-        displayMax: displayMax.value,
-      },
-      imageInfo: {
-        pixels: imageInfo.value.pixels === '--' ? null : imageInfo.value.pixels,
-        nonZero: imageInfo.value.nonZero === '--' ? null : imageInfo.value.nonZero,
-        totalIon: imageInfo.value.totalIon === '--' ? null : imageInfo.value.totalIon,
-        pixelSize: pixelSize.value || null,
-      },
-    }
-  },
-  // 页头（get_page.header）：数据集名 + 处理状态徽章
-  pageHeader: () => ({ datasetName: datasetName.value, status: status.value }),
+const multiIon = useIonChannels({
+  currentMzIndex: toRef(zarr, 'selectedMzIndex'),
+  currentMz: toRef(zarr, 'selectedMz'),
+  tolerance: toRef(zarr, 'mzTolerance'),
+  isContinuous: toRef(zarr, 'isContinuous'),
+  ready: toRef(zarr, 'ready'),
+  loadMatrix: loadIonMatrixByIndex,
 })
 
-async function handleExportMasks(payload: MaskExportPayload) {
-  const width = ionCols.value
-  const height = ionRows.value
-  if (!width || !height) {
+// ROI collect tool: the current single image's pixels with or without signal.
+const roiCollect = useRoiCollect(roi.editor, {
+  matrix: displayMatrix,
+  acquired: toRef(zarr, 'acquiredMask'),
+  image: computed(() => (zarr.isProcessed ? 'TIC' : zarr.ionMatrixMz)),
+  available: computed(() => !multiIon.overlayActive),
+  loading: toRef(zarr, 'loading'),
+})
+
+const clustering = useOverlayData(runId, toRef(zarr, 'ionRows'), toRef(zarr, 'ionCols'))
+
+/** Saved ROIs and KMeans clusters: what the editor, the export and the comparison work on. */
+const regions = computed<Region[]>(() => [...clustering.kmeansRegions, ...roi.confirmedROIs])
+
+// ---- SXO-Harness 上下文（页面卸载时只注销自己注册的几项） ----
+
+useVizAgentContext({ zarr, display, meta, multiIon, roi, clustering })
+
+// 离开页面时释放模块级状态，避免大数组（mzAxis、meanChartData、ticMatrix 等）
+// 和 ZarrStore 缓存在 SPA 导航后仍驻留内存
+onUnmounted(() => {
+  setAgentDataset('', true)
+  multiIon.reset()
+  disposeZarrState()
+})
+
+// ---- 掩膜导出 / 导入 ----
+
+async function handleExportMasks(format: ExportFormat, selected: Region[]) {
+  const grid = regionGrid.value
+  if (!grid.shape[0] || !grid.shape[1]) {
     showToast(t('vizworkbench.page.ionImageNotLoaded'), 'error')
     return
   }
 
-  // Merge every selected region (ROIs + KMeans clusters) into one binary mask.
-  const mask = createMask(width, height)
-  let any = false
-  for (const id of payload.roiIds) {
-    const roi = confirmedROIs.value.find((r) => r.id === id)
-    if (roi) {
-      orMask(mask, roi.mask)
-      any = true
-    }
-  }
-  const labels = getKmeansLabels()
-  if (payload.clusterIds.length && labels && labels.length >= width * height) {
-    orMask(mask, labelsToUnionMask(labels, width, height, payload.clusterIds))
-    any = true
-  }
-
-  if (!any) {
+  const mask = buildRegionMask(selected, grid)
+  if (!mask) {
     showToast(t('vizworkbench.page.nothingToExport'), 'warning')
     return
   }
 
   try {
-    await exportMask(mask, payload.format, {
-      datasetName: datasetName.value,
-      pixelSizeUm: pixelSizeUm.value,
+    await exportMask({ data: mask, shape: grid.shape }, format, {
+      datasetName: meta.datasetName,
+      pixelSizeUm: meta.pixelSizeUm,
     })
     showToast(t('common.feedback.exported'), 'success')
   } catch (err) {
@@ -601,73 +146,36 @@ async function handleExportMasks(payload: MaskExportPayload) {
 }
 
 async function handleImportMasks(files: File[]) {
-  const width = ionCols.value
-  const height = ionRows.value
-  if (!width || !height) {
+  if (!zarr.ionCols || !zarr.ionRows) {
     showToast(t('vizworkbench.page.ionImageNotLoaded'), 'error')
     return
   }
-  try {
-    // 每个文件独立导入：个别文件无效时其余仍然生效，失败逐个提示
-    const { imported, failed } = await importMaskFiles(files)
-    for (const f of failed) {
-      console.error('[Mask] import failed:', f.name, f.error)
-      showToast(
-        t('vizworkbench.page.maskImportFailed', { error: `${f.name}: ${f.error}` }),
-        'error',
-      )
-    }
-    if (imported.length) {
-      showToast(t('vizworkbench.page.masksImported', { count: imported.length }), 'success')
-    }
-  } catch (err) {
-    // 兜底分支：不预期的异常不外显细节，原因留控制台
-    console.error('[Mask] import failed', err)
-    showToast(t('vizworkbench.page.maskImportFailedGeneric'), 'error')
+  // 每个文件独立导入为 ROI：个别文件无效时其余仍然生效，失败逐个提示
+  const { imported, failed } = await roi.importRois(files, meta.datasetName)
+  for (const f of failed) {
+    console.error('[Mask] import failed:', f.name, f.error)
+    showToast(t('vizworkbench.page.maskImportFailed', { error: `${f.name}: ${f.error}` }), 'error')
+  }
+  if (imported.length) {
+    showToast(t('vizworkbench.page.masksImported', { count: imported.length }), 'success')
   }
 }
 
-// ---- Reference ROI import (local mode) ----
+// ---- m/z 与像素选择 ----
 
-const compareSectionRef = ref<HTMLElement | null>(null)
-// compare 面板与结果表共享展开状态。
-const comparisonExpanded = ref(false)
-
-// 展开 compare 时将中列平滑滚到该区域顶部，展示完整控件和结果。
-watch(comparisonExpanded, async (expanded) => {
-  if (!expanded) return
-  await nextTick()
-  compareSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-})
-
-// ---- 统计信息 ----
-
-const spectrumStats = computed(() => ({
-  intensityRange: getIntensityRange(),
-}))
-
-const displayInfo = computed(() => ({
-  ...imageInfo.value,
-  pixelSize: pixelSize.value,
-}))
-
-// ---- 选中像素坐标（processed 模式） ----
-
+/** 选中像素坐标（processed 模式在离子图上标出） */
 const selectedPixelCoord = computed(() => {
   const spec = pixelSpectrum.value
-  if (!spec) return null
-  return { x: spec.x, y: spec.y }
+  return spec ? { x: spec.x, y: spec.y } : null
 })
-
-// ---- 事件处理 ----
 
 /** 切换 m/z：直接加载新离子的 slice，保持当前强度标度。 */
 async function handleSelectMzIndex(idx: number, addToBatch = true) {
-  // `onSpectrumClickByIndex` updates selectedMzIndex synchronously before its
-  // image request yields. Starting the request first lets batch mode add the
-  // exact clicked index without waiting for a potentially slow image load.
-  const selection = onSpectrumClickByIndex(idx)
-  if (addToBatch && batchAddMode.value) addIonChannel()
+  // `selectMzIndex` updates selectedMzIndex synchronously before its image
+  // request yields. Starting the request first lets batch mode add the exact
+  // clicked index without waiting for a potentially slow image load.
+  const selection = zarr.selectMzIndex(idx)
+  if (addToBatch) multiIon.addPickedMz()
   await selection
 }
 
@@ -686,11 +194,11 @@ async function onSearchMz(raw: string) {
   const idx = findClosestMzIndex(target)
   const nearest = axis[idx]!
   const delta = Math.abs(nearest - target)
-  if (delta > mzTolerance.value) {
+  if (delta > zarr.mzTolerance) {
     const fmtDelta = delta < 0.001 ? delta.toExponential(2) : delta.toFixed(4)
     showToast(
       t('vizworkbench.page.noPeakInTolerance', {
-        tolerance: mzTolerance.value,
+        tolerance: zarr.mzTolerance,
         target,
         nearest: nearest.toFixed(4),
         delta: fmtDelta,
@@ -700,39 +208,6 @@ async function onSearchMz(raw: string) {
     return
   }
   await handleSelectMzIndex(idx, false)
-}
-
-/** 重置所有控件到默认值 */
-const resetControls = () => {
-  mzTolerance.value = ZARR_STORE.defaultMzTolerance
-  colormap.value = 'inferno'
-  intensityScale.value = 'linear'
-  gamma.value = 1
-  clearNormalization()
-  resetRange()
-}
-
-/** 切换强度标度（TIC 归一化需异步加载，其他即时切换） */
-async function onIntensityScaleChange(value: string) {
-  intensityScale.value = value
-  if (value === 'tic') await loadNormalization('tic')
-  else clearNormalization()
-}
-
-const setStripRef = (element: HTMLElement | null) => {
-  stripRef.value = element
-}
-
-const setRoiOverlayRef = (element: any) => {
-  roiOverlayRef.value = element
-}
-
-const onDisplayMinChange = (value: number) => {
-  displayMin.value = value
-}
-
-const onDisplayMaxChange = (value: number) => {
-  displayMax.value = value
 }
 
 // ---- 图像点击 → 加载像素谱（continuous 读 spectra 组，processed 读主数据组） ----
@@ -757,214 +232,80 @@ async function onSelectPixel(col: number, row: number) {
       <AnnotationPanel
         v-model:expanded="annotationExpanded"
         :run-id="runId"
-        :acquisition="acquisition"
+        :acquisition="meta.acquisition"
         :select-mz-index="handleSelectMzIndex"
-        :selected-mz-index="selectedMzIndex"
+        :selected-mz-index="zarr.selectedMzIndex"
       />
     </template>
 
     <template #viz>
-      <ResultHeader class="shrink-0" :dataset-name="datasetName" :status="status" />
+      <ResultHeader class="shrink-0" :dataset-name="meta.datasetName" :status="meta.status" />
       <IonImageSection
         :is-stale="isStale"
-        :ion-matrix="displaySourceMatrix"
-        :display-matrix="visualMatrix"
-        :selected-mz="selectedMz"
-        :mz-tolerance="mzTolerance"
-        :colormap="colormap"
-        :intensity-scale="intensityScale"
-        :gamma="gamma"
-        :display-min="displayMin"
-        :display-max="displayMax"
-        :ion-cols="ionCols"
-        :ion-rows="ionRows"
-        :roi-tool="roiTool"
-        :overlay-data="overlayData"
-        :gradient-css="gradientCSS"
-        :calc-handle-top="calcHandleTop"
-        :clamp-pct="clampPct"
-        :format-val="formatVal"
-        :data-mode="dataMode"
+        :zarr="zarr"
+        :display="display"
+        :roi="roi"
+        :multi-ion="multiIon"
+        :overlay-data="clustering.overlayData"
         :selected-pixel-coord="selectedPixelCoord"
-        :ion-loading="loading"
-        :ion-error="ionError"
-        :normalization-loading="normalizationLoading"
-        :normalization-error="normalizationError"
-        :has-tic="hasTic"
-        :channels-mode="channelsMode"
-        :channels="hoverChannels"
-        :roi-mask="effectiveRoiMask"
-        :roi-highlight-data="roiHighlightOverlay"
-        @update:mz-tolerance="mzTolerance = $event"
-        @update:colormap="colormap = $event"
-        @update:intensity-scale="onIntensityScaleChange"
         @search-mz="onSearchMz"
-        @reset-controls="resetControls"
-        @reset-range="resetRange"
-        @strip-ref="setStripRef"
-        @roi-overlay-ref="setRoiOverlayRef"
-        @strip-mouse-down="onStripMouseDown"
-        @start-strip-drag="startStripDrag"
-        @draft-updated="onDraftUpdated"
-        @draft-cleared="onDraftCleared"
         @select-pixel="onSelectPixel"
       />
 
       <SpectrumSection
         :is-stale="isStale"
-        :selected-mz="selectedMz"
-        :selected-mz-index="selectedMzIndex"
-        :mz-tolerance="mzTolerance"
-        :intensity-range="spectrumStats.intensityRange"
-        :spectrum-mode="spectrumMode"
-        :data-mode="dataMode"
+        :selected-mz="zarr.selectedMz"
+        :selected-mz-index="zarr.selectedMzIndex"
+        :mz-tolerance="zarr.mzTolerance"
+        :intensity-range="display.intensityRange"
+        :spectrum-mode="meta.spectrumMode"
+        :data-mode="zarr.dataMode"
         @select-mz-index="handleSelectMzIndex"
       />
     </template>
 
     <template #compare>
-      <!-- Region comparison：左 controls+preview，右结果表。
-           桌面端折叠栏保留在首屏，展开后由中列承载滚动。 -->
-      <div
-        ref="compareSectionRef"
-        class="w-full flex flex-col items-stretch gap-4 lg:flex-row lg:items-stretch"
-      >
-        <!-- 左侧正常参与文档流，它的自然高度决定整个 compare 区域的高度。 -->
-        <div class="w-full min-w-0 flex flex-col lg:w-0 lg:flex-[2_1_0%]">
-          <CompareRegionsPanel
-            :regions="cmpAvailableRegions"
-            :spectrum-mode="spectrumMode"
-            v-model:region-a-ids="cmpRegionAIds"
-            v-model:region-b-ids="cmpRegionBIds"
-            v-model:min-detection-rate="cmpMinDetectionRate"
-            v-model:noise-floor-percentile="cmpNoiseFloorPercentile"
-            v-model:enrichment-ratio="cmpEnrichmentRatio"
-            v-model:expanded="comparisonExpanded"
-            :comparing="cmpComparing"
-            :progress="cmpProgress"
-            :error="cmpError"
-            :can-compare="cmpCanCompare"
-            :color-a="cmpColorA"
-            :color-b="cmpColorB"
-            @compare="cmpCompare"
-            @cancel="cmpCancel"
-          >
-            <template #preview>
-              <!-- Only the selected A/B regions are drawn (clusters or ROIs).
-                   Unselected confirmed ROIs are NOT shown, so the thumbnail
-                   stays focused on the current comparison. -->
-              <RegionPreviewThumbnail
-                v-if="cmpThumbnail"
-                :a="cmpThumbnail.a"
-                :b="cmpThumbnail.b"
-                :rois="[]"
-                :matrix="currentIonMatrix"
-                :width="cmpThumbnail.dims.width"
-                :height="cmpThumbnail.dims.height"
-              />
-            </template>
-          </CompareRegionsPanel>
-        </div>
-        <!-- 桌面端右侧不参与父容器高度计算，只填满左侧确定的共享高度。 -->
-        <div class="w-full min-w-0 lg:relative lg:w-0 lg:flex-[5_1_0%] lg:min-h-0">
-          <ComparisonResultsTable
-            class="lg:absolute lg:inset-0"
-            :results="cmpCategorizedResults"
-            :selected-mz-index="selectedMzIndex"
-            :filter-stats="cmpFilterStats"
-            :region-a-color="rgbCss(cmpColorA)"
-            :region-b-color="rgbCss(cmpColorB)"
-            v-model:expanded="comparisonExpanded"
-            @select-mz="cmpSelectMz"
-          />
-        </div>
-      </div>
+      <RegionComparisonSection
+        :regions="regions"
+        :grid="regionGrid"
+        :data-mode="zarr.dataMode"
+        :backdrop="zarr.imageMatrix"
+        :spectrum-mode="meta.spectrumMode"
+        :selected-mz-index="zarr.selectedMzIndex"
+        @select-mz="handleSelectMzIndex"
+      />
     </template>
 
     <template #side-panel>
-      <VizInfoPanel
-        class="shrink-0 py-4 w-full"
-        :global-min="globalMin"
-        :global-max="globalMax"
-        :display-min="displayMin"
-        :display-max="displayMax"
-        :channels-mode="channelsMode"
-        :histogram="intensityHistogram"
-        :info="displayInfo"
-        :acquisition="acquisition"
-        :source-file="sourceFile"
-        :methods="methods"
-        :sorted-values="sortedNonZero"
-        @update:display-min="onDisplayMinChange"
-        @update:display-max="onDisplayMaxChange"
-      >
+      <VizInfoPanel :display="display" :meta="meta" :channels-mode="multiIon.overlayActive">
         <template #actions>
-          <OverlayControls
-            v-model:umap-alpha="umapAlpha"
-            v-model:kmeans-alpha="kmeansAlpha"
-            :umap-visible="umapVisible"
-            :kmeans-visible="kmeansVisible"
-            :overlay-loading="overlayLoading"
-            :clustering-creating="clusteringCreating"
-            :clustering-computing="clusteringComputing"
-            :clustering-ready="clusteringReady"
-            :clustering-refreshing="clusteringRefreshing"
-            :overlay-error="overlayError"
-            :kmeans-clusters="kmeansClusters"
-            :kmeans-labels-available="kmeansLabelsAvailable"
-            :kmeans-k="kmeansK"
-            :kmeans-computing="kmeansComputing"
-            :selected-kmeans-ids="selectedKmeansIds"
-            :storage-mode="storageMode"
-            :roi-tool="roiTool"
-            :draft-ready="draftReady"
-            :viewing-roi="viewingROI"
-            :confirmed-rois="confirmedROIs as any"
-            :selected-roi-ids="selectedRoiIds"
-            :gamma="gamma"
-            :channels-mode="channelsMode"
-            :channels-enabled="channelsEnabled"
-            :ion-channels="ionChannels"
-            :can-add-channel="canAddChannel"
-            :channels-loading="channelsLoading"
-            :selected-mz="selectedMz"
-            :max-ion-channels="MAX_ION_CHANNELS"
-            :batch-add-mode="batchAddMode"
-            :imported-masks="importedMasks"
-            @toggle-overlay="toggleOverlay"
-            @retry-clustering="retryClustering"
-            @enable-clustering="createClusteringTask"
-            @refresh-clustering="refreshClusteringStatus"
-            @toggle-kmeans-cluster="handleToggleKmeansCluster"
-            @kmeans-select-all="selectAllKmeansClusters"
-            @kmeans-clear-all="clearKmeansClusters"
-            @run-kmeans="handleRunKmeans"
-            @export-umap="exportUmapPng"
-            @export-kmeans="exportKmeansPng"
-            @update:roi-tool="roiSelectTool"
-            @update:viewing-roi="viewingROI = $event"
-            @roi-confirm="roiConfirm"
-            @roi-cancel="roiCancel"
-            @roi-delete="handleRoiDelete"
-            @toggle-roi-selection="toggleRoiSelection"
-            @roi-select-all="selectAllRois"
-            @roi-deselect-all="clearRoiSelection"
-            @export-masks="handleExportMasks"
-            @import-masks="handleImportMasks"
-            @remove-imported-mask="handleRemoveImportedMask"
-            @toggle-imported-mask="toggleImportedMaskActive"
-            @roi-clear-all="handleRoiClearAll"
-            @update:gamma="gamma = $event"
-            @update:channels-enabled="onChannelsEnabledChange"
-            @add-current-channel="onAddCurrentChannel"
-            @toggle-batch-add="toggleBatchAdd"
-            @update-channel-color="updateChannelColor"
-            @update-channel-opacity="updateChannelOpacity"
-            @remove-channel="removeChannel"
-            @toggle-channel-visible="toggleChannelVisible"
-            @retry-channel="retryChannel"
-            @clear-channels="clearChannels"
-          />
+          <!-- 多离子叠加与 UMAP/KMeans 只适用于 continuous 数据 -->
+          <template v-if="meta.storageMode === 'continuous'">
+            <CollapsibleSection :title="$t('vizworkbench.overlay.multiIon')" class="mt-5">
+              <template #title-help>
+                <SectionHelp :label="$t('vizworkbench.overlay.multiIon')">
+                  {{ $t('vizworkbench.channels.hint') }}
+                </SectionHelp>
+              </template>
+              <IonChannelPanel :state="multiIon" />
+            </CollapsibleSection>
+            <CollapsibleSection :title="$t('vizworkbench.overlay.clustering')" class="mt-5">
+              <ClusteringPanel :clustering="clustering" :rois="roi.confirmedROIs" />
+            </CollapsibleSection>
+          </template>
+          <CollapsibleSection :title="$t('vizworkbench.overlay.roi')" class="mt-5">
+            <ROIPanel :state="roi" :collect="roiCollect" :regions="regions" />
+          </CollapsibleSection>
+          <CollapsibleSection :title="$t('vizworkbench.mask.title')" class="mt-5">
+            <MaskExportPanel
+              :regions="regions"
+              :selected-roi-ids="roi.selectedRoiIds"
+              :kmeans-visible="clustering.kmeansVisible"
+              :selected-kmeans-ids="clustering.selectedKmeansIds"
+              @export-masks="handleExportMasks"
+              @import-masks="handleImportMasks"
+            />
+          </CollapsibleSection>
         </template>
       </VizInfoPanel>
     </template>

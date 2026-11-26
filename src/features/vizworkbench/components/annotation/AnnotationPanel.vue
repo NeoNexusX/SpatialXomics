@@ -12,6 +12,8 @@
 import { computed, provide, ref, toRef } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 import SearchInput from '@/shared/components/SearchInput.vue'
+import CollapsibleSidePanel from '@/features/vizworkbench/components/CollapsibleSidePanel.vue'
+import SectionHelp from '@/features/vizworkbench/components/SectionHelp.vue'
 import AnnotationConditions from '@/features/vizworkbench/components/annotation/AnnotationConditions.vue'
 import AdductMultiSelect from '@/features/vizworkbench/components/annotation/AdductMultiSelect.vue'
 import AnnotationTable from '@/features/vizworkbench/components/annotation/AnnotationTable.vue'
@@ -180,71 +182,40 @@ async function onDrop(e: DragEvent) {
   if (file) await importDbFile(file)
   else showToast(t('vizworkbench.annotation.dropCsvOnly'), 'error')
 }
+
+const dragHandlers = {
+  dragenter: onDragEnter,
+  dragover: onDragOver,
+  dragleave: onDragLeave,
+  drop: onDrop,
+}
 </script>
 
 <template>
-  <aside
-    :class="[
-      'static flex w-full flex-col overflow-hidden rounded-xl border-2 border-base-content/30 bg-base-100 shadow-sm lg:h-full lg:max-w-none lg:shrink-0 lg:transition-[width] lg:duration-200 lg:ease-out',
-      expanded ? 'lg:w-full' : 'lg:w-11 lg:min-w-11',
-    ]"
+  <CollapsibleSidePanel
+    :expanded="expanded"
+    side="left"
+    :title="$t('vizworkbench.annotation.title')"
+    :expand-label="$t('vizworkbench.annotation.expand')"
+    :collapse-label="$t('vizworkbench.annotation.collapse')"
+    class="lg:h-full lg:transition-[width] lg:duration-200 lg:ease-out"
+    content-class="gap-3 px-4 pb-4 pt-1 kawaru-text-62"
+    @update:expanded="emit('update:expanded', $event)"
+    v-on="expanded ? dragHandlers : {}"
   >
-    <!-- 小屏收起：留在页面流里的一条按钮 -->
-    <button
-      v-show="!expanded"
-      class="flex w-full items-center justify-between gap-3 px-4 py-3 hover:bg-base-200/60 lg:hidden"
-      :title="$t('vizworkbench.annotation.expand')"
-      @click="emit('update:expanded', true)"
-    >
-      <span class="kawaru-text-68 font-semibold">{{ $t('vizworkbench.annotation.title') }}</span>
-      <SvgIcon type="chevron_down" />
-    </button>
+    <template #header-actions>
+      <button
+        v-if="ions.length"
+        type="button"
+        class="btn btn-ghost btn-xs btn-square mr-4 shrink-0"
+        :title="$t('vizworkbench.annotation.exportHint')"
+        @click="exportCsv"
+      >
+        <SvgIcon type="download" />
+      </button>
+    </template>
 
-    <!-- 桌面收起：细条 -->
-    <div
-      v-show="!expanded"
-      class="hidden h-full w-full cursor-pointer flex-col items-center justify-center gap-2 py-3 hover:bg-base-200/60 lg:flex"
-      :title="$t('vizworkbench.annotation.expand')"
-      @click="emit('update:expanded', true)"
-    >
-      <SvgIcon type="chevron_right" />
-      <span class="[writing-mode:vertical-rl] kawaru-text-62 font-medium tracking-wide">
-        {{ $t('vizworkbench.annotation.title') }}
-      </span>
-    </div>
-
-    <div
-      v-show="expanded"
-      class="relative flex h-auto min-h-0 min-w-0 flex-col gap-3 p-4 kawaru-text-62 lg:h-full"
-      @dragenter="onDragEnter"
-      @dragover="onDragOver"
-      @dragleave="onDragLeave"
-      @drop="onDrop"
-    >
-      <!-- 标题栏 -->
-      <div class="flex shrink-0 items-center justify-between gap-2">
-        <h3 class="kawaru-text-62 font-semibold leading-tight text-base-content">
-          {{ $t('vizworkbench.annotation.title') }}
-        </h3>
-        <div class="flex shrink-0 items-center gap-1">
-          <button
-            v-if="ions.length"
-            class="btn btn-ghost btn-xs btn-square"
-            :title="$t('vizworkbench.annotation.exportHint')"
-            @click="exportCsv"
-          >
-            <SvgIcon type="download" />
-          </button>
-          <button
-            class="btn btn-ghost btn-xs btn-square"
-            :title="$t('vizworkbench.annotation.collapse')"
-            @click="emit('update:expanded', false)"
-          >
-            <SvgIcon type="chevron_right" class="rotate-180" />
-          </button>
-        </div>
-      </div>
-
+    <template #default>
       <input
         ref="fileInput"
         type="file"
@@ -341,11 +312,11 @@ async function onDrop(e: DragEvent) {
               {{ $t('vizworkbench.annotation.runFailed') }}
             </div>
             <div v-else-if="summary" class="flex flex-wrap items-center gap-2">
-              <span
-                class="kawaru-text-56 text-base-content/50"
-                :title="$t('vizworkbench.annotation.qLevelHint')"
-              >
+              <span class="inline-flex items-center gap-1 kawaru-text-56 text-base-content/50">
                 {{ $t('vizworkbench.annotation.qLevelLabel') }}
+                <SectionHelp :label="$t('vizworkbench.annotation.qLevelLabel')">
+                  {{ $t('vizworkbench.annotation.qLevelHint') }}
+                </SectionHelp>
               </span>
               <button
                 v-for="lv in qLevels"
@@ -488,8 +459,8 @@ async function onDrop(e: DragEvent) {
           {{ $t('vizworkbench.annotation.dropHint') }}
         </p>
       </div>
-    </div>
-  </aside>
+    </template>
+  </CollapsibleSidePanel>
 </template>
 
 <style scoped>

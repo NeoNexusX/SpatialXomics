@@ -75,27 +75,33 @@ Gamma correction is always available; UMAP / KMeans clustering is only available
 
 ### Region of Interest (ROI)
 
+An ROI is built in a draft from one or more shapes, then saved to the ROI list.
+
 | Tool | Description |
 |---|---|
-| **Rect** | Drag to draw a rectangular ROI. |
-| **Lasso** | Draw a freeform outline for an irregular ROI. |
-| **Confirm / Cancel** | Finalize or discard the current draft. |
+| **Rect / Ellipse** | Drag on the ion image to draw a rectangle or an ellipse (hold Shift for a circle). Before confirming, drag a corner to resize or the center to move. |
+| **Segments** | Click to place vertices. Click the first point or press Enter to close. |
+| **Freehand** | Drag to trace. Release to pause and resume from the endpoint. Click the first point or press Enter to close. |
+| **Collect** | Select the pixels with or without signal in the current ion image, or all acquired pixels. |
+| **Add / Subtract / Intersect** | How the next shape combines with the draft. |
+| **Use an existing region** | Add a saved ROI or a KMeans cluster to the draft as a shape. |
+| **Confirm shape / Discard shape** | Apply the current shape to the draft, or drop it. |
+| **Undo / Redo** | Step back or forward through the draft (Ctrl/⌘+Z, Shift+Ctrl/⌘+Z). |
+| **Save ROI / Cancel draft** | Save the draft as an ROI, or discard the whole draft. |
+| **ROI list** | Checked ROIs are filled in their colors on the image and included in the exported mask. Each ROI has its own opacity and shows its pixel count, Mean, Std, Min and Max. |
 | **ROI only / Show all** | Toggle between showing only ROI pixels or the full image. |
-| **ROI stats** | Each ROI shows: Pixels, Mean, Std, Min, Max. |
 | **Delete / Clear all** | Remove individual ROIs or clear everything. |
 
 ### Mask Import & Export
 
-Export ROI masks and KMeans clusters as a binary mask file, or import one and use it as a display filter.
+Export ROI masks and KMeans clusters as a binary mask file, or import mask files as ROIs.
 
 | Control | Description |
 |---|---|
 | **Format** | Choose the mask file format. |
-| **ROI masks / KMeans clusters** | Pick which regions to include. Checked regions are merged into a single binary mask. |
+| **To export** | The ROIs checked in the ROI list, plus the checked clusters while KMeans is shown. They are merged into a single binary mask. |
 | **Export mask** | Download one mask file. Each file embeds the dataset name, shape, pixel size, and a SHA-256 digest over the pixel payload. |
-| **Import mask** | Load a mask and apply it as a filter on the ion image. |
-| **Apply Mask / Show Original** | Re-apply the imported mask, or suspend it and show the full image (appears after importing a mask). |
-| **Clear imported mask** | Remove the imported mask. |
+| **Import mask** | Load mask files. Each one becomes an entry in the ROI list (tagged “Imported”) and works like a drawn ROI. |
 
 ![Mask import & export](https://cdn.neonexus.top/docs/20261008182213629.jpg_view)
 
@@ -184,11 +190,11 @@ Set a minimum detection rate and an intensity threshold, then click **Compare**.
 
 ### Using ROIs
 
-1. Click **Rect** in the ROI section, draw a region, then click **Confirm** to create ROI 1.
+1. Click **Rect** in the ROI section, draw a region, click **Confirm shape**, then **Save ROI** to create ROI 1.
 
    ![ROI 1](https://cdn.neonexus.top/docs/20260914161347733.jpg_view)
 
-2. Click **ROI only** to reset the view, then draw another region to create ROI 2.
+2. Repeat step 1 to create ROI 2.
 
    ![ROI 2](https://cdn.neonexus.top/docs/20260914161613765.jpg_view)
 

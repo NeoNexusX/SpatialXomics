@@ -126,6 +126,9 @@ export function rgbCss(c: RGB): string {
   return `rgb(${c.r},${c.g},${c.b})`
 }
 
+/** Contrasting colors used in order for individual shapes in an ROI draft. */
+export const ROI_SHAPE_COLORS = [0, 2, 25, 5, 19, 23].map((index) => rgbCss(roiColorAt(index)))
+
 /** Parse a hex or CSS rgb(...) color string back to RGB. */
 export function hexToRgb(color: string): RGB | null {
   const value = color.trim()
