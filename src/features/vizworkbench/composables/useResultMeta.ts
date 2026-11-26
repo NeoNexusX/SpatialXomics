@@ -1,4 +1,4 @@
-import { computed, ref, shallowRef, watch, onUnmounted, type Ref } from 'vue'
+import { computed, reactive, ref, shallowRef, watch, onUnmounted } from 'vue'
 import { metadataAttrsRef, polarityRef } from '@/features/vizworkbench/composables/useZarrIonImage'
 import { getFileMetadata, listMyProcesses } from '@/features/datasets/api/datasetApi'
 import { mapItemToDataset } from '@/features/datasets/mappers/datasetMapper'
@@ -22,7 +22,7 @@ interface VizWorkbenchState {
  * 处理记录（history.state，缺失时回查「我的处理记录」）。展示字段全部由它们推导，
  * 不管哪个请求先返回，结果都一样；各字段以谁为准见 types/acquisition.ts。
  */
-export function useResultMeta(runId: Ref<string>) {
+export function useResultMeta(runId: string) {
   const stateName = ref('')
   const processName = ref('')
   const status = ref('')
@@ -35,14 +35,11 @@ export function useResultMeta(runId: Ref<string>) {
    */
   const sourceFile = shallowRef<File | null>(null)
 
+  /** Responses that arrive after the page unmounted are dropped. */
   let disposed = false
   onUnmounted(() => {
     disposed = true
   })
-  /** true when a response fetched for `id` must be discarded: the component
-   *  unmounted, or runId already moved on to another result (same-instance
-   *  reuse on /viz). */
-  const isStale = (id: string) => disposed || runId.value !== id
 
   const acquisition = computed<Acquisition>(() =>
     deriveAcquisition(metadataAttrsRef.value, sourceFile.value, methods.value),
@@ -79,12 +76,12 @@ export function useResultMeta(runId: Ref<string>) {
    * 处理记录兜底：history.state 缺名称 / 状态 / methods 时（Explore 入口不带 status）
    * 回查「我的处理记录」。只能查到当前用户自己的 run，查不到时这几项留空。
    */
-  async function fetchProcessMetaFromApi(id: string) {
+  async function fetchProcessMetaFromApi() {
     if (datasetName.value && status.value && methods.value.length) return
 
     const result = await listMyProcesses(1, 100)
-    if (isStale(id)) return
-    const process = (result.data || []).find((p: any) => String(p.id) === id)
+    if (disposed) return
+    const process = (result.data || []).find((p: any) => String(p.id) === runId)
     if (!process) return
 
     processName.value = (process.filename || '').replace(/\.[^.]+$/, '')
@@ -98,48 +95,37 @@ export function useResultMeta(runId: Ref<string>) {
    * 按源文件 ID 取完整文件记录。两个入口（工作区列表、数据集 Explore）都随 runId
    * 携带 filePublicId；该接口任意登录用户可读，别人的公开数据、较早的 run 都能查到。
    */
-  async function fetchSourceFile(id: string, filePublicId: string | undefined) {
+  async function fetchSourceFile(filePublicId: string | undefined) {
     if (!filePublicId) return
     try {
       const file = mapItemToDataset(await getFileMetadata(filePublicId))
-      if (!isStale(id)) sourceFile.value = file
+      if (!disposed) sourceFile.value = file
     } catch (e) {
       // 源文件已删除（404）等：只显示 zarr 自带的元信息
-      if (!isStale(id)) console.warn('[useResultMeta] source file metadata unavailable:', e)
+      if (!disposed) console.warn('[useResultMeta] source file metadata unavailable:', e)
     }
   }
 
-  let requestId = 0
-
-  async function fetchMeta(id: string) {
-    const currentRequest = ++requestId
+  async function fetchMeta() {
     loading.value = true
     try {
       const state = history.state as VizWorkbenchState | null
       stateName.value = state?.datasetName || ''
-      processName.value = ''
       status.value = (state?.status || '').toLowerCase()
       methods.value = state?.methods || []
-      sourceFile.value = null
 
       // 源文件元信息与处理记录兜底互不依赖，并行请求
-      await Promise.all([fetchSourceFile(id, state?.filePublicId), fetchProcessMetaFromApi(id)])
+      await Promise.all([fetchSourceFile(state?.filePublicId), fetchProcessMetaFromApi()])
     } catch (e) {
-      if (currentRequest === requestId) console.error('[useResultMeta] fetch failed:', e)
+      if (!disposed) console.error('[useResultMeta] fetch failed:', e)
     } finally {
-      if (currentRequest === requestId) loading.value = false
+      loading.value = false
     }
   }
 
-  watch(
-    runId,
-    (id) => {
-      if (id) fetchMeta(id)
-    },
-    { immediate: true },
-  )
+  if (runId) void fetchMeta()
 
-  return {
+  return reactive({
     datasetName,
     acquisition,
     spectrumMode: computed(() => acquisition.value.spectrumMode),
@@ -150,5 +136,7 @@ export function useResultMeta(runId: Ref<string>) {
     methods,
     loading,
     sourceFile,
-  }
+  })
 }
+
+export type ResultMeta = ReturnType<typeof useResultMeta>

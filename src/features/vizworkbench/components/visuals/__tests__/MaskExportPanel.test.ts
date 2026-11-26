@@ -1,38 +1,40 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import MaskExportPanel from '../MaskExportPanel.vue'
-import type { ConfirmedROI } from '@/features/vizworkbench/composables/useROI'
-import type { KmeansCluster } from '@/features/vizworkbench/composables/useOverlayData'
+import type { KmeansRegion, RegionGrid, RoiRegion } from '@/features/vizworkbench/utils/region'
 import { i18n, loadCoreMessages, loadFeatureMessages } from '@/i18n'
 
 beforeAll(() => Promise.all([loadCoreMessages('en'), loadFeatureMessages('vizworkbench')]))
 
-function roi(id: string, label: string): ConfirmedROI {
+const GRID: RegionGrid = { runId: '', shape: [1, 1] }
+
+function roi(id: string, label: string): RoiRegion {
+  return { id, kind: 'roi', label, color: '#e11d48', grid: GRID, mask: Uint8Array.of(1) }
+}
+
+function cluster(id: number): KmeansRegion {
   return {
-    id,
-    type: 'rectangle',
-    label,
-    color: '#e11d48',
-    mask: Uint8Array.of(1),
-    shape: [1, 1],
-    pixelCount: 1,
-    stats: null,
-    spectrum: null,
+    id: `kmeans:1:${id}`,
+    kind: 'kmeans',
+    clusterId: id,
+    label: `Cluster ${id}`,
+    color: 'rgb(0,0,0)',
+    grid: GRID,
+    labels: Int32Array.of(id),
   }
 }
 
-function cluster(id: number): KmeansCluster {
-  return { id, color: [0, 0, 0], count: 10 }
-}
+const ROIS = [roi('a', 'ROI 1'), roi('b', 'ROI 2')]
+const CLUSTERS = [cluster(0), cluster(1), cluster(2)]
 
 type Props = InstanceType<typeof MaskExportPanel>['$props']
 
 function mountPanel(over: Partial<Props> = {}) {
   return mount(MaskExportPanel, {
     props: {
-      rois: [roi('a', 'ROI 1'), roi('b', 'ROI 2')],
+      // Clusters come first in the page's region list.
+      regions: [...CLUSTERS, ...ROIS],
       selectedRoiIds: null,
-      kmeansClusters: [cluster(0), cluster(1), cluster(2)],
       kmeansVisible: true,
       selectedKmeansIds: null,
       ...over,
@@ -46,7 +48,7 @@ const exportButton = (w: ReturnType<typeof mountPanel>) =>
   w.findAll('button').find((b) => b.text() === 'Export mask')!
 
 describe('MaskExportPanel', () => {
-  it('lists the regions to export by name, without checkboxes', () => {
+  it('lists the ROIs, then the clusters, to export by name without checkboxes', () => {
     const w = mountPanel({
       selectedRoiIds: new Set(['b', 'deleted']),
       selectedKmeansIds: new Set([2]),
@@ -58,12 +60,9 @@ describe('MaskExportPanel', () => {
   it('leaves clusters out while the KMeans overlay is hidden', async () => {
     const w = mountPanel({ kmeansVisible: false })
     expect(names(w)).toEqual(['ROI 1', 'ROI 2'])
-    expect(w.find('p').exists()).toBe(false)
 
     await exportButton(w).trigger('click')
-    expect(w.emitted('export-masks')).toEqual([
-      [{ format: 'npz', roiIds: ['a', 'b'], clusterIds: [] }],
-    ])
+    expect(w.emitted('export-masks')).toEqual([['npz', ROIS]])
   })
 
   it('exports the listed ROIs and clusters in the chosen format', async () => {
@@ -73,9 +72,7 @@ describe('MaskExportPanel', () => {
       .find((b) => b.text() === '.csv')!
       .trigger('click')
     await exportButton(w).trigger('click')
-    expect(w.emitted('export-masks')).toEqual([
-      [{ format: 'csv', roiIds: ['a', 'b'], clusterIds: [0, 2] }],
-    ])
+    expect(w.emitted('export-masks')).toEqual([['csv', [...ROIS, CLUSTERS[0], CLUSTERS[2]]]])
   })
 
   it('hands the picked mask files to the parent, which adds them as ROIs', async () => {
@@ -87,14 +84,15 @@ describe('MaskExportPanel', () => {
     expect(w.emitted('import-masks')).toEqual([[files]])
   })
 
-  it('disables export when the list is empty', () => {
+  it('disables export when the list is empty', async () => {
     const none = mountPanel({ selectedRoiIds: new Set(), kmeansVisible: false })
     expect(names(none)).toEqual([])
-    expect(none.find('p').exists()).toBe(false)
     expect(exportButton(none).attributes('disabled')).toBeDefined()
+    await exportButton(none).trigger('click')
+    expect(none.emitted('export-masks')).toBeUndefined()
 
-    const empty = mountPanel({ rois: [], kmeansClusters: [] })
-    expect(empty.find('p').exists()).toBe(false)
+    const empty = mountPanel({ regions: [] })
+    expect(names(empty)).toEqual([])
     expect(exportButton(empty).attributes('disabled')).toBeDefined()
   })
 })

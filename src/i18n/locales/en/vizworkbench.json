@@ -13,7 +13,6 @@
       "noPeakInTolerance": "No peak within ±{tolerance} of {target}: nearest is {nearest} (Δ {delta}). Widen the tolerance or try another value.",
       "masksImported": "Imported {count} mask(s) as ROIs.",
       "maskImportFailed": "Mask import failed: {error}",
-      "maskImportFailedGeneric": "Mask import failed, please check the file and retry",
       "noPixelAtPosition": "No data was acquired at this position"
     },
     "ionImage": {

@@ -1,3 +1,5 @@
+import type { RGB } from './regionPalette'
+
 export type ROIContourType = 'polygon' | 'freehand'
 export type ROIType = 'rectangle' | 'ellipse' | ROIContourType
 /** Drawing tools plus collecting the current ion image's pixels by signal. */
@@ -158,6 +160,32 @@ export function intersectRoiMasks(target: Uint8Array, operand: Uint8Array) {
   for (let i = 0; i < target.length; i++) target[i] = target[i]! & operand[i]!
 }
 
+/**
+ * Paint `color` over the pixels set in `mask`: source-over in straight RGBA,
+ * the layout ImageData uses, with `alpha` in 0–255. Transparent pixels take the
+ * color as is; opaque ones blend with it.
+ */
+export function compositeMask(
+  rgba: Uint8ClampedArray,
+  mask: Uint8Array,
+  color: RGB,
+  alpha: number,
+) {
+  const remaining = 1 - alpha / 255
+  for (let i = 0; i < mask.length; i++) {
+    if (!mask[i]) continue
+    const off = i * 4
+    const below = rgba[off + 3]! * remaining
+    const total = alpha + below
+    if (!total) continue
+    const weight = below / total
+    rgba[off] = color.r + (rgba[off]! - color.r) * weight
+    rgba[off + 1] = color.g + (rgba[off + 1]! - color.g) * weight
+    rgba[off + 2] = color.b + (rgba[off + 2]! - color.b) * weight
+    rgba[off + 3] = total
+  }
+}
+
 /** Trace the exposed cell edges, coalescing runs to keep the SVG path compact. */
 export function roiMaskOutline(mask: Uint8Array, width: number, height: number): string {
   const edges: string[] = []
@@ -193,12 +221,21 @@ export function roiMaskOutline(mask: Uint8Array, width: number, height: number):
   return edges.join(' ')
 }
 
+export interface RoiStats {
+  mean: number
+  std: number
+  min: number
+  max: number
+}
+
 /** Mask area includes all selected cells. Intensity statistics use finite samples only. */
-export function summarizeRoiMask(mask: Uint8Array, matrix: Float32Array | null) {
+export function summarizeRoiMask(
+  mask: Uint8Array,
+  matrix: Float32Array | null,
+): { pixelCount: number; stats: RoiStats | null } {
   const values = matrix?.length === mask.length ? matrix : null
   let pixelCount = 0
   let count = 0
-  let sum = 0
   let mean = 0
   let squaredDeviations = 0
   let min = Infinity
@@ -210,21 +247,13 @@ export function summarizeRoiMask(mask: Uint8Array, matrix: Float32Array | null) 
     const value = values[i]!
     if (!Number.isFinite(value)) continue
     count++
-    sum += value
     min = Math.min(min, value)
     max = Math.max(max, value)
-    // Welford's update gives the population variance in the same pass.
+    // Welford's update gives the mean and the population variance in one pass.
     const delta = value - mean
     mean += delta / count
     squaredDeviations += delta * (value - mean)
   }
-  const stats = count
-    ? {
-        mean: sum / count,
-        std: Math.sqrt(squaredDeviations / count),
-        min,
-        max,
-      }
-    : null
-  return { pixelCount, sampleCount: count, sum, stats }
+  const stats = count ? { mean, std: Math.sqrt(squaredDeviations / count), min, max } : null
+  return { pixelCount, stats }
 }

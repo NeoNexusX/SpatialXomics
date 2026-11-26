@@ -7,15 +7,23 @@ interface RegionIdentity {
   id: string
   label: string
   color: string
-  pixelCount: number
   grid: RegionGrid
 }
 
-export type Region = RegionIdentity &
-  (
-    | { kind: 'roi'; sourceId: string; mask: Uint8Array }
-    | { kind: 'kmeans'; clusterId: number; labels: Int32Array }
-  )
+/** A row-major 0/1 mask, such as a saved ROI. */
+export interface RoiRegion extends RegionIdentity {
+  kind: 'roi'
+  mask: Uint8Array
+}
+
+/** One cluster of a KMeans label map (-1 = unlabelled). */
+export interface KmeansRegion extends RegionIdentity {
+  kind: 'kmeans'
+  clusterId: number
+  labels: Int32Array
+}
+
+export type Region = RoiRegion | KmeansRegion
 
 /** Materialize a binary union on the current grid. Scan each shared label map once. */
 export function buildRegionMask(regions: readonly Region[], grid: RegionGrid) {

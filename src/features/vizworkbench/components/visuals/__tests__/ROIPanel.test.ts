@@ -1,17 +1,21 @@
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { afterEach, beforeAll, expect, it } from 'vitest'
 import { nextTick, ref, type Ref } from 'vue'
-import { useResultROI } from '@/features/vizworkbench/composables/useResultROI'
+import { useROI, type RoiState } from '@/features/vizworkbench/composables/useROI'
 import { useRoiCollect } from '@/features/vizworkbench/composables/useRoiCollect'
 import type { RoiEditor } from '@/features/vizworkbench/composables/useRoiEditor'
-import { roiToRegion } from '@/features/vizworkbench/composables/useROI'
-import type { Region } from '@/features/vizworkbench/utils/region'
+import type { Region, RegionGrid } from '@/features/vizworkbench/utils/region'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { i18n, loadCoreMessages, loadFeatureMessages } from '@/i18n'
 import ROIPanel from '../ROIPanel.vue'
 
 beforeAll(() => Promise.all([loadCoreMessages('en'), loadFeatureMessages('vizworkbench')]))
 enableAutoUnmount(afterEach)
+
+/** ROI state on a `width` × 1 grid. */
+function roiState(matrix: Readonly<Ref<Float32Array | null>>, width: number) {
+  return useROI(matrix, ref<RegionGrid>({ runId: '', shape: [1, width] }))
+}
 
 function collectFrom(
   editor: RoiEditor,
@@ -28,37 +32,24 @@ function collectFrom(
   })
 }
 
-function mountPanel(
-  state: ReturnType<typeof useResultROI>,
-  collect = collectFrom(state.editor, ref(null), null),
-) {
+function mountPanel(state: RoiState, collect = collectFrom(state.editor, ref(null), null)) {
   const panel = mount(ROIPanel, {
-    props: {
-      editor: state.editor,
-      collect,
-      rois: state.confirmedROIs.value,
-      regions: state.confirmedROIs.value.map((roi) => roiToRegion(roi, '')),
-      opacities: state.roiOpacities.value,
-      viewingRoi: false,
-      selectedRoiIds: null,
-      onClearAll: state.roiClearAll,
-      onConfirm: state.roiConfirm,
-    },
+    props: { state, collect, regions: [...state.confirmedROIs] },
     global: { plugins: [i18n] },
   })
   const button = (label: string) => panel.findAll('button').find((item) => item.text() === label)!
   return { panel, button }
 }
 
-function stageRectangle(editor: ReturnType<typeof useResultROI>['editor'], x0: number, x1: number) {
+function stageRectangle(editor: RoiEditor, x0: number, x1: number) {
   editor.stageShape({ type: 'rectangle', rect: { x0, x1, y0: 0, y1: 0 }, path: [] })
 }
 
 it('clears saved ROIs and the draft only after confirming Clear all', async () => {
-  const state = useResultROI(ref(new Float32Array([1, 2])), ref(2), ref(1))
+  const state = roiState(ref(new Float32Array([1, 2])), 2)
   stageRectangle(state.editor, 0, 0)
   state.editor.confirmShape()
-  state.roiConfirm()
+  state.saveDraft()
   stageRectangle(state.editor, 1, 1)
   state.editor.confirmShape()
 
@@ -67,23 +58,21 @@ it('clears saved ROIs and the draft only after confirming Clear all', async () =
   await clear.trigger('click')
   const dialog = panel.getComponent(ConfirmDialog)
   expect(dialog.text()).toContain('Clear all ROIs?')
-  expect(panel.emitted('clearAll')).toBeUndefined()
 
   await dialog.get('.modal-action button').trigger('click')
   expect(panel.findComponent(ConfirmDialog).exists()).toBe(false)
-  expect(state.confirmedROIs.value).toHaveLength(1)
+  expect(state.confirmedROIs).toHaveLength(1)
   expect(state.editor.previewCount).toBe(1)
 
   await clear.trigger('click')
   await panel.getComponent(ConfirmDialog).get('.modal-action .btn-error').trigger('click')
   expect(panel.findComponent(ConfirmDialog).exists()).toBe(false)
-  expect(panel.emitted('clearAll')).toHaveLength(1)
-  expect(state.confirmedROIs.value).toHaveLength(0)
+  expect(state.confirmedROIs).toHaveLength(0)
   expect(state.editor.hasDraft).toBe(false)
 })
 
 it('intersects each confirmed shape without switching modes before saving', async () => {
-  const state = useResultROI(ref(new Float32Array(4).fill(1)), ref(4), ref(1))
+  const state = roiState(ref(new Float32Array(4).fill(1)), 4)
   const { editor } = state
   stageRectangle(editor, 0, 3)
   editor.confirmShape()
@@ -101,24 +90,24 @@ it('intersects each confirmed shape without switching modes before saving', asyn
   await button('Confirm shape').trigger('click')
   expect(editor.previewCount).toBe(1)
   await button('Save ROI').trigger('click')
-  expect(Array.from(state.confirmedROIs.value[0]!.mask)).toEqual([0, 1, 0, 0])
+  expect(Array.from(state.confirmedROIs[0]!.mask)).toEqual([0, 1, 0, 0])
 })
 
 it('previews a saved ROI and subtracts it only on confirmation', async () => {
-  const state = useResultROI(ref(new Float32Array(4).fill(1)), ref(4), ref(1))
+  const state = roiState(ref(new Float32Array(4).fill(1)), 4)
   const { editor } = state
   stageRectangle(editor, 0, 1)
   editor.confirmShape()
-  state.roiConfirm()
-  const saved = state.confirmedROIs.value[0]!
+  state.saveDraft()
+  const saved = state.confirmedROIs[0]!
 
   stageRectangle(editor, 1, 3)
   editor.confirmShape()
   const { panel, button } = mountPanel(state)
   await button('Subtract').trigger('click')
   const select = panel.get<HTMLSelectElement>('select[aria-label="Use an existing region"]')
-  await select.setValue(`roi:${saved.id}`)
-  expect(select.element.value).toBe(`roi:${saved.id}`)
+  await select.setValue(saved.id)
+  expect(select.element.value).toBe(saved.id)
   expect(Array.from(editor.shapeMask!)).toEqual([1, 1, 0, 0])
   expect(Array.from(editor.previewMask!)).toEqual([0, 1, 1, 1])
   expect(button('Save ROI').attributes('disabled')).toBeDefined()
@@ -127,7 +116,7 @@ it('previews a saved ROI and subtracts it only on confirmation', async () => {
   expect(select.element.value).toBe('')
   expect(Array.from(editor.previewMask!)).toEqual([0, 1, 1, 1])
 
-  await select.setValue(`roi:${saved.id}`)
+  await select.setValue(saved.id)
   await button('Confirm shape').trigger('click')
   expect(select.element.value).toBe('')
   expect(Array.from(editor.previewMask!)).toEqual([0, 0, 1, 1])
@@ -136,39 +125,39 @@ it('previews a saved ROI and subtracts it only on confirmation', async () => {
   expect(Array.from(editor.previewMask!)).toEqual([0, 1, 1, 1])
   await button('Redo').trigger('click')
   await button('Save ROI').trigger('click')
-  expect(state.confirmedROIs.value.map((roi) => Array.from(roi.mask))).toEqual([
+  expect(state.confirmedROIs.map((roi) => Array.from(roi.mask))).toEqual([
     [1, 1, 0, 0],
     [0, 0, 1, 1],
   ])
 })
 
 it('starts a draft with a saved ROI and adds another saved ROI on confirmation', async () => {
-  const state = useResultROI(ref(new Float32Array(4).fill(1)), ref(4), ref(1))
+  const state = roiState(ref(new Float32Array(4).fill(1)), 4)
   const { editor } = state
   stageRectangle(editor, 0, 1)
   editor.confirmShape()
-  state.roiConfirm()
+  state.saveDraft()
   stageRectangle(editor, 1, 2)
   editor.confirmShape()
-  state.roiConfirm()
-  const [first, second] = state.confirmedROIs.value
+  state.saveDraft()
+  const [first, second] = state.confirmedROIs
 
   const { panel, button } = mountPanel(state)
   const select = panel.get<HTMLSelectElement>('select[aria-label="Use an existing region"]')
-  await select.setValue(`roi:${first!.id}`)
+  await select.setValue(first!.id)
   expect(editor.previewMask).toBeNull()
   await button('Confirm shape').trigger('click')
   expect(Array.from(editor.previewMask!)).toEqual([1, 1, 0, 0])
 
-  await select.setValue(`roi:${second!.id}`)
+  await select.setValue(second!.id)
   expect(Array.from(editor.previewMask!)).toEqual([1, 1, 0, 0])
   await button('Confirm shape').trigger('click')
   await button('Save ROI').trigger('click')
-  expect(Array.from(state.confirmedROIs.value[2]!.mask)).toEqual([1, 1, 1, 0])
+  expect(Array.from(state.confirmedROIs[2]!.mask)).toEqual([1, 1, 1, 0])
 })
 
 it('keeps the selected cluster mask when a new result replaces the label map', async () => {
-  const state = useResultROI(ref(new Float32Array(4).fill(1)), ref(4), ref(1))
+  const state = roiState(ref(new Float32Array(4).fill(1)), 4)
   const { panel, button } = mountPanel(state)
   const cluster: Region = {
     id: 'kmeans:1:0',
@@ -178,7 +167,6 @@ it('keeps the selected cluster mask when a new result replaces the label map', a
     label: 'Cluster 0',
     color: '#abc',
     grid: { runId: '', shape: [1, 4] },
-    pixelCount: 2,
   }
   await panel.setProps({ regions: [cluster] })
   const select = panel.get<HTMLSelectElement>('select[aria-label="Use an existing region"]')
@@ -198,16 +186,16 @@ it('keeps the selected cluster mask when a new result replaces the label map', a
   expect(state.editor.previewMask).toBeNull()
   await button('Redo').trigger('click')
   await button('Save ROI').trigger('click')
-  expect(Array.from(state.confirmedROIs.value[0]!.mask)).toEqual([1, 0, 0, 1])
+  expect(Array.from(state.confirmedROIs[0]!.mask)).toEqual([1, 0, 0, 1])
 })
 
 it('collects the signal pixels of the current image into a named ROI', async () => {
   const matrix = ref<Float32Array | null>(Float32Array.of(5, 0, 2, 0))
-  const state = useResultROI(matrix, ref(4), ref(1))
+  const state = roiState(matrix, 4)
   // A saved ROI keeps the region select on screen while collecting.
   stageRectangle(state.editor, 3, 3)
   state.editor.confirmShape()
-  state.roiConfirm()
+  state.saveDraft()
   const collect = collectFrom(state.editor, matrix, Uint8Array.of(1, 1, 1, 0))
   const { panel, button } = mountPanel(state, collect)
 
@@ -226,16 +214,15 @@ it('collects the signal pixels of the current image into a named ROI', async () 
 
   await button('Confirm shape').trigger('click')
   await button('Save ROI').trigger('click')
-  const roi = state.confirmedROIs.value[1]!
+  const roi = state.confirmedROIs[1]!
   expect(roi).toMatchObject({ type: 'collect', label: '100.0000 Signal' })
   expect(Array.from(roi.mask)).toEqual([1, 0, 1, 0])
-  await panel.setProps({ rois: state.confirmedROIs.value })
   expect(panel.findAll('.card-tag').map((tag) => tag.text())).toEqual(['Rect', 'Collect'])
 })
 
 it('disables a collect option that has no pixels', async () => {
   const matrix = ref<Float32Array | null>(Float32Array.of(5, 3))
-  const state = useResultROI(matrix, ref(2), ref(1))
+  const state = roiState(matrix, 2)
   const { panel } = mountPanel(state, collectFrom(state.editor, matrix, Uint8Array.of(1, 1)))
   await panel.get('button[aria-label="Collect"]').trigger('click')
   const [signal, noSignal] = panel.findAll('[role="group"][aria-label="Collect"] button')
@@ -245,7 +232,7 @@ it('disables a collect option that has no pixels', async () => {
 
 it('disables the Collect tool under the multi-ion overlay', () => {
   const matrix = ref<Float32Array | null>(Float32Array.of(5, 0))
-  const state = useResultROI(matrix, ref(2), ref(1))
+  const state = roiState(matrix, 2)
   const collect = collectFrom(state.editor, matrix, Uint8Array.of(1, 1), false)
   const tool = mountPanel(state, collect).panel.get('button[aria-label="Collect"]')
   expect(tool.attributes('disabled')).toBeDefined()

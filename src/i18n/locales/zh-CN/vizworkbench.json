@@ -13,7 +13,6 @@
       "noPeakInTolerance": "{target} 的 ±{tolerance} 范围内没有峰：最近的是 {nearest}（Δ {delta}）。请放宽容差或换一个值。",
       "masksImported": "已将 {count} 个掩膜导入为 ROI。",
       "maskImportFailed": "掩膜导入失败：{error}",
-      "maskImportFailedGeneric": "掩膜导入失败，请检查文件后重试",
       "noPixelAtPosition": "该位置没有采集数据"
     },
     "ionImage": {

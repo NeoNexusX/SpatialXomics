@@ -2,7 +2,7 @@
   <div class="flex flex-col select-none kawaru-text-75">
     <!-- Info：仪器信息 / 生物与样本信息 / 预处理 -->
     <CollapsibleSection
-      v-if="rowGroups.length || methods.length"
+      v-if="rowGroups.length || meta.methods.length"
       :title="$t('vizworkbench.info.info')"
     >
       <div class="divide-y divide-base-content/10 select-text text-base-content">
@@ -25,11 +25,11 @@
             </div>
           </dl>
         </section>
-        <section v-if="methods.length" class="py-3 first:pt-1 last:pb-0">
+        <section v-if="meta.methods.length" class="py-3 first:pt-1 last:pb-0">
           <h3 :class="SUBHEAD_CLASS">{{ $t('common.preprocessing.title') }}</h3>
           <ul class="space-y-1">
             <li
-              v-for="m in methods"
+              v-for="m in meta.methods"
               :key="m"
               :title="methodLabel(m)"
               class="kawaru-text-62 flex items-center gap-1.5 min-w-0"
@@ -51,11 +51,11 @@
             <canvas ref="histCanvasRef" class="absolute inset-0 w-full h-full" />
             <div
               class="absolute top-0 bottom-0 w-[2px] bg-red-500/80 z-10"
-              :style="{ left: markerLeft(displayMin) + '%' }"
+              :style="{ left: markerLeft(display.displayMin) + '%' }"
             />
             <div
               class="absolute top-0 bottom-0 w-[2px] bg-red-500/80 z-10"
-              :style="{ left: markerLeft(displayMax) + '%' }"
+              :style="{ left: markerLeft(display.displayMax) + '%' }"
             />
           </div>
           <div
@@ -81,11 +81,11 @@
               :class="{ 'opacity-50': channelsMode }"
               :disabled="channelsMode"
               :title="channelsMode ? $t('vizworkbench.ionImage.rangeDisabled') : undefined"
-              :value="formatValue(localMax)"
+              :value="formatValue(display.displayMax)"
               @change="onMaxInput($event)"
             />
             <div class="w-[4em] text-right">
-              <span class="kawaru-text-68 font-bold">{{ pctLabel(displayMax) }}</span>
+              <span class="kawaru-text-68 font-bold">{{ pctLabel(display.displayMax) }}</span>
             </div>
           </div>
           <div class="flex items-center gap-2">
@@ -98,11 +98,11 @@
               :class="{ 'opacity-50': channelsMode }"
               :disabled="channelsMode"
               :title="channelsMode ? $t('vizworkbench.ionImage.rangeDisabled') : undefined"
-              :value="formatValue(localMin)"
+              :value="formatValue(display.displayMin)"
               @change="onMinInput($event)"
             />
             <div class="w-[4em] text-right">
-              <span class="kawaru-text-68 font-bold">{{ pctLabel(displayMin) }}</span>
+              <span class="kawaru-text-68 font-bold">{{ pctLabel(display.displayMin) }}</span>
             </div>
           </div>
         </div>
@@ -115,7 +115,7 @@
                 {{ $t('vizworkbench.overlay.gammaHint') }}
               </SectionHelp>
             </div>
-            <span class="font-mono">{{ gamma.toFixed(1) }}</span>
+            <span class="font-mono">{{ display.gamma.toFixed(1) }}</span>
           </div>
           <input
             :id="gammaId"
@@ -127,8 +127,8 @@
             min="0.5"
             max="1.5"
             step="0.1"
-            :value="gamma"
-            @input="emit('update:gamma', +($event.target as HTMLInputElement).value)"
+            :value="display.gamma"
+            @input="display.setGamma(+($event.target as HTMLInputElement).value)"
           />
           <div class="flex justify-between mt-0.5 kawaru-text-62 text-base-content/60">
             <span>0.5</span>
@@ -144,61 +144,38 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount, useId, watch, type PropType } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, useId, watch } from 'vue'
 import CollapsibleSection from '@/shared/components/CollapsibleSection.vue'
 import SectionHelp from '@/features/vizworkbench/components/SectionHelp.vue'
 import { upperBound } from '@/shared/utils/bisect'
 import { methodLabel } from '@/shared/utils/methodsNormalize'
 import { vocabLabel } from '@/features/datasets/constants/vocabLabels'
-import type { File } from '@/features/datasets/types/dataset'
-import type { Acquisition } from '@/features/vizworkbench/types/acquisition'
+import type { IonImageDisplay } from '@/features/vizworkbench/composables/useIonImageDisplay'
+import type { ResultMeta } from '@/features/vizworkbench/composables/useResultMeta'
 import { t } from '@/i18n'
 
-const props = defineProps({
-  globalMin: { type: Number, required: true },
-  globalMax: { type: Number, required: true },
-  displayMin: { type: Number, required: true },
-  displayMax: { type: Number, required: true },
-  histogram: { type: Array as PropType<number[]>, default: () => [] },
-  info: {
-    type: Object as PropType<{
-      pixels?: string
-      nonZero?: string
-      totalIon?: string
-      pixelSize?: string
-    }>,
-    default: () => ({}),
-  },
-  /** 采集元数据（useResultMeta 合并 zarr attrs 与源文件记录） */
-  acquisition: { type: Object as PropType<Acquisition | null>, default: null },
-  /** 源数据集的完整文件记录：样本信息只在这里有 */
-  sourceFile: { type: Object as PropType<File | null>, default: null },
-  methods: { type: Array as PropType<string[]>, default: () => [] },
-  sortedValues: { type: Array as PropType<number[]>, default: () => [] },
-  gamma: { type: Number, default: 1 },
+const props = defineProps<{
+  /** Display range, histogram and gamma of the ion image. */
+  display: IonImageDisplay
+  /** 采集元数据（合并 zarr attrs 与源文件记录）、源文件记录与预处理方法 */
+  meta: ResultMeta
   /** 多离子叠加激活：显示上下限与 Gamma 不参与叠加渲染，置灰（与工具栏 Colormap 同一语义） */
-  channelsMode: { type: Boolean, default: false },
-})
-
-const emit = defineEmits<{
-  (e: 'update:displayMin', v: number): void
-  (e: 'update:displayMax', v: number): void
-  (e: 'update:gamma', v: number): void
+  channelsMode?: boolean
 }>()
 
 /** 「信息」里各子项的小标题 */
 const SUBHEAD_CLASS = 'mb-1.5 kawaru-text-75 font-semibold text-base-content/70'
 const gammaId = useId()
 
-const localMin = computed(() => props.displayMin)
-const localMax = computed(() => props.displayMax)
-const range = computed(() => props.globalMax - props.globalMin || 1)
+/** Image dimensions and statistics, with the pixel size of the dataset. */
+const info = computed(() => ({ ...props.display.imageInfo, pixelSize: props.meta.pixelSize }))
+const range = computed(() => props.display.globalMax - props.display.globalMin || 1)
 function markerLeft(v: number) {
-  return Math.max(0, Math.min(100, ((v - props.globalMin) / range.value) * 100))
+  return Math.max(0, Math.min(100, ((v - props.display.globalMin) / range.value) * 100))
 }
 
 function pctLabel(v: number): string {
-  const arr = props.sortedValues
+  const arr = props.display.sortedNonZero
   if (!arr.length) return '0.00%'
   const rank = upperBound(arr, v)
   let pct = (rank / arr.length) * 100
@@ -209,24 +186,24 @@ function pctLabel(v: number): string {
 /** 直方图下方的一行：当前离子图的非零像素数与 TIC */
 const statRows = computed(() => {
   const items: { label: string; value: string }[] = []
-  if (props.info.nonZero)
-    items.push({ label: t('vizworkbench.info.nonZero'), value: props.info.nonZero })
-  if (props.info.totalIon) items.push({ label: 'TIC', value: props.info.totalIon })
+  if (info.value.nonZero)
+    items.push({ label: t('vizworkbench.info.nonZero'), value: info.value.nonZero })
+  if (info.value.totalIon) items.push({ label: 'TIC', value: info.value.totalIon })
   return items
 })
 
 const acquisitionRows = computed(() => {
   const items: { label: string; value: string }[] = []
-  const a = props.acquisition
+  const a = props.meta.acquisition
   // zarr 属性里的极性可能是小写（positive），词表按首字母大写的原值查显示文字
   if (a?.polarity)
     items.push({ label: t('common.meta.polarity'), value: vocabLabel(capitalize(a.polarity)) })
   if (a?.analyzer) items.push({ label: t('common.meta.analyzer'), value: a.analyzer })
   if (a?.ionSource) items.push({ label: t('common.meta.ionisationSource'), value: a.ionSource })
-  if (props.info.pixelSize)
-    items.push({ label: t('common.meta.pixelSize'), value: props.info.pixelSize })
-  if (props.info.pixels)
-    items.push({ label: t('vizworkbench.info.dimensions'), value: props.info.pixels })
+  if (info.value.pixelSize)
+    items.push({ label: t('common.meta.pixelSize'), value: info.value.pixelSize })
+  if (info.value.pixels)
+    items.push({ label: t('vizworkbench.info.dimensions'), value: info.value.pixels })
   const resolvingPower = formatResolvingPower(a?.resolvingPower, a?.resolvingPowerMz)
   if (resolvingPower) items.push({ label: t('common.meta.resolvingPower'), value: resolvingPower })
   // 基质名、溶剂表达式按 vocabLabel 的规则原样显示，涂布方式显示「中文 (English)」
@@ -246,7 +223,7 @@ const acquisitionRows = computed(() => {
 
 /** 与数据集详情页的「生物与样本信息」同一组字段、同一顺序；空值不显示 */
 const sampleRows = computed(() => {
-  const file = props.sourceFile
+  const file = props.meta.sourceFile
   if (!file) return []
   return [
     { label: t('common.meta.organism'), value: file.organism },
@@ -285,11 +262,11 @@ function formatResolvingPower(rp: string | undefined, mz: string | undefined): s
 
 function onMinInput(e: Event) {
   const v = parseFloat((e.target as HTMLInputElement).value)
-  if (!isNaN(v)) emit('update:displayMin', v)
+  if (!isNaN(v)) props.display.setDisplayMin(v)
 }
 function onMaxInput(e: Event) {
   const v = parseFloat((e.target as HTMLInputElement).value)
-  if (!isNaN(v)) emit('update:displayMax', v)
+  if (!isNaN(v)) props.display.setDisplayMax(v)
 }
 
 // Histogram
@@ -297,7 +274,7 @@ const histCanvasRef = ref<HTMLCanvasElement | null>(null)
 function drawHistogram() {
   const canvas = histCanvasRef.value
   if (!canvas) return
-  const bins = props.histogram
+  const bins = props.display.intensityHistogram
   if (!bins.length) return
   const rect = canvas.getBoundingClientRect()
   // Collapsed section: display:none reports a 0×0 box. Skip so the canvas
@@ -329,7 +306,7 @@ onMounted(() => {
   }
 })
 onBeforeUnmount(() => histRo?.disconnect())
-watch(() => props.histogram, drawHistogram, { deep: true })
+watch(() => props.display.intensityHistogram, drawHistogram)
 
 function formatValue(v: number): string {
   if (v === 0) return '0'

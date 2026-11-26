@@ -1,77 +1,50 @@
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
-import SvgIcon from '@/shared/components/SvgIcon.vue'
 import IonImageViewer from '@/features/vizworkbench/components/visuals/IonImageViewer.vue'
 import ROIOverlay from '@/features/vizworkbench/components/visuals/ROIOverlay.vue'
-import type { RoiEditor } from '@/features/vizworkbench/composables/useRoiEditor'
-import type { ViewIonChannel } from '@/features/vizworkbench/composables/useIonChannels'
-import type { DataMode } from '@/services/zarr/types/zarr'
+import DisplayRangeStrip from '@/features/vizworkbench/components/visuals/DisplayRangeStrip.vue'
+import type { ZarrSession } from '@/features/vizworkbench/composables/useZarrIonImage'
+import type { IonImageDisplay } from '@/features/vizworkbench/composables/useIonImageDisplay'
+import type { RoiState } from '@/features/vizworkbench/composables/useROI'
+import type { IonChannelState } from '@/features/vizworkbench/composables/useIonChannels'
+import { ZARR_STORE } from '@/shared/config/defaults'
 import { t } from '@/i18n'
 
 const props = defineProps<{
   isStale?: boolean
-  ionMatrix: Float32Array | null
-  displayMatrix: Float32Array | null
-  selectedMz: number
-  mzTolerance: number
-  colormap: string
-  intensityScale: string
-  gamma: number
-  displayMin: number
-  displayMax: number
-  ionCols: number
-  ionRows: number
-  roiEditor: RoiEditor
+  /** Selected m/z and tolerance, the grid, loading state and TIC availability. */
+  zarr: ZarrSession
+  /** Colormap, intensity scale, gamma, display range and the image they apply to. */
+  display: IonImageDisplay
+  /** The ROI editor overlay, the ROI-only mask and the ROI highlight. */
+  roi: RoiState
+  /** While active, the multi-ion overlay replaces the single image. */
+  multiIon: IonChannelState
+  /** UMAP / KMeans overlay (RGBA, ion-grid sized). */
   overlayData: Uint8ClampedArray | null
-  gradientCss: string
-  calcHandleTop: (value: number) => number
-  clampPct: (value: number) => number
-  formatVal: (value: number) => string
-  /** 数据模式 */
-  dataMode?: DataMode | null
   /** 当前选中像素坐标（processed 模式） */
   selectedPixelCoord?: { x: number; y: number } | null
-  /** 离子图是否正在加载（切换 m/z 时） */
-  ionLoading?: boolean
-  /** 离子图加载错误（保留上一张成功图并显示反馈） */
-  ionError?: string | null
-  /** 归一化计算是否进行中 */
-  normalizationLoading?: boolean
-  /** 归一化计算失败的原因 */
-  normalizationError?: string | null
-  /** zarr 是否预存 stats/tic（TIC 归一化可用） */
-  hasTic?: boolean
-  /** 多离子叠加模式 */
-  channelsMode?: boolean
-  /** 可见且已加载的叠加通道 */
-  channels?: ViewIonChannel[]
-  /** ROI 并集掩膜（叠加模式下按此裁剪通道） */
-  roiMask?: Uint8Array | null
-  /** 选中 ROI 的高亮层（RGBA，与离子图同尺寸） */
-  roiHighlightData?: Uint8ClampedArray | null
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:mzTolerance', value: number): void
-  (e: 'update:colormap', value: string): void
-  (e: 'update:intensityScale', value: string): void
   (e: 'searchMz', value: string): void
-  (e: 'reset-controls'): void
-  (e: 'reset-range'): void
-  (e: 'strip-ref', element: HTMLElement | null): void
-  (e: 'strip-mouse-down', event: MouseEvent): void
-  (e: 'start-strip-drag', which: 'min' | 'max', event: MouseEvent): void
   /** 点击图像中的某个像素（加载该像素的谱） */
   (e: 'select-pixel', col: number, row: number): void
 }>()
+
+/** The toolbar's Reset: default tolerance, then every display control. */
+function resetControls() {
+  props.zarr.setMzTolerance(ZARR_STORE.defaultMzTolerance)
+  props.display.reset()
+}
 
 /** 图像标题 */
 const imageTitle = computed(() => t('vizworkbench.ionImage.title'))
 
 /** 图像加载占位提示 */
 const processedPlaceholder = computed(() => {
-  if (props.dataMode === 'processed') return t('vizworkbench.ionImage.computingTic')
-  if (props.dataMode === null) return t('vizworkbench.ionImage.loadingResult')
+  if (props.zarr.dataMode === 'processed') return t('vizworkbench.ionImage.computingTic')
+  if (props.zarr.dataMode === null) return t('vizworkbench.ionImage.loadingResult')
   return t('vizworkbench.ionImage.loading')
 })
 
@@ -82,7 +55,7 @@ let delayTimer: ReturnType<typeof setTimeout> | null = null
 const showLoadingOverlay = ref(false)
 
 watch(
-  () => props.ionLoading,
+  () => props.zarr.loading,
   (loading) => {
     if (loading) {
       delayTimer = setTimeout(() => {
@@ -111,7 +84,7 @@ onBeforeUnmount(() => {
   <!-- 移动端保留 360px 可用高度；桌面端在首屏剩余空间内与谱图按 4:3 分高。 -->
   <div
     data-testid="ion-image-section"
-    :data-loading="ionLoading ? 'true' : 'false'"
+    :data-loading="zarr.loading ? 'true' : 'false'"
     class="flex gap-2 p-2 min-h-[520px] shrink-0 lg:h-auto lg:min-h-0 lg:flex-[5_1_0%] lg:shrink"
   >
     <div class="flex-1 card bg-base-100 rounded-xl overflow-hidden">
@@ -123,58 +96,58 @@ onBeforeUnmount(() => {
         <p class="kawaru-text-95">{{ $t('vizworkbench.ionImage.noResultHint') }}</p>
       </div>
       <div
-        v-else-if="ionError && !ionMatrix"
+        v-else-if="zarr.error && !display.matrix"
         class="flex-1 flex flex-col items-center justify-center gap-2 px-6 text-center"
       >
         <p class="kawaru-text-112 font-semibold text-error">
           {{ $t('vizworkbench.ionImage.loadFailed') }}
         </p>
-        <p class="kawaru-text-68 text-base-content/60 break-words">{{ ionError }}</p>
+        <p class="kawaru-text-68 text-base-content/60 break-words">{{ zarr.error }}</p>
       </div>
       <div
-        v-else-if="!ionMatrix"
+        v-else-if="!display.matrix"
         class="flex-1 flex items-center justify-center text-base-content/40 kawaru-text-95"
       >
         {{ processedPlaceholder }}
       </div>
       <div v-else class="flex-1 min-h-0 relative overflow-hidden">
         <IonImageViewer
-          :selected-mz="selectedMz"
-          :mz-tolerance="mzTolerance"
-          :colormap="colormap"
-          :intensity-scale="intensityScale"
-          :gamma="gamma"
-          :display-min="displayMin"
-          :display-max="displayMax"
-          :matrix="displayMatrix"
-          :matrix-cols="ionCols"
-          :matrix-rows="ionRows"
-          :draw-mode="roiEditor.drawing"
+          :selected-mz="zarr.selectedMz"
+          :mz-tolerance="zarr.mzTolerance"
+          :colormap="display.colormap"
+          :intensity-scale="display.intensityScale"
+          :gamma="display.gamma"
+          :display-min="display.displayMin"
+          :display-max="display.displayMax"
+          :matrix="display.matrix"
+          :matrix-cols="zarr.ionCols"
+          :matrix-rows="zarr.ionRows"
+          :draw-mode="roi.editor.drawing"
           :overlay-data="overlayData"
-          :overlay-width="ionCols"
-          :overlay-height="ionRows"
-          :data-mode="dataMode"
+          :overlay-width="zarr.ionCols"
+          :overlay-height="zarr.ionRows"
+          :data-mode="zarr.dataMode"
           :selected-pixel-coord="selectedPixelCoord"
-          :normalization-loading="normalizationLoading"
-          :normalization-error="normalizationError"
-          :has-tic="hasTic"
+          :normalization-loading="zarr.normalizationLoading"
+          :normalization-error="zarr.normalizationError"
+          :has-tic="zarr.hasTic"
           :image-title="imageTitle"
-          :channels-mode="channelsMode"
-          :channels="channels"
-          :roi-mask="roiMask"
-          :roi-highlight-data="roiHighlightData"
-          @update:mz-tolerance="emit('update:mzTolerance', $event)"
-          @update:colormap="emit('update:colormap', $event)"
-          @update:intensity-scale="emit('update:intensityScale', $event)"
+          :channels-mode="multiIon.overlayActive"
+          :channels="multiIon.hoverChannels"
+          :roi-mask="roi.roiUnionMask"
+          :roi-highlight-data="roi.roiHighlightOverlay"
+          @update:mz-tolerance="zarr.setMzTolerance($event)"
+          @update:colormap="display.setColormap($event)"
+          @update:intensity-scale="display.setIntensityScale($event)"
           @search-mz="emit('searchMz', $event)"
-          @reset="emit('reset-controls')"
+          @reset="resetControls"
           @select-pixel="(col, row) => emit('select-pixel', col, row)"
         >
           <template #drawing="{ imageRect }">
             <ROIOverlay
-              :editor="roiEditor"
-              :image-width="ionCols"
-              :image-height="ionRows"
+              :editor="roi.editor"
+              :image-width="zarr.ionCols"
+              :image-height="zarr.ionRows"
               :image-rect="imageRect"
             />
           </template>
@@ -182,7 +155,7 @@ onBeforeUnmount(() => {
         <!-- 切换 m/z 时的加载遮罩（延迟出现，避免快速切换一闪而过）。
              多离子叠加模式下中列显示的是通道合成图，隐藏单图的加载遮罩。 -->
         <div
-          v-if="showLoadingOverlay && ionMatrix && !channelsMode"
+          v-if="showLoadingOverlay && display.matrix && !multiIon.overlayActive"
           class="absolute inset-0 flex items-center justify-center bg-base-100/80 backdrop-blur-[2px] z-10 transition-opacity duration-200"
         >
           <div class="flex flex-col items-center gap-3">
@@ -193,7 +166,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div
-          v-if="ionError"
+          v-if="zarr.error"
           class="absolute left-3 right-3 top-3 z-30 rounded-lg border border-error/30 bg-error/10 px-3 py-2 kawaru-text-68 text-error shadow-sm backdrop-blur-sm"
         >
           {{ $t('vizworkbench.ionImage.updateFailed') }}
@@ -201,54 +174,6 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- 强度条：多离子叠加模式下每通道各自归一化，此条不适用 → 置灰但保留 DOM -->
-    <div
-      class="shrink-0 flex flex-col items-center gap-2 w-[3em] kawaru-text-87"
-      :class="{ 'opacity-40 pointer-events-none': channelsMode }"
-      :title="channelsMode ? $t('vizworkbench.ionImage.rangeDisabled') : undefined"
-    >
-      <button
-        class="text-base-content/40 hover:text-base-content w-[3em]"
-        :title="$t('vizworkbench.ionImage.resetRange')"
-        :disabled="channelsMode"
-        @click="emit('reset-range')"
-      >
-        <SvgIcon type="refresh" />
-      </button>
-      <span class="range-label">{{ formatVal(displayMax) }}</span>
-      <div
-        :ref="(element) => emit('strip-ref', element as HTMLElement | null)"
-        class="flex-1 w-[1.5em] rounded-sm border border-base-300 relative cursor-pointer bg-base-200"
-        @mousedown.prevent="emit('strip-mouse-down', $event)"
-      >
-        <div class="absolute inset-0 rounded-sm" :style="{ background: gradientCss }"></div>
-        <!-- 上下两个拖拽手柄结构一致，只是绑定的端点不同 -->
-        <div
-          v-for="handle in ['max', 'min'] as const"
-          :key="handle"
-          class="absolute left-0 right-0 h-3 cursor-ns-resize z-10 flex items-center justify-center"
-          :style="{
-            top: clampPct(calcHandleTop(handle === 'max' ? displayMax : displayMin)) + '%',
-            transform: 'translateY(-50%)',
-          }"
-          @mousedown.prevent.stop="emit('start-strip-drag', handle, $event)"
-        >
-          <div class="w-full h-[3px] bg-base-100 rounded shadow-[0_0_0_1px_rgba(0,0,0,0.5)]"></div>
-        </div>
-      </div>
-      <span class="range-label">{{ formatVal(displayMin) }}</span>
-    </div>
+    <DisplayRangeStrip :display="display" :disabled="multiIon.overlayActive" />
   </div>
 </template>
-
-<style scoped>
-/* 强度条两端的数值标签：等宽字体让拖动手柄时数字不左右抖动，
-   nowrap 避免 formatVal 输出科学计数法（如 1.2e+05）时被 3em 宽的列折行。 */
-.range-label {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
-  line-height: 1;
-  text-align: center;
-  white-space: nowrap;
-}
-</style>

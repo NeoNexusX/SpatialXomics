@@ -122,7 +122,7 @@
           class="pointer-events-auto"
           :class="handle.kind === 'center' ? 'cursor-move' : 'cursor-crosshair'"
           fill="#0f172a"
-          :stroke="editor.editableColor ?? editor.nextColor"
+          :stroke="editor.shapeColor ?? editor.nextColor"
           stroke-width="2"
           @pointerdown.stop="start($event, handle.kind)"
         />
@@ -136,6 +136,7 @@ import { computed, onBeforeUnmount, ref, shallowRef, useTemplateRef, watch } fro
 import type { RoiEditor } from '@/features/vizworkbench/composables/useRoiEditor'
 import { hexToRgb } from '@/features/vizworkbench/utils/regionPalette'
 import {
+  compositeMask,
   isRoiContour,
   isRoiDrawingTool,
   roiBoxBounds,
@@ -192,7 +193,7 @@ const shapeOutline = computed(() => {
 
 const fillCanvas = useTemplateRef<HTMLCanvasElement>('fillCanvas')
 // Saved ROIs default to 0.4, which barely shows over viridis or in the darker shape colors.
-const FILL_OPACITY = 0.6
+const FILL_ALPHA = Math.round(0.6 * 255)
 /** Collected masks are painted instead of outlined. */
 const fill = computed(() => {
   const { shapeFill, shapeMask, shapeColor } = props.editor
@@ -208,16 +209,7 @@ watch(
     const context = value && canvas?.getContext('2d')
     if (!value || !context) return
     const image = context.createImageData(props.imageWidth, props.imageHeight)
-    const alpha = Math.round(FILL_OPACITY * 255)
-    const { mask, rgb } = value
-    for (let i = 0; i < mask.length; i++) {
-      if (!mask[i]) continue
-      const offset = i * 4
-      image.data[offset] = rgb.r
-      image.data[offset + 1] = rgb.g
-      image.data[offset + 2] = rgb.b
-      image.data[offset + 3] = alpha
-    }
+    compositeMask(image.data, value.mask, value.rgb, FILL_ALPHA)
     context.putImageData(image, 0, 0)
   },
   { flush: 'post' },
@@ -290,7 +282,7 @@ function start(event: PointerEvent, handle?: Handle) {
   surface.value?.focus({ preventScroll: true })
   surface.value?.setPointerCapture(event.pointerId)
   const color = handle
-    ? props.editor.editableColor
+    ? props.editor.shapeColor
     : props.editor.tool === props.editor.openPathType
       ? props.editor.contourColor
       : null

@@ -1,7 +1,7 @@
 import { nextTick, ref, shallowRef } from 'vue'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { loadCoreMessages, loadFeatureMessages } from '@/i18n'
-import { useResultROI } from '../useResultROI'
+import { useROI } from '../useROI'
 import { useRoiCollect } from '../useRoiCollect'
 
 beforeAll(() => Promise.all([loadCoreMessages('en'), loadFeatureMessages('vizworkbench')]))
@@ -15,15 +15,15 @@ function setup(values: number[]) {
   const image = ref<number | 'TIC' | null>(100)
   const available = ref(true)
   const loading = ref(false)
-  const state = useResultROI(matrix, ref(3), ref(2))
+  const state = useROI(matrix, ref({ runId: '', shape: [2, 3] as const }))
   const collect = useRoiCollect(state.editor, { matrix, acquired, image, available, loading })
   state.editor.selectTool('collect')
-  return { ...state, collect, matrix, acquired, image, available, loading }
+  return { state, editor: state.editor, collect, matrix, acquired, image, available, loading }
 }
 
 describe('ROI collect tool', () => {
   it('saves the acquired pixels with signal as a named ROI', () => {
-    const { editor, collect, confirmedROIs, roiConfirm } = setup([5, 0, 2, 0, 7, 0])
+    const { state, editor, collect } = setup([5, 0, 2, 0, 7, 0])
     expect(editor.drawing).toBe(false)
     expect(collect.counts).toEqual({ present: 3, absent: 2, all: 5 })
 
@@ -32,9 +32,9 @@ describe('ROI collect tool', () => {
     expect(editor.shapeFill).toBe(true)
     expect(Array.from(editor.shapeMask!)).toEqual([1, 0, 1, 0, 1, 0])
     editor.confirmShape()
-    roiConfirm()
+    state.saveDraft()
 
-    const [roi] = confirmedROIs.value
+    const [roi] = state.confirmedROIs
     expect(roi!.type).toBe('collect')
     expect(roi!.label).toBe('100.0000 Signal')
     expect(Array.from(roi!.mask)).toEqual([1, 0, 1, 0, 1, 0])
@@ -51,7 +51,7 @@ describe('ROI collect tool', () => {
   })
 
   it('collects every acquired pixel whichever image is shown', async () => {
-    const { editor, collect, matrix, image, confirmedROIs, roiConfirm } = setup([5, 0, 2, 0, 7, 0])
+    const { state, editor, collect, matrix, image } = setup([5, 0, 2, 0, 7, 0])
     collect.stage('all')
     expect(editor.pendingCollect).toBe('all')
     expect(Array.from(editor.shapeMask!)).toEqual([1, 1, 1, 1, 1, 0])
@@ -61,12 +61,12 @@ describe('ROI collect tool', () => {
     await nextTick()
     expect(Array.from(editor.shapeMask!)).toEqual([1, 1, 1, 1, 1, 0])
     editor.confirmShape()
-    roiConfirm()
-    expect(confirmedROIs.value[0]).toMatchObject({ type: 'collect', label: 'All acquired' })
+    state.saveDraft()
+    expect(state.confirmedROIs[0]).toMatchObject({ type: 'collect', label: 'All acquired' })
   })
 
   it('combines with drawn shapes like any other step', () => {
-    const { editor, collect, confirmedROIs, roiConfirm } = setup([5, 0, 2, 0, 7, 0])
+    const { state, editor, collect } = setup([5, 0, 2, 0, 7, 0])
     editor.selectTool('rectangle')
     editor.stageShape({ type: 'rectangle', rect: { x0: 1, y0: 0, x1: 2, y1: 1 }, path: [] })
     editor.confirmShape()
@@ -76,8 +76,8 @@ describe('ROI collect tool', () => {
     editor.confirmShape()
     expect(Array.from(editor.previewMask!)).toEqual([0, 0, 1, 0, 1, 0])
 
-    roiConfirm()
-    expect(confirmedROIs.value[0]).toMatchObject({ type: 'composite', label: 'ROI 1' })
+    state.saveDraft()
+    expect(state.confirmedROIs[0]).toMatchObject({ type: 'composite', label: 'ROI 1' })
   })
 
   it('follows the current image until confirmed, then keeps the collected pixels', async () => {

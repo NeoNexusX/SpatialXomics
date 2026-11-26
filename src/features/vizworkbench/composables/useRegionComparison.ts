@@ -18,9 +18,11 @@
  * streamIonStatsProcessed, so results are per bin rather than per ion.
  *
  * Region inputs use row-major binary rasters before conversion to spectra order.
+ * Results are dropped once a region they were computed from disappears (a
+ * deleted ROI, a re-run KMeans).
  */
 
-import { ref, computed, shallowRef, watch, onScopeDispose, type Ref } from 'vue'
+import { ref, computed, reactive, shallowRef, watch, onScopeDispose, type Ref } from 'vue'
 import {
   getSharedZarrContext,
   meanSpectrumRef,
@@ -59,14 +61,6 @@ export interface IonComparison {
   category: ComparisonCategory
 }
 
-/** Region payload for the preview thumbnail (color resolved, mask gridded). */
-export interface RegionThumbnailRegion {
-  value: string
-  label: string
-  color: RGB
-  mask: Uint8Array
-}
-
 /**
  * Category from per-ion stats. Pure so it can run both at scan time and
  * again client-side when the user adjusts the enrichment ratio — the
@@ -92,10 +86,9 @@ const PROCESSED_BIN_WIDTH = 0.01
 // ---------- composable ----------
 
 export function useRegionComparison(deps: {
-  regions: Ref<Region[]>
-  runId: Ref<string>
-  dataMode: Ref<DataMode | null>
-  onSelectMzIndex: (idx: number) => void | Promise<void>
+  regions: Readonly<Ref<Region[]>>
+  grid: Readonly<Ref<RegionGrid>>
+  dataMode: Readonly<Ref<DataMode | null>>
 }) {
   const regionAIds = ref<string[]>([])
   const regionBIds = ref<string[]>([])
@@ -135,17 +128,18 @@ export function useRegionComparison(deps: {
   onScopeDispose(() => {
     currentRun++
   })
+  /** Ids of the regions behind the current results. */
   let lastRegionIds: string[] = []
-  const availableRegions = deps.regions
 
-  watch(availableRegions, (regions) => {
+  watch(deps.regions, (regions) => {
     const ids = new Set(regions.map((region) => region.id))
     regionAIds.value = regionAIds.value.filter((id) => ids.has(id))
     regionBIds.value = regionBIds.value.filter((id) => ids.has(id))
+    if (lastRegionIds.some((id) => !ids.has(id))) reset()
   })
 
   const regionsById = computed(
-    () => new Map(availableRegions.value.map((region) => [region.id, region])),
+    () => new Map(deps.regions.value.map((region) => [region.id, region])),
   )
   const selectedRegionsA = computed(() =>
     regionAIds.value
@@ -296,9 +290,8 @@ export function useRegionComparison(deps: {
     results.value = []
 
     try {
-      const grid: RegionGrid = { runId: deps.runId.value, shape: store.spatialShape }
-      const rasterA = buildRegionMask(selectedRegionsA.value, grid)
-      const rasterB = buildRegionMask(selectedRegionsB.value, grid)
+      const rasterA = buildRegionMask(selectedRegionsA.value, deps.grid.value)
+      const rasterB = buildRegionMask(selectedRegionsB.value, deps.grid.value)
       if (!rasterA || !rasterB) {
         error.value = t('vizworkbench.compare.maskBuildFailed')
         return
@@ -405,64 +398,11 @@ export function useRegionComparison(deps: {
     }
   }
 
-  // ---------- result interaction ----------
-
-  /** Click a result row: load the ion image (continuous mode only).
-   *  Processed mode has no ion image - the row click is a no-op. */
-  function selectMz(ionIndex: number) {
-    deps.onSelectMzIndex(ionIndex)
-  }
-
-  // ---------- thumbnail ----------
-
-  /**
-   * Build thumbnail-ready masks for the currently selected A/B group members.
-   * Reuses buildRaster (kmeans labels / ROI masks -> Uint8Array
-   * grid) so the preview works the moment a region is selected, before any
-   * comparison run. Returns null when the zarr store (grid shape) isn't
-   * available yet.
-   */
-  function buildThumbnailRegions(): {
-    a: RegionThumbnailRegion[]
-    b: RegionThumbnailRegion[]
-    dims: { width: number; height: number }
-  } | null {
-    const ctx = getSharedZarrContext()
-    const store = ctx.store
-    if (!store) return null
-    const [height, width] = store.spatialShape
-    const dims = { width, height }
-
-    // Every member carries its GROUP's fixed color (not its own identity
-    // color) so the thumbnail paints each group in a single color.
-    const grid: RegionGrid = { runId: deps.runId.value, shape: [height, width] }
-    const build = (opts: Region[], groupColor: RGB): RegionThumbnailRegion[] => {
-      const out: RegionThumbnailRegion[] = []
-      for (const opt of opts) {
-        const mask = buildRegionMask([opt], grid)
-        if (!mask) continue
-        out.push({ value: opt.id, label: opt.label, color: groupColor, mask })
-      }
-      return out
-    }
-    return {
-      a: build(selectedRegionsA.value, COMPARISON_A_RGB),
-      b: build(selectedRegionsB.value, COMPARISON_B_RGB),
-      dims,
-    }
-  }
-
   // ---------- cleanup ----------
 
   function cancel() {
     currentRun++
     comparing.value = false
-  }
-
-  function involvesRoi(id?: string): boolean {
-    return id === undefined
-      ? lastRegionIds.some((key) => key.startsWith('roi:'))
-      : lastRegionIds.includes(`roi:${id}`)
   }
 
   function reset() {
@@ -475,7 +415,7 @@ export function useRegionComparison(deps: {
     lastRegionIds = []
   }
 
-  return {
+  return reactive({
     // State
     regionAIds,
     regionBIds,
@@ -488,16 +428,15 @@ export function useRegionComparison(deps: {
     results,
     categorizedResults,
     filterStats,
-    availableRegions,
+    selectedRegionsA,
+    selectedRegionsB,
     canCompare,
     colorA,
     colorB,
     // Actions
     compare,
     cancel,
-    reset,
-    involvesRoi,
-    selectMz,
-    buildThumbnailRegions,
-  }
+  })
 }
+
+export type RegionComparison = ReturnType<typeof useRegionComparison>

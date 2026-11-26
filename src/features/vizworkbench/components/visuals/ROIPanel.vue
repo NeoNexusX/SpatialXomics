@@ -89,10 +89,7 @@
             class="btn btn-sm min-w-0 kawaru-text-68"
             :class="editor.operation === mode ? 'btn-primary' : 'btn-ghost'"
             :aria-pressed="editor.operation === mode"
-            :disabled="
-              editor.operation !== mode &&
-              (editor.hasUnconfirmedShape || (mode !== 'union' && !editor.hasDraft))
-            "
+            :disabled="!editor.canSelectOperation(mode)"
             @click="editor.selectOperation(mode)"
           >
             {{ labels[mode] }}
@@ -187,7 +184,7 @@
             type="button"
             class="btn btn-sm btn-primary w-full"
             :disabled="!editor.canSave"
-            @click="emit('confirm')"
+            @click="state.saveDraft()"
           >
             {{ $t('vizworkbench.roi.save') }}
           </button>
@@ -196,7 +193,7 @@
     </div>
 
     <!-- ROI List -->
-    <div v-if="rois.length">
+    <div v-if="state.confirmedROIs.length">
       <div class="flex items-center justify-between mb-2">
         <!-- 总勾选框：全选 ⇄ 全不选，部分勾选时显示半选。勾选会显示主图填充并纳入导出掩膜 -->
         <div class="flex min-w-0 items-center gap-1">
@@ -216,7 +213,7 @@
               />
               {{ $t('vizworkbench.roi.rois') }}
               <span class="font-mono font-normal text-base-content/60"
-                >{{ selectedCount }}/{{ rois.length }}</span
+                >{{ selectedCount }}/{{ state.confirmedROIs.length }}</span
               >
             </label>
           </h3>
@@ -228,15 +225,15 @@
           <button
             type="button"
             class="btn btn-xs btn-ghost shrink-0"
-            :aria-pressed="viewingRoi"
+            :aria-pressed="state.viewingROI"
             :title="
-              viewingRoi
+              state.viewingROI
                 ? $t('vizworkbench.roi.viewingRoiHint')
                 : $t('vizworkbench.roi.viewingAllHint')
             "
-            @click="emit('update:viewingRoi', !viewingRoi)"
+            @click="state.toggleViewingROI()"
           >
-            {{ viewingRoi ? $t('vizworkbench.roi.roiOnly') : $t('vizworkbench.roi.showAll') }}
+            {{ state.viewingROI ? $t('vizworkbench.roi.roiOnly') : $t('vizworkbench.roi.showAll') }}
           </button>
           <button
             type="button"
@@ -250,14 +247,19 @@
       <div class="space-y-2 max-h-64 overflow-y-auto scrollbar-thin [scrollbar-gutter:stable]">
         <!-- 两行：身份（名字 · 形状 · 像素数）+ 强度统计条（标签在上、数值在下，
              多张卡片同列对齐便于比较） -->
-        <RegionSummaryCard v-for="roi in rois" :key="roi.id" :color="roi.color" :stats="roi.stats">
+        <RegionSummaryCard
+          v-for="roi in state.confirmedROIs"
+          :key="roi.id"
+          :color="roi.color"
+          :stats="roi.stats"
+        >
           <div class="flex items-center gap-1.5">
             <label class="flex items-center gap-1.5 min-w-0 cursor-pointer select-none">
               <input
                 type="checkbox"
                 class="checkbox checkbox-xs checkbox-primary shrink-0"
-                :checked="isSelected(roi.id)"
-                @change="$emit('toggle-selection', roi.id)"
+                :checked="state.isRoiSelected(roi.id)"
+                @change="state.toggleRoiSelection(roi.id)"
               />
               <span
                 class="font-semibold truncate"
@@ -273,7 +275,7 @@
             <button
               class="shrink-0 text-base-content hover:text-error"
               :title="$t('common.action.delete')"
-              @click="$emit('delete', roi.id)"
+              @click="state.deleteROI(roi.id)"
             >
               <SvgIcon type="trash" />
             </button>
@@ -287,13 +289,13 @@
                 min="0"
                 max="1"
                 step="0.01"
-                :value="opacityFor(roi.id)"
+                :value="state.opacityOf(roi.id)"
                 :aria-label="$t('vizworkbench.roi.opacityFor', { label: roi.label })"
-                :aria-valuetext="`${Math.round(opacityFor(roi.id) * 100)}%`"
-                @input="emit('update-opacity', roi.id, +($event.target as HTMLInputElement).value)"
+                :aria-valuetext="`${Math.round(state.opacityOf(roi.id) * 100)}%`"
+                @input="state.updateRoiOpacity(roi.id, +($event.target as HTMLInputElement).value)"
               />
               <span class="w-[3em] shrink-0 text-right font-mono"
-                >{{ Math.round(opacityFor(roi.id) * 100) }}%</span
+                >{{ Math.round(state.opacityOf(roi.id) * 100) }}%</span
               >
             </label>
           </template>
@@ -320,43 +322,29 @@ import SvgIcon from '@/shared/components/SvgIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import SectionHelp from '@/features/vizworkbench/components/SectionHelp.vue'
 import RegionSummaryCard from './RegionSummaryCard.vue'
-import type { RoiEditor } from '@/features/vizworkbench/composables/useRoiEditor'
 import {
   collectKindLabel,
   type RoiCollect,
 } from '@/features/vizworkbench/composables/useRoiCollect'
-import { DEFAULT_ROI_OPACITY, type ConfirmedROI } from '@/features/vizworkbench/composables/useROI'
+import type { RoiState } from '@/features/vizworkbench/composables/useROI'
 import { t } from '@/i18n'
 import type { Region } from '@/features/vizworkbench/utils/region'
-import { isRoiContour, type CollectKind, type RoiTool } from '@/features/vizworkbench/utils/roiMask'
+import type { CollectKind, RoiTool } from '@/features/vizworkbench/utils/roiMask'
 
 const props = defineProps<{
-  editor: RoiEditor
+  /** Saved ROIs, their selection and opacity, and the editor that drafts new ones. */
+  state: RoiState
   /** Collect tool source: the current ion image's signal and no-signal pixels. */
   collect: RoiCollect
-  rois: ConfirmedROI[]
+  /** Regions a draft can start from or combine with: saved ROIs and KMeans clusters. */
   regions: Region[]
-  opacities: ReadonlyMap<string, number>
-  /** When true, the ion image is filtered to the ROI union ("ROI only"). */
-  viewingRoi: boolean
-  /** 共享选中集（null = 全选）：勾选驱动主图高亮 + 导出掩膜 */
-  selectedRoiIds: Set<string> | null
 }>()
 
-const emit = defineEmits<{
-  (e: 'confirm'): void
-  (e: 'delete', id: string): void
-  (e: 'update-opacity', id: string, opacity: number): void
-  (e: 'clearAll'): void
-  (e: 'update:viewingRoi', v: boolean): void
-  (e: 'toggle-selection', id: string): void
-  (e: 'select-all'): void
-  (e: 'deselect-all'): void
-}>()
+const editor = computed(() => props.state.editor)
 
 const pendingAction = ref<'discardDraft' | 'clearAll' | null>(null)
 const hasDraftControls = computed(() => {
-  const { tool, hasDraft, hasUnconfirmedShape, canRedo } = props.editor
+  const { tool, hasDraft, hasUnconfirmedShape, canRedo } = editor.value
   return !!tool || hasDraft || hasUnconfirmedShape || canRedo
 })
 const confirmationLabels = computed(() =>
@@ -377,8 +365,8 @@ const confirmationLabels = computed(() =>
 function confirmAction() {
   const action = pendingAction.value
   pendingAction.value = null
-  if (action === 'clearAll') emit('clearAll')
-  else if (action === 'discardDraft') props.editor.reset()
+  if (action === 'clearAll') props.state.clearAllROIs()
+  else if (action === 'discardDraft') editor.value.reset()
 }
 
 const labels = computed(() => ({
@@ -421,10 +409,9 @@ const toolHints = computed(() => ({
 }))
 
 function toolDisabled(type: RoiTool) {
-  const { editor, collect } = props
-  if (editor.hasPendingShape) return true
-  if (isRoiContour(type)) return !!editor.openPathType && editor.openPathType !== type
-  return type === 'collect' && editor.tool !== type && (!collect.available || !collect.counts)
+  if (!editor.value.canSelectTool(type)) return true
+  const { collect } = props
+  return type === 'collect' && editor.value.tool !== type && (!collect.available || !collect.counts)
 }
 
 function toolTitle(type: RoiTool) {
@@ -436,8 +423,8 @@ function toolTitle(type: RoiTool) {
 const collectKinds = ['present', 'absent', 'all'] as const satisfies readonly CollectKind[]
 
 function collectDisabled(kind: CollectKind) {
-  const { editor, collect } = props
-  return !collect.ready || !editor.canSelectRegion || !collect.counts?.[kind]
+  const { collect } = props
+  return !collect.ready || !editor.value.canSelectRegion || !collect.counts?.[kind]
 }
 
 function collectCount(kind: CollectKind) {
@@ -447,36 +434,31 @@ function collectCount(kind: CollectKind) {
 const roiRegions = computed(() => props.regions.filter((region) => region.kind === 'roi'))
 const clusterRegions = computed(() => props.regions.filter((region) => region.kind === 'kmeans'))
 const previousRegion = computed(() => {
-  const pending = props.editor.pendingRegion
+  const pending = editor.value.pendingRegion
   return pending && !props.regions.some((region) => region.id === pending.id) ? pending : null
 })
 
 function stageRegion(event: Event) {
   const select = event.target as HTMLSelectElement
   const region = props.regions.find((item) => item.id === select.value)
-  if (region) props.editor.stageRegion(region)
-  select.value = props.editor.pendingRegion?.id ?? ''
+  if (region) editor.value.stageRegion(region)
+  select.value = editor.value.pendingRegion?.id ?? ''
 }
 
-function opacityFor(id: string): number {
-  return props.opacities.get(id) ?? DEFAULT_ROI_OPACITY
-}
-
-function isSelected(id: string): boolean {
-  return props.selectedRoiIds === null || props.selectedRoiIds.has(id)
-}
-
-// Count by filtering rois (never Set.size) — the set can hold ids of deleted
-// ROIs, which must not inflate the count.
-const selectedCount = computed(() => props.rois.filter((r) => isSelected(r.id)).length)
+// Count by filtering the ROIs (never Set.size), so a stale id cannot inflate it.
+const selectedCount = computed(
+  () => props.state.confirmedROIs.filter((roi) => props.state.isRoiSelected(roi.id)).length,
+)
 
 const allSelected = computed(
-  () => props.rois.length > 0 && selectedCount.value === props.rois.length,
+  () =>
+    props.state.confirmedROIs.length > 0 &&
+    selectedCount.value === props.state.confirmedROIs.length,
 )
 
 function toggleAll() {
-  if (allSelected.value) emit('deselect-all')
-  else emit('select-all')
+  if (allSelected.value) props.state.clearRoiSelection()
+  else props.state.selectAllRois()
 }
 
 /** ROI 形状标签。 */

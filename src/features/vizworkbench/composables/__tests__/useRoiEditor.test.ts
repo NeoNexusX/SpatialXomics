@@ -1,10 +1,10 @@
 import { ref } from 'vue'
 import { describe, expect, it } from 'vitest'
-import { useResultROI } from '../useResultROI'
-import { roiToRegion } from '../useROI'
+import { useROI } from '../useROI'
 import type { RoiEditor } from '../useRoiEditor'
+import type { RegionGrid } from '@/features/vizworkbench/utils/region'
 import { ROI_SHAPE_COLORS } from '@/features/vizworkbench/utils/regionPalette'
-import { roiMaskOutline, type DraftROI, type ROIType } from '@/features/vizworkbench/utils/roiMask'
+import type { DraftROI, ROIType } from '@/features/vizworkbench/utils/roiMask'
 
 function box(
   x0: number,
@@ -21,15 +21,17 @@ function addShape(editor: RoiEditor, shape: DraftROI) {
   editor.confirmShape()
 }
 
+// 12 columns × 10 rows
 function setup() {
-  const state = useResultROI(ref(new Float32Array(12 * 10).fill(2)), ref(12), ref(10))
+  const grid = ref<RegionGrid>({ runId: '', shape: [10, 12] })
+  const state = useROI(ref(new Float32Array(12 * 10).fill(2)), grid)
   const pixel = (x: number, y: number) => state.editor.previewMask?.[y * 12 + x]
-  return { ...state, pixel }
+  return { state, editor: state.editor, pixel }
 }
 
 describe('ROI editor', () => {
   it('intersects each confirmed shape with the current draft and saves the preview', () => {
-    const { editor, pixel, roiConfirm, confirmedROIs } = setup()
+    const { state, editor, pixel } = setup()
     addShape(editor, box(0, 0, 4, 9))
     addShape(editor, box(7, 0, 11, 9))
     editor.selectOperation('intersection')
@@ -57,10 +59,10 @@ describe('ROI editor', () => {
     expect(editor.previewCount).toBe(12)
 
     const preview = [...editor.previewMask!]
-    roiConfirm()
-    const [roi] = confirmedROIs.value
+    state.saveDraft()
+    const [roi] = state.confirmedROIs
     expect(Array.from(roi!.mask)).toEqual(preview)
-    expect(roi!.stats?.pixelCount).toBe(12)
+    expect(roi!.pixelCount).toBe(12)
     expect(roi!.type).toBe('composite')
   })
 
@@ -169,7 +171,7 @@ describe('ROI editor', () => {
   })
 
   it('retains the current preview when switching operations and saves the intersection directly', () => {
-    const { editor, roiConfirm, confirmedROIs } = setup()
+    const { state, editor } = setup()
     editor.selectTool('rectangle')
     addShape(editor, box(0, 0, 4, 4))
 
@@ -183,8 +185,8 @@ describe('ROI editor', () => {
     addShape(editor, box(0, 0, 2, 2))
     expect(editor.previewCount).toBe(5)
 
-    roiConfirm()
-    expect(confirmedROIs.value[0]?.stats?.pixelCount).toBe(5)
+    state.saveDraft()
+    expect(state.confirmedROIs[0]?.pixelCount).toBe(5)
     expect(editor.operation).toBe('union')
   })
 
@@ -203,16 +205,16 @@ describe('ROI editor', () => {
   })
 
   it('uses a saved ROI as an intersection source without modifying the source', () => {
-    const { editor, roiConfirm, roiDelete, confirmedROIs } = setup()
+    const { state, editor } = setup()
     addShape(editor, box(1, 1, 3, 3))
-    roiConfirm()
-    const [saved] = confirmedROIs.value
+    state.saveDraft()
+    const [saved] = state.confirmedROIs
 
     addShape(editor, box(2, 2, 5, 5))
     editor.selectOperation('intersection')
     addShape(editor, box(3, 2, 5, 5))
-    editor.stageRegion(roiToRegion(saved!, ''))
-    expect(editor.pendingRegion?.id).toBe(`roi:${saved!.id}`)
+    editor.stageRegion(saved!)
+    expect(editor.pendingRegion?.id).toBe(saved!.id)
     expect(editor.previewCount).toBe(12)
     expect(editor.canSave).toBe(false)
     expect(editor.editableBox).toBeNull()
@@ -221,8 +223,8 @@ describe('ROI editor', () => {
     expect(saved!.mask[13]).toBe(1)
     editor.undo()
     expect(editor.previewCount).toBe(12)
-    editor.stageRegion(roiToRegion(saved!, ''))
-    roiDelete(saved!.id)
+    editor.stageRegion(saved!)
+    state.deleteROI(saved!.id)
     expect(editor.pendingRegion).toBeNull()
     editor.confirmShape()
     expect(editor.previewCount).toBe(12)
@@ -248,7 +250,7 @@ describe('ROI editor', () => {
   })
 
   it('closes a straight-segment contour with its original type across tool switches', () => {
-    const { editor, roiConfirm, confirmedROIs } = setup()
+    const { state, editor } = setup()
     editor.selectTool('polygon')
     for (const point of [
       { x: 1, y: 1 },
@@ -267,8 +269,8 @@ describe('ROI editor', () => {
     editor.confirmShape()
 
     expect(editor.previewCount).toBe(9)
-    roiConfirm()
-    expect(confirmedROIs.value[0]?.type).toBe('polygon')
+    state.saveDraft()
+    expect(state.confirmedROIs[0]?.type).toBe('polygon')
   })
 
   it('reports the active gesture color, then the latest stroke instead of the next color', () => {
@@ -356,30 +358,23 @@ describe('ROI editor', () => {
   })
 
   it('discards just the pending shape and keeps mode and history locked until it is resolved', () => {
-    const { editor, roiConfirm, confirmedROIs } = setup()
+    const { state, editor } = setup()
     addShape(editor, box(0, 0, 3, 3))
     editor.selectOperation('difference')
     editor.stageShape(box(1, 1, 2, 2))
     editor.stageShape(box(2, 2, 3, 3))
     editor.selectOperation('union')
     editor.undo()
-    roiConfirm()
+    state.saveDraft()
 
     expect(editor.operation).toBe('difference')
     expect(editor.previewCount).toBe(16)
     expect(editor.shapeMask?.[1 * 12 + 1]).toBe(1)
-    expect(confirmedROIs.value).toHaveLength(0)
+    expect(state.confirmedROIs).toHaveLength(0)
 
     editor.discardShape()
     expect(editor.hasPendingShape).toBe(false)
     expect(editor.previewCount).toBe(16)
     expect(editor.canSave).toBe(true)
-  })
-
-  it('traces both the outer border and the hole of a draft mask', () => {
-    const mask = new Uint8Array([1, 1, 1, 1, 0, 1, 1, 1, 1])
-    expect(roiMaskOutline(mask, 3, 3)).toBe(
-      'M0 0h3 M1 1h1 M1 2h1 M0 3h3 M0 0v3 M1 1v1 M2 1v1 M3 0v3',
-    )
   })
 })

@@ -22,7 +22,7 @@ export { loadIonMatrixByIndex, findClosestMzIndex } from '@/services/zarr/ionRea
  * 或新一轮 init()，旧 init 在每个 await 检查点放弃并 dispose 自己的孤儿 store。
  */
 
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue'
 import { getZarrUrl } from '@/services/zarr/api/zarrAccessApi'
 import { ZarrIncompatibleError, ZarrStore } from '@/services/zarr/zarrStore'
 import {
@@ -52,7 +52,6 @@ import {
 import { buildSpectrumChartData } from '@/features/vizworkbench/utils/spectrumChartData'
 import { ZARR_STORE } from '@/shared/config/defaults'
 import { getConfig } from '@/shared/config'
-import { formatNumber } from '@/shared/utils/format'
 import { t } from '@/i18n'
 
 // 转发导出：feature 内既有导入路径不变（SpectrumSection / useAnnotation /
@@ -221,10 +220,7 @@ export async function loadPixelSpectrum(pixelIndex: number): Promise<void> {
 }
 
 const normalizationCache = new Map<'tic', Float32Array>()
-const normalizationPending = new Map<
-  'tic',
-  { store: ZarrStore; promise: Promise<Float32Array> }
->()
+const normalizationPending = new Map<'tic', { store: ZarrStore; promise: Promise<Float32Array> }>()
 let normalizationRequestId = 0
 let ionImageRequestId = 0
 let pixelSpectrumRequestId = 0
@@ -252,10 +248,12 @@ export function useZarrIonImage() {
   // Computed
   const ionCols = computed(() => ionDims.value?.width ?? 0)
   const ionRows = computed(() => ionDims.value?.height ?? 0)
-  const totalPeaks = computed(() => (mzAxisRef.value ? formatNumber(mzAxisRef.value.length) : '--'))
 
+  const dataMode = computed(() => dataModeRef.value)
   const isContinuous = computed(() => dataModeRef.value === 'continuous')
   const isProcessed = computed(() => dataModeRef.value === 'processed')
+  /** The single image of this dataset: the selected ion image, or the TIC image of processed data. */
+  const imageMatrix = computed(() => (isProcessed.value ? ticMatrix.value : ionMatrix.value))
 
   /** zarr 是否预存 stats/tic（TIC 归一化的唯一数据源，ready 后才有值） */
   const hasTic = computed(() => (ready.value ? !!store?.hasTIC : false))
@@ -360,6 +358,10 @@ export function useZarrIonImage() {
     normalizationFactors.value = null
     normalizationError.value = null
     normalizationLoading.value = false
+  }
+
+  function setMzTolerance(value: number) {
+    mzTolerance.value = value
   }
 
   const loadDefaultImage = async () => {
@@ -484,17 +486,19 @@ export function useZarrIonImage() {
     }
   }
 
-  return {
+  return reactive({
     // Common
     selectedMzIndex,
     selectedMz,
     mzTolerance,
+    setMzTolerance,
     ionMatrix,
     ionMatrixMz,
+    imageMatrix,
     acquiredMask,
     ionCols,
     ionRows,
-    totalPeaks,
+    dataMode,
     isContinuous,
     isProcessed,
     loading,
@@ -503,12 +507,16 @@ export function useZarrIonImage() {
     init,
 
     // Continuous mode
-    onSpectrumClickByIndex: loadForMzIndex,
+    /** Load the ion image of an m/z axis index; selectedMzIndex moves at once. */
+    selectMzIndex: loadForMzIndex,
     loadNormalization,
     clearNormalization,
     normalizationFactors,
     normalizationLoading,
     normalizationError,
     hasTic,
-  }
+  })
 }
+
+/** The dataset session of the result page: the selected image and its loading state. */
+export type ZarrSession = ReturnType<typeof useZarrIonImage>

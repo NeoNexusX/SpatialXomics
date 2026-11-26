@@ -29,7 +29,9 @@ const mocks = vi.hoisted(() => ({
   meanSpectrum: null as Promise<Float32Array> | null,
 }))
 
-vi.mock('@/services/zarr/api/zarrAccessApi', () => ({ getZarrUrl: async () => 'https://cdn.test/run.zarr/' }))
+vi.mock('@/services/zarr/api/zarrAccessApi', () => ({
+  getZarrUrl: async () => 'https://cdn.test/run.zarr/',
+}))
 
 vi.mock('@/shared/config/runtimeConfig', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/shared/config/runtimeConfig')>()),
@@ -206,6 +208,6 @@ describe('useZarrIonImage pixel spectrum', () => {
   it('reports an unsupported zarr layout with the localized incompatible-format message', async () => {
     mocks.initError = new ZarrIncompatibleError('no v1.1 data group')
     const api = await initSession()
-    expect(api.error.value).toBe('Incompatible result data format: only Zarr v1.1 is supported')
+    expect(api.error).toBe('Incompatible result data format: only Zarr v1.1 is supported')
   })
 })

@@ -1,9 +1,11 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
+import { nextTick, reactive } from 'vue'
 import { mount } from '@vue/test-utils'
 import VizInfoPanel from '../VizInfoPanel.vue'
 import { mapItemToDataset } from '@/features/datasets/mappers/datasetMapper'
 import { deriveAcquisition } from '@/features/vizworkbench/utils/acquisition'
+import type { IonImageDisplay } from '@/features/vizworkbench/composables/useIonImageDisplay'
+import type { ResultMeta } from '@/features/vizworkbench/composables/useResultMeta'
 import type { MetadataAttrs } from '@/services/zarr/types/zarr'
 import type { File } from '@/features/datasets/types/dataset'
 import { i18n, loadActiveFeatureMessages, loadCoreMessages, loadFeatureMessages } from '@/i18n'
@@ -44,19 +46,37 @@ function sourceFile(over: Record<string, unknown> = {}) {
   })
 }
 
+/** The display fields and actions the panel uses, before any image statistics exist. */
+function displayState() {
+  return reactive({
+    globalMin: 0,
+    globalMax: 1,
+    displayMin: 0,
+    displayMax: 1,
+    gamma: 1,
+    sortedNonZero: [],
+    intensityHistogram: [],
+    imageInfo: { pixels: '', nonZero: '', totalIon: '' },
+    setDisplayMin: vi.fn(),
+    setDisplayMax: vi.fn(),
+    setGamma: vi.fn(),
+  }) as unknown as IonImageDisplay
+}
+
 /** 面板拿到的是 useResultMeta 推导出的 acquisition 与原始文件记录 */
 function mountPanel(file: File | null, attrs: MetadataAttrs | null = null) {
-  return mount(VizInfoPanel, {
-    props: {
-      globalMin: 0,
-      globalMax: 1,
-      displayMin: 0,
-      displayMax: 1,
-      acquisition: deriveAcquisition(attrs, file, []),
-      sourceFile: file,
-    },
+  const display = displayState()
+  const meta = reactive({
+    acquisition: deriveAcquisition(attrs, file, []),
+    sourceFile: file,
+    methods: [] as string[],
+    pixelSize: '',
+  }) as unknown as ResultMeta
+  const wrapper = mount(VizInfoPanel, {
+    props: { display, meta },
     global: { plugins: [i18n] },
   })
+  return Object.assign(wrapper, { display, meta })
 }
 
 const zarrPositive = { polarity: 'positive' } as MetadataAttrs
@@ -97,7 +117,9 @@ describe('VizInfoPanel sections', () => {
 
   it('keeps instrument info, sample and preprocessing as sub-items of Info', async () => {
     const w = mountPanel(sourceFile(), zarrPositive)
-    await w.setProps({ methods: ['tic'], info: { pixels: '120 × 80' } })
+    w.meta.methods = ['tic']
+    w.display.imageInfo.pixels = '120 × 80'
+    await nextTick()
     expect(headers(w)).toEqual(['Info', 'Intensity'])
     const subheads = w.findAll('h3').map((h) => h.text())
     expect(subheads).toEqual(['Instrument Info', 'Biological & Sample Info', 'Preprocessing'])
@@ -137,7 +159,7 @@ describe('VizInfoPanel sections', () => {
       document.body.querySelector('[role="dialog"][aria-label="Gamma"]')?.textContent,
     ).toContain('brighten weak signals')
     await slider.setValue('1.3')
-    expect(w.emitted('update:gamma')).toEqual([[1.3]])
+    expect(w.display.setGamma).toHaveBeenCalledWith(1.3)
     await w.setProps({ channelsMode: true })
     expect(slider.attributes('disabled')).toBeDefined()
     w.unmount()

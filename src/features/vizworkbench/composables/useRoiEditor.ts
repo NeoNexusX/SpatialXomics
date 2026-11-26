@@ -1,4 +1,4 @@
-import { computed, reactive, shallowReactive, shallowRef, type Ref } from 'vue'
+import { computed, reactive, shallowReactive, shallowRef, watch, type Ref } from 'vue'
 import {
   intersectRoiMasks,
   isRoiContour,
@@ -13,7 +13,7 @@ import {
 } from '@/features/vizworkbench/utils/roiMask'
 import { ROI_SHAPE_COLORS } from '@/features/vizworkbench/utils/regionPalette'
 import type { ConfirmedROI } from './useROI'
-import { buildRegionMask, type Region } from '@/features/vizworkbench/utils/region'
+import { buildRegionMask, type Region, type RegionGrid } from '@/features/vizworkbench/utils/region'
 
 type RegionSnapshot = Pick<Region, 'id' | 'label'> & { mask: Uint8Array }
 
@@ -71,7 +71,9 @@ function useHistory<T>() {
   }
 }
 
-export function useRoiEditor(width: Ref<number>, height: Ref<number>, runId: Ref<string>) {
+export function useRoiEditor(grid: Readonly<Ref<RegionGrid>>) {
+  const height = computed(() => grid.value.shape[0])
+  const width = computed(() => grid.value.shape[1])
   const tool = shallowRef<RoiTool | null>(null)
   const operation = shallowRef<MaskOperation>('union')
   const steps = useHistory<Step>()
@@ -192,7 +194,6 @@ export function useRoiEditor(width: Ref<number>, height: Ref<number>, runId: Ref
     const source = pendingShape.value?.source
     return source && 'rect' in source ? source.rect : null
   })
-  const editableColor = computed(() => pendingShape.value?.color ?? null)
 
   const type = computed<ConfirmedROI['type']>(() => {
     const source = steps.latest.value?.source
@@ -204,10 +205,15 @@ export function useRoiEditor(width: Ref<number>, height: Ref<number>, runId: Ref
     return steps.entries.length === 1 && isCollect(source) ? source.label : undefined
   })
 
+  /** A waiting shape blocks every switch; an open outline blocks the other outline tool. */
+  function canSelectTool(value: RoiTool | null) {
+    if (hasPendingShape.value) return false
+    return !isRoiContour(value) || !openPathType.value || value === openPathType.value
+  }
+
   function selectTool(value: RoiTool | null) {
-    if (hasPendingShape.value) return
+    if (!canSelectTool(value)) return
     if (isRoiContour(value)) {
-      if (openPathType.value && value !== openPathType.value) return
       const nextContour = contour.future[contour.future.length - 1]
       if (!hasPath.value && nextContour && value !== nextContour.type) contour.reset()
     }
@@ -288,13 +294,16 @@ export function useRoiEditor(width: Ref<number>, height: Ref<number>, runId: Ref
     else if (canRedoStep.value) steps.redo()
   }
 
-  function selectOperation(value: MaskOperation) {
-    if (
+  /** Subtract and Intersect need a draft to act on; no mode changes while a shape waits. */
+  function canSelectOperation(value: MaskOperation) {
+    return (
       value === operation.value ||
-      hasUnconfirmedShape.value ||
-      (value !== 'union' && !hasDraft.value)
+      (!hasUnconfirmedShape.value && (value === 'union' || hasDraft.value))
     )
-      return
+  }
+
+  function selectOperation(value: MaskOperation) {
+    if (value === operation.value || !canSelectOperation(value)) return
     contour.reset()
     operation.value = value
   }
@@ -305,10 +314,7 @@ export function useRoiEditor(width: Ref<number>, height: Ref<number>, runId: Ref
 
   function stageRegion(region: Region) {
     if (!canSelectRegion.value) return
-    const mask = buildRegionMask([region], {
-      runId: runId.value,
-      shape: [height.value, width.value],
-    })
+    const mask = buildRegionMask([region], grid.value)
     if (mask) stageMask({ id: region.id, label: region.label, mask })
   }
 
@@ -327,6 +333,9 @@ export function useRoiEditor(width: Ref<number>, height: Ref<number>, runId: Ref
     steps.reset()
     contour.reset()
   }
+
+  // Shapes and staged masks are painted on the current grid.
+  watch([width, height], reset)
 
   return reactive({
     tool,
@@ -358,10 +367,11 @@ export function useRoiEditor(width: Ref<number>, height: Ref<number>, runId: Ref
     canUndo,
     canRedo,
     editableBox,
-    editableColor,
     type,
     label,
+    canSelectTool,
     selectTool,
+    canSelectOperation,
     selectOperation,
     stageShape,
     replaceBox,

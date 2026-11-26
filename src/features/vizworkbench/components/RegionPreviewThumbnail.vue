@@ -2,10 +2,9 @@
 /**
  * Region preview thumbnail.
  *
- * Sits under the Compare Regions panel and shows the compared regions (A/B)
- * on a dimmed TIC backdrop, each in its own identity color (kmeans palette
- * color for clusters, palette-assigned color for ROIs). Confirmed ROIs are
- * also rendered as colored fills when present in the preview.
+ * Sits under the Compare Regions panel and shows the compared groups (A/B) on
+ * a dimmed TIC backdrop. Each group is drawn as the union of its members in
+ * the group's fixed color, i.e. exactly the pixels the comparison uses.
  *
  * Rendering: masks are H×W grids (row*width+col), drawn into a 1:1 ImageData
  * and upscaled with drawImage - same pattern as the main canvas renderer, so
@@ -14,65 +13,43 @@
  * inside it, so datasets of any aspect ratio render into the same footprint.
  */
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import type { ConfirmedROI } from '@/features/vizworkbench/composables/useROI'
+import { buildRegionMask, type Region, type RegionGrid } from '@/features/vizworkbench/utils/region'
 import {
   COMPARISON_A_ALPHA,
+  COMPARISON_A_RGB,
   COMPARISON_B_ALPHA,
-  hexToRgb,
+  COMPARISON_B_RGB,
   rgbCss,
-  type RGB,
 } from '@/features/vizworkbench/utils/regionPalette'
-
-interface ThumbnailRegion {
-  value: string
-  label: string
-  color: RGB
-  /** H×W 0/1 raster, row*width+col. */
-  mask: Uint8Array
-}
+import { compositeMask } from '@/features/vizworkbench/utils/roiMask'
 
 const props = defineProps<{
-  /** Members of group A / B, each painted in its own identity color. */
-  a: ThumbnailRegion[]
-  b: ThumbnailRegion[]
-  rois: ConfirmedROI[]
+  /** Members of group A / B. */
+  a: Region[]
+  b: Region[]
+  grid: RegionGrid
+  /** Backdrop image, drawn dimmed. */
   matrix: Float32Array | null
-  width: number
-  height: number
 }>()
 
 const containerRef = ref<HTMLDivElement | null>(null)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 
-interface LegendEntry {
-  label: string
-  css: string
-}
-/** 展示名：导入掩膜的标签来自文件名，带扩展名（"Cancerous regions.csv"）——隐藏。 */
-function displayLabel(label: string): string {
-  return label.replace(/\.(csv|npy|npz)$/i, '')
-}
-// One legend entry per group: member labels joined, swatch in the group's
-// fixed color (all members carry the same group color).
-const legendsA = computed<LegendEntry[]>(() =>
-  props.a.length
-    ? [
-        {
-          label: `A · ${props.a.map((r) => displayLabel(r.label)).join(' + ')}`,
-          css: rgbCss(props.a[0]!.color),
-        },
-      ]
-    : [],
-)
-const legendsB = computed<LegendEntry[]>(() =>
-  props.b.length
-    ? [
-        {
-          label: `B · ${props.b.map((r) => displayLabel(r.label)).join(' + ')}`,
-          css: rgbCss(props.b[0]!.color),
-        },
-      ]
-    : [],
+// B is painted after A with lower alpha so overlap shows through instead of
+// reading as B-only - same precedence as the ion-image overlay.
+const groups = computed(() => [
+  { name: 'A', regions: props.a, color: COMPARISON_A_RGB, opacity: COMPARISON_A_ALPHA },
+  { name: 'B', regions: props.b, color: COMPARISON_B_RGB, opacity: COMPARISON_B_ALPHA },
+])
+
+// One legend entry per group: member labels joined, swatch in the group's color.
+const legends = computed(() =>
+  groups.value
+    .filter((group) => group.regions.length)
+    .map((group) => ({
+      label: `${group.name} · ${group.regions.map((region) => region.label).join(' + ')}`,
+      css: rgbCss(group.color),
+    })),
 )
 
 // ---------- raster building ----------
@@ -80,14 +57,14 @@ const legendsB = computed<LegendEntry[]>(() =>
 const BG = { r: 0x0a, g: 0x0a, b: 0x0f } // same backdrop as the main canvas
 
 function buildImageData(): ImageData | null {
-  const { width: w, height: h } = props
+  const [h, w] = props.grid.shape
   if (!w || !h) return null
   const img = new ImageData(w, h)
   const buf = img.data
   const n = w * h
 
   // Backdrop: dimmed grayscale of the TIC/ion matrix so the regions sit in
-  // spatial context without competing with their identity colors.
+  // spatial context without competing with the group colors.
   const matrix = props.matrix
   let max = 0
   if (matrix) {
@@ -113,32 +90,12 @@ function buildImageData(): ImageData | null {
     buf[off + 3] = 255
   }
 
-  // Confirmed ROIs: same strong fill as the compared regions (KMeans), so all
-  // region types share one visual language in the thumbnail. Drawn under the
-  // A/B highlight so the compared regions stay on top.
-  for (const roi of props.rois) {
-    const c = hexToRgb(roi.color)
-    if (!c || roi.shape[0] !== h || roi.shape[1] !== w) continue
-    paintMask(buf, roi.mask, c, 0.85)
+  for (const { regions, color, opacity } of groups.value) {
+    const mask = buildRegionMask(regions, props.grid)
+    if (mask) compositeMask(buf, mask, color, Math.round(opacity * 255))
   }
-
-  // Compared groups: strong fill in each group's fixed color. B is painted
-  // after A with lower alpha so overlap shows through instead of reading as
-  // B-only - same precedence as the ion-image overlay.
-  for (const r of props.a) paintMask(buf, r.mask, r.color, COMPARISON_A_ALPHA)
-  for (const r of props.b) paintMask(buf, r.mask, r.color, COMPARISON_B_ALPHA)
 
   return img
-}
-
-function paintMask(buf: Uint8ClampedArray, mask: Uint8Array, c: RGB, alpha: number) {
-  for (let i = 0; i < mask.length; i++) {
-    if (!mask[i]) continue
-    const off = i * 4
-    buf[off] = Math.round(buf[off]! * (1 - alpha) + c.r * alpha)
-    buf[off + 1] = Math.round(buf[off + 1]! * (1 - alpha) + c.g * alpha)
-    buf[off + 2] = Math.round(buf[off + 2]! * (1 - alpha) + c.b * alpha)
-  }
 }
 
 // ---------- canvas ----------
@@ -202,7 +159,7 @@ onMounted(() => {
 onBeforeUnmount(() => ro?.disconnect())
 
 watch(
-  () => [props.a, props.b, props.rois, props.matrix, props.width, props.height],
+  () => [props.a, props.b, props.grid, props.matrix],
   () => draw(),
 )
 </script>
@@ -214,12 +171,9 @@ watch(
         $t('vizworkbench.compare.preview')
       }}</span>
     </div>
-    <div
-      v-if="legendsA.length || legendsB.length"
-      class="px-3 pb-2.5 flex flex-wrap gap-x-4 gap-y-1"
-    >
+    <div v-if="legends.length" class="px-3 pb-2.5 flex flex-wrap gap-x-4 gap-y-1">
       <span
-        v-for="legend in [...legendsA, ...legendsB]"
+        v-for="legend in legends"
         :key="legend.label"
         class="flex items-center gap-1.5 text-base-content/80"
       >

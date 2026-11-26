@@ -1,4 +1,4 @@
-import { computed, ref, shallowRef, watch, onBeforeUnmount, type Ref } from 'vue'
+import { computed, reactive, ref, shallowRef, watch, onBeforeUnmount, type Ref } from 'vue'
 import { getZarrUrl } from '@/services/zarr/api/zarrAccessApi'
 import { createClustering } from '@/services/clustering/api/clusteringApi'
 import type { ClusteringTaskResponse, UmapEmbedding } from '@/services/clustering/types/clustering'
@@ -8,7 +8,7 @@ import {
   embeddingWithin,
   preloadKmeans,
 } from '@/features/vizworkbench/utils/kmeans'
-import type { Region, RegionGrid } from '@/features/vizworkbench/utils/region'
+import type { KmeansRegion, RegionGrid } from '@/features/vizworkbench/utils/region'
 import { kmeansColor, rgbCss } from '@/features/vizworkbench/utils/regionPalette'
 import { dataModeRef } from '@/features/vizworkbench/composables/useZarrIonImage'
 import { useToast } from '@/shared/composables/useToast'
@@ -32,6 +32,20 @@ export interface KmeansCluster {
 export interface KmeansScope {
   mask: Uint8Array
   label: string
+}
+
+/** A published local KMeans result. */
+interface KmeansResult {
+  /** Request number. Region ids include it, so a new result never matches an old selection. */
+  request: number
+  k: number
+  /** The region the result was restricted to (null = every tissue pixel). */
+  scope: KmeansScope | null
+  grid: RegionGrid
+  /** -1 = background. */
+  labels: Int32Array
+  rgb: Uint8Array
+  clusters: KmeansCluster[]
 }
 
 /**
@@ -79,7 +93,7 @@ function deriveKmeansClusters(labels: Int32Array): KmeansCluster[] {
  * - `ready` is only ever set by a successful zarr load - the status fields
  *   steer the UI, but the data itself is the final gate.
  */
-export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols: Ref<number>) {
+export function useOverlayData(runId: string, ionRows: Ref<number>, ionCols: Ref<number>) {
   // State - UMAP and KMeans are mutually exclusive: only one shows at a time.
   const umapVisible = ref(false)
   const kmeansVisible = ref(false)
@@ -93,43 +107,36 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
   let store: ClusteringZarrStore | null = null
   let umapRgb: Uint8Array | null = null
   let umapEmbedding: UmapEmbedding | null = null
-  let kmeansRgb: Uint8Array | null = null
-  let kmeansLabels: Int32Array | null = null
-  let kmeansGrid: RegionGrid | null = null
   let kmeansRequest = 0
-  let kmeansPublishedRequest = 0
   let dims: { height: number; width: number } | null = null
-  // Entry probe runs at most once per run.
-  let probedForRun: string | null = null
+  let probed = false
 
-  /** KMeans clusters (id + sampled color + pixel count), empty until the
-   *  user runs a local clustering. */
-  const kmeansClusters = ref<KmeansCluster[]>([])
-  const kmeansRegions = computed<Region[]>(() => {
-    const clusters = kmeansClusters.value
-    const grid = kmeansGrid
-    const labels = kmeansLabels
-    if (!grid || !labels || grid.runId !== runId.value) return []
-    return clusters.map(({ id, color: [r, g, b], count }) => ({
-      id: `kmeans:${kmeansPublishedRequest}:${id}`,
+  /** The current local KMeans result; null until the user runs one. */
+  const kmeansResult = shallowRef<KmeansResult | null>(null)
+  /** KMeans clusters (id + color + pixel count), empty until the user runs a local clustering. */
+  const kmeansClusters = computed(() => kmeansResult.value?.clusters ?? [])
+  const kmeansRegions = computed<KmeansRegion[]>(() => {
+    const result = kmeansResult.value
+    if (!result) return []
+    return result.clusters.map(({ id, color: [r, g, b] }) => ({
+      id: `kmeans:${result.request}:${id}`,
       kind: 'kmeans',
       clusterId: id,
       label: t('vizworkbench.kmeans.cluster', { id }),
       color: rgbCss({ r, g, b }),
-      pixelCount: count,
-      grid,
-      labels,
+      grid: result.grid,
+      labels: result.labels,
     }))
   })
   /** False until a local KMeans run produced labels - the UI should say so
    *  explicitly rather than hide the picker silently. */
-  const kmeansLabelsAvailable = ref(false)
+  const kmeansLabelsAvailable = computed(() => kmeansResult.value !== null)
   /** The k of the currently computed KMeans result (null = never run). */
-  const kmeansK = ref<number | null>(null)
+  const kmeansK = computed(() => kmeansResult.value?.k ?? null)
+  /** The region the current result was restricted to (null = every tissue pixel). */
+  const kmeansScope = computed(() => kmeansResult.value?.scope ?? null)
   /** True while a local KMeans computation is in flight. */
   const kmeansComputing = ref(false)
-  /** The region the current result was restricted to (null = every tissue pixel). */
-  const kmeansScope = shallowRef<KmeansScope | null>(null)
   /** Selected cluster ids: drives both the overlay mask and the export mask.
    *  null = show all (default); an empty Set = explicitly hide all. */
   const selectedKmeansIds = ref<Set<number> | null>(null)
@@ -145,15 +152,15 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
   // Poll interval fixed at 5s; completed / failed status ends the chain.
   const POLL_INTERVAL_MS = 5000
   let pollTimer: ReturnType<typeof setTimeout> | null = null
-  /** The run the current poll chain belongs to; a mismatch stops the chain. */
-  let pollingForRun: string | null = null
+  /** True while a poll chain is live; stopPolling ends it. */
+  let polling = false
 
   function stopPolling() {
     if (pollTimer) {
       clearTimeout(pollTimer)
       pollTimer = null
     }
-    pollingForRun = null
+    polling = false
   }
 
   /**
@@ -163,37 +170,35 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
    * failed task on POST. A transient request error keeps the chain alive.
    */
   async function pollOnce() {
-    const forRun = runId.value
     try {
-      const task = await createClustering(forRun)
-      if (pollingForRun !== forRun) return // run changed / polling stopped
+      const task = await createClustering(runId)
+      if (!polling) return // polling stopped meanwhile
       await applyTaskStatus(task)
     } catch (e) {
       console.warn('[useOverlayData] clustering status poll failed:', e)
-      if (pollingForRun === forRun) scheduleNextPoll(forRun)
+      if (polling) scheduleNextPoll()
     }
   }
 
-  function scheduleNextPoll(forRun: string) {
-    if (pollingForRun !== forRun) return
+  function scheduleNextPoll() {
+    if (!polling) return
     // One pending tick at most - a manual Refresh hitting the processing
     // branch must not stack a second timer on top of the chain's own.
     if (pollTimer) return
     pollTimer = setTimeout(() => {
       pollTimer = null
-      if (pollingForRun === forRun) pollOnce()
+      if (polling) pollOnce()
     }, POLL_INTERVAL_MS)
   }
 
-  /** Start a poll chain for the current run (no-op if one is already live).
-   *  The first tick waits one interval - the caller just received a fresh
-   *  status from its own POST, so re-POSTing immediately would be redundant. */
+  /** Start a poll chain (no-op if one is already live). The first tick waits
+   *  one interval - the caller just received a fresh status from its own
+   *  POST, so re-POSTing immediately would be redundant. */
   function startPolling() {
-    const forRun = runId.value
-    if (pollingForRun === forRun) return
+    if (polling) return
     stopPolling()
-    pollingForRun = forRun
-    scheduleNextPoll(forRun)
+    polling = true
+    scheduleNextPoll()
   }
 
   /** Drop the cached zarr store + rasters and mark the data not-ready. */
@@ -203,16 +208,10 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     store = null
     umapRgb = null
     umapEmbedding = null
-    kmeansRgb = null
-    kmeansLabels = null
-    kmeansGrid = null
+    kmeansResult.value = null
     kmeansRequest++
     kmeansComputing.value = false
     dims = null
-    kmeansClusters.value = []
-    kmeansLabelsAvailable.value = false
-    kmeansK.value = null
-    kmeansScope.value = null
     selectedKmeansIds.value = null
     clusteringReady.value = false
   }
@@ -230,19 +229,12 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     if (umapRgb && dims) return true
     overlayLoading.value = true
     if (!loadOpts.silent) overlayError.value = null
-    const forRun = runId.value
     try {
       // The UMAP group (analysis/umap) is embedded in the run's own zarr -
       // same zarr_url as the algorithm data, no zarr_type parameter.
-      const s = new ClusteringZarrStore(await getZarrUrl(forRun))
+      const s = new ClusteringZarrStore(await getZarrUrl(runId))
       await s.init()
       const umap = await s.loadUmap()
-      // The user navigated to another run mid-load - discard, don't pollute
-      // the new run's cache.
-      if (forRun !== runId.value) {
-        s.dispose()
-        return false
-      }
       store = s
       umapRgb = umap.image.data
       umapEmbedding = umap.embedding
@@ -298,7 +290,7 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     // Continue the poll chain: the next tick is one interval away whether this
     // status came from the initial create POST (startPolling begins the chain)
     // or from a poll/Refresh tick (scheduleNextPoll keeps it going).
-    if (pollingForRun === runId.value) scheduleNextPoll(runId.value)
+    if (polling) scheduleNextPoll()
     else startPolling()
   }
 
@@ -311,7 +303,7 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     if (clusteringCreating.value) return
     clusteringCreating.value = true
     try {
-      const task = await createClustering(runId.value)
+      const task = await createClustering(runId)
       await applyTaskStatus(task)
       if (clusteringComputing.value) {
         showToast(t('vizworkbench.overlay.taskStarted'), 'info')
@@ -332,7 +324,7 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     if (clusteringRefreshing.value) return
     clusteringRefreshing.value = true
     try {
-      const task = await createClustering(runId.value)
+      const task = await createClustering(runId)
       await applyTaskStatus(task)
       if (clusteringComputing.value) {
         showToast(t('vizworkbench.overlay.stillComputing'), 'info')
@@ -353,8 +345,8 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
    * the POST reveals the real status and polling takes over.
    */
   async function probeExisting() {
-    if (probedForRun === runId.value) return
-    probedForRun = runId.value
+    if (probed) return
+    probed = true
     await loadClusteringData({ silent: true })
   }
 
@@ -418,15 +410,17 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
   }
 
   const computeKmeansOverlay = () => {
-    if (!kmeansRgb || !dims) return null
-    const rgba = rgbToRgba(kmeansRgb, dims.height, dims.width, kmeansAlpha.value)
+    const result = kmeansResult.value
+    if (!result || !dims) return null
+    const rgba = rgbToRgba(result.rgb, dims.height, dims.width, kmeansAlpha.value)
     if (!rgba) return null
     // Mask out unselected clusters. Background stays decided by RGB (0,0,0)
     // since the label image's background convention is ambiguous.
-    if (selectedKmeansIds.value !== null && kmeansLabels) {
-      const selected = selectedKmeansIds.value
-      for (let i = 0; i < kmeansLabels.length; i++) {
-        if (!selected.has(kmeansLabels[i]!)) rgba[i * 4 + 3] = 0
+    const selected = selectedKmeansIds.value
+    if (selected !== null) {
+      const { labels } = result
+      for (let i = 0; i < labels.length; i++) {
+        if (!selected.has(labels[i]!)) rgba[i * 4 + 3] = 0
       }
     }
     return rgba
@@ -448,13 +442,11 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
    */
   async function runKmeans(k: number, scope: KmeansScope | null = null): Promise<boolean> {
     if (kmeansComputing.value) return false
-    const forRun = runId.value
     const request = ++kmeansRequest
     kmeansComputing.value = true
     try {
       const ok = await loadClusteringData()
-      if (!ok || request !== kmeansRequest || forRun !== runId.value || !umapEmbedding || !dims)
-        return false
+      if (!ok || request !== kmeansRequest || !umapEmbedding || !dims) return false
       const { height, width } = dims
       if (scope && scope.mask.length !== height * width)
         throw new Error('[useOverlayData] the ROI grid does not match the UMAP grid')
@@ -464,16 +456,17 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
         return false
       }
       const result = await computeKmeansFromUmap(input, height, width, k, 42, 30)
-      if (request !== kmeansRequest || forRun !== runId.value) return false
-      kmeansRgb = result.rgb
-      kmeansLabels = result.labels
-      kmeansGrid = { runId: forRun, shape: [height, width] }
-      kmeansPublishedRequest = request
-      kmeansClusters.value = deriveKmeansClusters(result.labels)
-      kmeansLabelsAvailable.value = true
+      if (request !== kmeansRequest) return false
+      kmeansResult.value = {
+        request,
+        k,
+        scope,
+        grid: { runId, shape: [height, width] },
+        labels: result.labels,
+        rgb: result.rgb,
+        clusters: deriveKmeansClusters(result.labels),
+      }
       selectedKmeansIds.value = null // default: show all clusters
-      kmeansK.value = k
-      kmeansScope.value = scope
       // Show the result (mutually exclusive with UMAP).
       kmeansVisible.value = true
       umapVisible.value = false
@@ -481,8 +474,7 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
       return true
     } catch (e) {
       console.error('[useOverlayData] local kmeans failed:', e)
-      if (request === kmeansRequest && forRun === runId.value)
-        overlayError.value = e instanceof Error ? e.message : String(e)
+      if (request === kmeansRequest) overlayError.value = e instanceof Error ? e.message : String(e)
       return false
     } finally {
       if (request === kmeansRequest) kmeansComputing.value = false
@@ -519,7 +511,7 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     if (umapVisible.value && umapRgb) recomputeOverlay()
   })
   watch(kmeansAlpha, () => {
-    if (kmeansVisible.value && kmeansRgb) recomputeOverlay()
+    if (kmeansVisible.value && kmeansResult.value) recomputeOverlay()
   })
 
   // Recompute the KMeans overlay when the cluster selection changes. Deep
@@ -527,7 +519,7 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
   watch(
     selectedKmeansIds,
     () => {
-      if (kmeansVisible.value && kmeansRgb && kmeansLabels) recomputeOverlay()
+      if (kmeansVisible.value && kmeansResult.value) recomputeOverlay()
     },
     { deep: true },
   )
@@ -537,28 +529,16 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
   watch([ionRows, ionCols, clusteringReady], () => {
     if (!ionRows.value || !ionCols.value) return
     if (umapVisible.value && !umapRgb) return
-    if (kmeansVisible.value && !kmeansRgb) return
+    if (kmeansVisible.value && !kmeansResult.value) return
     if (umapVisible.value || kmeansVisible.value) recomputeOverlay()
   })
 
-  // Invalidate the cache when the run changes (same component, new result).
-  watch(runId, () => {
-    clearCache()
-    overlayError.value = null
-    overlayData.value = null
-    umapVisible.value = false
-    kmeansVisible.value = false
-    clusteringCreating.value = false
-    clusteringComputing.value = false
-    clusteringRefreshing.value = false
-  })
-
-  // Page-entry UMAP probe: once per run, once the zarr data mode is known and
-  // only for continuous storage (processed data has no UMAP).
+  // Page-entry UMAP probe: once the zarr data mode is known, and only for
+  // continuous storage (processed data has no UMAP).
   watch(
-    [runId, dataModeRef],
-    ([id, mode]) => {
-      if (id && mode === 'continuous') probeExisting()
+    dataModeRef,
+    (mode) => {
+      if (runId && mode === 'continuous') probeExisting()
     },
     { immediate: true },
   )
@@ -571,7 +551,7 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
 
   /** Current KMeans labels (Int32Array, -1 = background) or null if not run. */
   function getKmeansLabels(): Int32Array | null {
-    return kmeansLabels
+    return kmeansResult.value?.labels ?? null
   }
 
   /** Current UMAP RGB raster (H×W×3 uint8) or null if not loaded. */
@@ -581,7 +561,7 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
 
   /** Current KMeans RGB raster (H×W×3 uint8) or null if not run. */
   function getKmeansRgb(): Uint8Array | null {
-    return kmeansRgb
+    return kmeansResult.value?.rgb ?? null
   }
 
   /** Overlay raster grid dims or null if the clustering zarr never loaded. */
@@ -650,13 +630,21 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     exportRgbPng(umapRgb, dims.width, dims.height, 'umap_image.png')
   }
 
-  /** Export the KMeans RGB image as a standalone PNG (no ion image background). */
-  function exportKmeansPng() {
-    if (!kmeansRgb || !dims) return
-    exportRgbPng(kmeansRgb, dims.width, dims.height, `kmeans_k${kmeansK.value ?? 0}.png`)
+  /** Overlay opacity as 0-255 alpha, one value per overlay kind. */
+  function setOverlayAlpha(kind: OverlayKind, alpha: number) {
+    const value = Math.max(0, Math.min(255, alpha))
+    if (kind === 'umap') umapAlpha.value = value
+    else kmeansAlpha.value = value
   }
 
-  return {
+  /** Export the KMeans RGB image as a standalone PNG (no ion image background). */
+  function exportKmeansPng() {
+    const result = kmeansResult.value
+    if (!result || !dims) return
+    exportRgbPng(result.rgb, dims.width, dims.height, `kmeans_k${result.k}.png`)
+  }
+
+  return reactive({
     umapVisible,
     kmeansVisible,
     overlayData,
@@ -670,8 +658,10 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     clusteringReady,
     /** True while a refresh POST is in flight. */
     clusteringRefreshing,
+    /** Overlay opacities as 0-255 alpha; set through setOverlayAlpha. */
     umapAlpha,
     kmeansAlpha,
+    setOverlayAlpha,
     /** KMeans clusters (id + color + pixel count) for the picker UI. */
     kmeansClusters,
     kmeansRegions,
@@ -710,5 +700,7 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     createClusteringTask,
     /** Refresh button: re-POST and branch on clustering_status. */
     refreshClusteringStatus,
-  }
+  })
 }
+
+export type ClusteringState = ReturnType<typeof useOverlayData>

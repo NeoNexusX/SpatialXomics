@@ -340,12 +340,14 @@ function onHover(e: MouseEvent) {
           intensity: c.matrix[i] ?? 0,
         }))
       : undefined
+    // The ROI-only view hides every pixel outside the ROIs, so they read as empty.
+    const hidden = props.roiMask ? !props.roiMask[i] : false
     hoverPixel.value = {
       x: mx,
       y: my,
       row,
       col,
-      intensity: data?.[i] ?? 0,
+      intensity: hidden ? 0 : (data?.[i] ?? 0),
       channelValues,
     }
   } else {

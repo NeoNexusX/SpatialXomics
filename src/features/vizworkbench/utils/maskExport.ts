@@ -32,13 +32,6 @@ import {
 
 export type ExportFormat = 'npz' | 'csv'
 
-/** What the export panel selects; resolved to one merged mask by the parent. */
-export interface MaskExportPayload {
-  format: ExportFormat
-  roiIds: string[]
-  clusterIds: number[]
-}
-
 /** Provenance supplied by the caller; shape and sha256 are derived here. */
 export interface MaskExportMeta {
   datasetName: string
