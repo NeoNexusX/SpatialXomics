@@ -3,7 +3,7 @@ import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 import IonImageViewer from '@/features/vizworkbench/components/visuals/IonImageViewer.vue'
 import ROIOverlay from '@/features/vizworkbench/components/visuals/ROIOverlay.vue'
-import type { ROIType } from '@/features/vizworkbench/composables/useROI'
+import type { RoiEditor } from '@/features/vizworkbench/composables/useRoiEditor'
 import type { ViewIonChannel } from '@/features/vizworkbench/composables/useIonChannels'
 import type { DataMode } from '@/services/zarr/types/zarr'
 import { t } from '@/i18n'
@@ -21,7 +21,7 @@ const props = defineProps<{
   displayMax: number
   ionCols: number
   ionRows: number
-  roiTool: ROIType | null
+  roiEditor: RoiEditor
   overlayData: Uint8ClampedArray | null
   gradientCss: string
   calcHandleTop: (value: number) => number
@@ -61,17 +61,9 @@ const emit = defineEmits<{
   (e: 'strip-ref', element: HTMLElement | null): void
   (e: 'strip-mouse-down', event: MouseEvent): void
   (e: 'start-strip-drag', which: 'min' | 'max', event: MouseEvent): void
-  (e: 'draft-updated', draft: any): void
-  (e: 'draft-cleared'): void
-  (e: 'roi-overlay-ref', element: InstanceType<typeof ROIOverlay> | null): void
   /** 点击图像中的某个像素（加载该像素的谱） */
   (e: 'select-pixel', col: number, row: number): void
 }>()
-
-const ionViewerRef = ref<InstanceType<typeof IonImageViewer> | null>(null)
-const roiOverlayRef = ref<InstanceType<typeof ROIOverlay> | null>(null)
-
-watch(roiOverlayRef, (el) => emit('roi-overlay-ref', el ?? null))
 
 /** 图像标题 */
 const imageTitle = computed(() => t('vizworkbench.ionImage.title'))
@@ -147,7 +139,6 @@ onBeforeUnmount(() => {
       </div>
       <div v-else class="flex-1 min-h-0 relative overflow-hidden">
         <IonImageViewer
-          ref="ionViewerRef"
           :selected-mz="selectedMz"
           :mz-tolerance="mzTolerance"
           :colormap="colormap"
@@ -158,7 +149,7 @@ onBeforeUnmount(() => {
           :matrix="displayMatrix"
           :matrix-cols="ionCols"
           :matrix-rows="ionRows"
-          :draw-mode="!!roiTool"
+          :draw-mode="!!roiEditor.tool"
           :overlay-data="overlayData"
           :overlay-width="ionCols"
           :overlay-height="ionRows"
@@ -178,7 +169,16 @@ onBeforeUnmount(() => {
           @search-mz="emit('searchMz', $event)"
           @reset="emit('reset-controls')"
           @select-pixel="(col, row) => emit('select-pixel', col, row)"
-        />
+        >
+          <template #drawing="{ imageRect }">
+            <ROIOverlay
+              :editor="roiEditor"
+              :image-width="ionCols"
+              :image-height="ionRows"
+              :image-rect="imageRect"
+            />
+          </template>
+        </IonImageViewer>
         <!-- 切换 m/z 时的加载遮罩（延迟出现，避免快速切换一闪而过）。
              多离子叠加模式下中列显示的是通道合成图，隐藏单图的加载遮罩。 -->
         <div
@@ -192,15 +192,6 @@ onBeforeUnmount(() => {
             }}</span>
           </div>
         </div>
-        <ROIOverlay
-          ref="roiOverlayRef"
-          :tool="roiTool"
-          :image-width="ionCols"
-          :image-height="ionRows"
-          :target-el="ionViewerRef?.canvasContainer ?? null"
-          @draft-updated="emit('draft-updated', $event)"
-          @draft-cleared="emit('draft-cleared')"
-        />
         <div
           v-if="ionError"
           class="absolute left-3 right-3 top-3 z-30 rounded-lg border border-error/30 bg-error/10 px-3 py-2 kawaru-text-68 text-error shadow-sm backdrop-blur-sm"

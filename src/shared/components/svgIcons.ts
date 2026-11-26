@@ -37,6 +37,8 @@ export const ICON_MAP = {
   pencil: 'heroicons:pencil',
   lasso: 'lucide:lasso',
   square: 'lucide:square',
+  ellipse: 'lucide:ellipse',
+  waypoints: 'lucide:waypoints',
   upload: 'heroicons:arrow-up-tray',
   download: 'heroicons:arrow-down-tray',
   refresh: 'heroicons:arrow-path',

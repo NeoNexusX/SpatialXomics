@@ -26,6 +26,7 @@ import {
 } from '@/features/vizworkbench/composables/useZarrIonImage'
 import { useDisplayRange } from '@/features/vizworkbench/composables/useDisplayRange'
 import { useOverlayData } from '@/features/vizworkbench/composables/useOverlayData'
+import { roiToRegion } from '@/features/vizworkbench/composables/useROI'
 import { useResultROI } from '@/features/vizworkbench/composables/useResultROI'
 import { useIonChannels } from '@/features/vizworkbench/composables/useIonChannels'
 import { MAX_ION_CHANNELS } from '@/features/vizworkbench/utils/ionChannelBlend'
@@ -34,13 +35,8 @@ import { useRegionComparison } from '@/features/vizworkbench/composables/useRegi
 import { useImportedMasks } from '@/features/vizworkbench/composables/useImportedMasks'
 import { ZARR_STORE } from '@/shared/config/defaults'
 import { rgbCss } from '@/features/vizworkbench/utils/regionPalette'
-import {
-  createMask,
-  exportMask,
-  labelsToUnionMask,
-  orMask,
-  type MaskExportPayload,
-} from '@/features/vizworkbench/utils/maskExport'
+import { exportMask, type MaskExportPayload } from '@/features/vizworkbench/utils/maskExport'
+import { buildRegionMask, type Region, type RegionGrid } from '@/features/vizworkbench/utils/region'
 import {
   registerContextProviders,
   unregisterContextProviders,
@@ -163,10 +159,6 @@ watch(
   { immediate: true },
 )
 
-watch(runId, () => {
-  clearImportedMasks()
-})
-
 // 离开页面时释放模块级状态，避免大数组（mzAxis、meanChartData、ticMatrix 等）
 // 和 ZarrStore 缓存在 SPA 导航后仍驻留内存
 onUnmounted(() => {
@@ -201,26 +193,22 @@ const {
 // ---- ROI ----
 
 const {
-  roiOverlayRef,
-  roiTool,
+  editor: roiEditor,
   confirmedROIs,
+  roiOpacities,
+  updateRoiOpacity,
   selectedRoiIds,
   toggleRoiSelection,
   selectAllRois,
   clearRoiSelection,
-  draftReady,
   viewingROI,
   displayMatrix,
   roiUnionMask,
   roiHighlightOverlay,
-  roiSelectTool,
   roiConfirm,
-  roiCancel,
   roiDelete,
   roiClearAll,
-  onDraftUpdated,
-  onDraftCleared,
-} = useResultROI(displaySourceMatrix, ionCols, ionRows)
+} = useResultROI(displaySourceMatrix, ionCols, ionRows, runId)
 
 // File-imported masks are kept separate from drawn ROIs. The active ones act
 // as an additional display filter (their union), and every mask is also a
@@ -342,6 +330,7 @@ const {
   umapAlpha,
   kmeansAlpha,
   kmeansClusters,
+  kmeansRegions,
   kmeansLabelsAvailable,
   kmeansK,
   kmeansComputing,
@@ -362,6 +351,30 @@ const {
   selectAllKmeansClusters,
   clearKmeansClusters,
 } = useOverlayData(runId, ionRows, ionCols)
+
+const regionGrid = computed<RegionGrid>(() => ({
+  runId: runId.value,
+  shape: [ionRows.value, ionCols.value],
+}))
+const editableRegions = computed<Region[]>(() => [
+  ...kmeansRegions.value,
+  ...confirmedROIs.value.map((roi) => roiToRegion(roi, runId.value)),
+])
+const regions = computed<Region[]>(() => [
+  ...editableRegions.value,
+  ...importedMasks.value.map(
+    (entry): Region => ({
+      id: `imported:${entry.id}`,
+      kind: 'imported',
+      sourceId: entry.id,
+      label: entry.name,
+      color: entry.color,
+      pixelCount: entry.summary.pixelCount,
+      grid: { runId: runId.value, shape: entry.shape },
+      mask: entry.mask,
+    }),
+  ),
+])
 
 // ---- Region comparison ----
 
@@ -388,27 +401,22 @@ const {
   involvesRoi: cmpInvolvesRoi,
   involvesImportedMask: cmpInvolvesImportedMask,
 } = useRegionComparison({
-  kmeansClusters,
-  kmeansLabelsAvailable,
-  getKmeansLabels,
-  confirmedROIs: confirmedROIs,
-  importedMasks,
-  ionCols,
-  ionRows,
+  regions,
+  runId,
   dataMode,
   onSelectMzIndex: handleSelectMzIndex,
 })
 
+watch(runId, () => {
+  clearImportedMasks()
+  roiClearAll()
+  cmpReset()
+})
+
 const cmpThumbnail = computed(() => cmpBuildThumbnailRegions())
 
-// Re-running KMeans always invalidates any existing comparison (clusters may
-// be renumbered), so reset unconditionally. Clearing/deleting ROIs only
-// invalidates the comparison when an ROI was actually one of the compared
-// regions — a KMeans-vs-KMeans comparison is unaffected and should survive.
-function handleRunKmeans(k: number) {
-  cmpReset()
-  return runKmeans(k)
-}
+// A successful re-cluster replaces the selectable cluster regions.
+watch(kmeansClusters, cmpReset)
 
 function handleRoiClearAll() {
   if (cmpInvolvesRoi()) cmpReset()
@@ -551,36 +559,25 @@ registerContextProviders({
 })
 
 async function handleExportMasks(payload: MaskExportPayload) {
-  const width = ionCols.value
-  const height = ionRows.value
-  if (!width || !height) {
+  const grid = regionGrid.value
+  if (!grid.shape[0] || !grid.shape[1]) {
     showToast(t('vizworkbench.page.ionImageNotLoaded'), 'error')
     return
   }
 
-  // Merge every selected region (ROIs + KMeans clusters) into one binary mask.
-  const mask = createMask(width, height)
-  let any = false
-  for (const id of payload.roiIds) {
-    const roi = confirmedROIs.value.find((r) => r.id === id)
-    if (roi) {
-      orMask(mask, roi.mask)
-      any = true
-    }
-  }
-  const labels = getKmeansLabels()
-  if (payload.clusterIds.length && labels && labels.length >= width * height) {
-    orMask(mask, labelsToUnionMask(labels, width, height, payload.clusterIds))
-    any = true
-  }
-
-  if (!any) {
+  const roiIds = new Set(payload.roiIds)
+  const clusterIds = new Set(payload.clusterIds)
+  const selected = editableRegions.value.filter((region) =>
+    region.kind === 'kmeans' ? clusterIds.has(region.clusterId) : roiIds.has(region.sourceId),
+  )
+  const mask = buildRegionMask(selected, grid)
+  if (!mask) {
     showToast(t('vizworkbench.page.nothingToExport'), 'warning')
     return
   }
 
   try {
-    await exportMask(mask, payload.format, {
+    await exportMask({ data: mask, shape: grid.shape }, payload.format, {
       datasetName: datasetName.value,
       pixelSizeUm: pixelSizeUm.value,
     })
@@ -714,10 +711,6 @@ const setStripRef = (element: HTMLElement | null) => {
   stripRef.value = element
 }
 
-const setRoiOverlayRef = (element: any) => {
-  roiOverlayRef.value = element
-}
-
 const onDisplayMinChange = (value: number) => {
   displayMin.value = value
 }
@@ -769,7 +762,7 @@ async function onSelectPixel(col: number, row: number) {
         :display-max="displayMax"
         :ion-cols="ionCols"
         :ion-rows="ionRows"
-        :roi-tool="roiTool"
+        :roi-editor="roiEditor"
         :overlay-data="overlayData"
         :gradient-css="gradientCSS"
         :calc-handle-top="calcHandleTop"
@@ -793,11 +786,8 @@ async function onSelectPixel(col: number, row: number) {
         @reset-controls="resetControls"
         @reset-range="resetRange"
         @strip-ref="setStripRef"
-        @roi-overlay-ref="setRoiOverlayRef"
         @strip-mouse-down="onStripMouseDown"
         @start-strip-drag="startStripDrag"
-        @draft-updated="onDraftUpdated"
-        @draft-cleared="onDraftCleared"
         @select-pixel="onSelectPixel"
       />
 
@@ -908,10 +898,11 @@ async function onSelectPixel(col: number, row: number) {
             :kmeans-computing="kmeansComputing"
             :selected-kmeans-ids="selectedKmeansIds"
             :storage-mode="storageMode"
-            :roi-tool="roiTool"
-            :draft-ready="draftReady"
+            :roi-editor="roiEditor"
             :viewing-roi="viewingROI"
-            :confirmed-rois="confirmedROIs as any"
+            :confirmed-rois="confirmedROIs"
+            :editable-regions="editableRegions"
+            :roi-opacities="roiOpacities"
             :selected-roi-ids="selectedRoiIds"
             :channels-enabled="channelsEnabled"
             :ion-channels="ionChannels"
@@ -928,14 +919,13 @@ async function onSelectPixel(col: number, row: number) {
             @toggle-kmeans-cluster="toggleKmeansCluster"
             @kmeans-select-all="selectAllKmeansClusters"
             @kmeans-clear-all="clearKmeansClusters"
-            @run-kmeans="handleRunKmeans"
+            @run-kmeans="runKmeans"
             @export-umap="exportUmapPng"
             @export-kmeans="exportKmeansPng"
-            @update:roi-tool="roiSelectTool"
             @update:viewing-roi="viewingROI = $event"
             @roi-confirm="roiConfirm"
-            @roi-cancel="roiCancel"
             @roi-delete="handleRoiDelete"
+            @update-roi-opacity="updateRoiOpacity"
             @toggle-roi-selection="toggleRoiSelection"
             @roi-select-all="selectAllRois"
             @roi-deselect-all="clearRoiSelection"

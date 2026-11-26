@@ -19,7 +19,7 @@ const props = withDefaults(
     /** Initial open state; ignored after mount. */
     defaultOpen?: boolean
   }>(),
-  { defaultOpen: true },
+  { defaultOpen: false },
 )
 
 const open = ref(props.defaultOpen)

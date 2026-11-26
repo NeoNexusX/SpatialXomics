@@ -11,6 +11,8 @@ import type { IonChannel } from '@/features/vizworkbench/composables/useIonChann
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import type { OverlayKind, KmeansCluster } from '@/features/vizworkbench/composables/useOverlayData'
+import type { RoiEditor } from '@/features/vizworkbench/composables/useRoiEditor'
+import type { Region } from '@/features/vizworkbench/utils/region'
 import type { ConfirmedROI } from '@/features/vizworkbench/composables/useROI'
 
 const props = defineProps<{
@@ -41,10 +43,11 @@ const props = defineProps<{
   selectedKmeansIds: Set<number> | null
   /** 'continuous' | 'processed' — UMAP/KMeans only apply to continuous data */
   storageMode: string
-  roiTool: string | null
-  draftReady: boolean
+  roiEditor: RoiEditor
   viewingRoi: boolean
   confirmedRois: ConfirmedROI[]
+  editableRegions: Region[]
+  roiOpacities: ReadonlyMap<string, number>
   /** 共享的 ROI 选中集（null = 全选）。同时驱动主图高亮与导出内容，语义对齐 selectedKmeansIds。 */
   selectedRoiIds: Set<string> | null
   /** Multi-ion overlay state (owned by the parent). */
@@ -55,7 +58,7 @@ const props = defineProps<{
   selectedMz: number
   maxIonChannels: number
   batchAddMode: boolean
-  /** 文件导入的掩膜列表：ROI 模块展示信息卡，导出面板展示导入状态 */
+  /** 文件导入的掩膜列表，供区域掩膜模块管理。 */
   importedMasks?: ImportedMask[]
 }>()
 
@@ -77,11 +80,10 @@ const emit = defineEmits<{
   (e: 'run-kmeans', k: number): void
   (e: 'export-umap'): void
   (e: 'export-kmeans'): void
-  (e: 'update:roiTool', value: string | null): void
   (e: 'update:viewingRoi', value: boolean): void
   (e: 'roi-confirm'): void
-  (e: 'roi-cancel'): void
   (e: 'roi-delete', id: string): void
+  (e: 'update-roi-opacity', id: string, opacity: number): void
   /** 选中集操作：驱动主图高亮 + 导出勾选（与 kmeans 的 select-all/clear-all 同构）。
    *  注意与上面的 'roi-clear-all'（删除全部 ROI）区分开。 */
   (e: 'toggle-roi-selection', id: string): void
@@ -527,35 +529,35 @@ function cancelEnable() {
 
   <CollapsibleSection :title="$t('vizworkbench.overlay.roi')" class="mt-5">
     <ROIPanel
-      :selected-tool="roiTool"
-      :draft-ready="draftReady"
+      :editor="roiEditor"
+      :regions="editableRegions"
       :rois="confirmedRois"
+      :opacities="roiOpacities"
       :viewing-roi="viewingRoi"
       :selected-roi-ids="selectedRoiIds"
-      :imported-masks="importedMasks"
-      @update:selected-tool="emit('update:roiTool', $event)"
       @update:viewing-roi="emit('update:viewingRoi', $event)"
       @confirm="emit('roi-confirm')"
-      @cancel="emit('roi-cancel')"
       @delete="emit('roi-delete', $event)"
+      @update-opacity="(id, opacity) => emit('update-roi-opacity', id, opacity)"
       @clear-all="emit('roi-clear-all')"
       @toggle-selection="emit('toggle-roi-selection', $event)"
       @select-all="emit('roi-select-all')"
       @deselect-all="emit('roi-deselect-all')"
-      @remove-imported-mask="emit('remove-imported-mask', $event)"
-      @toggle-imported-mask="emit('toggle-imported-mask', $event)"
     />
-    <!-- Mask import/export. Regions are picked in the ROI list above and the
-         KMeans cluster picker; this block only names what will be exported. -->
+  </CollapsibleSection>
+
+  <CollapsibleSection :title="$t('vizworkbench.mask.title')" class="mt-5">
     <MaskExportPanel
-      class="mt-3 pt-3 border-t border-base-content/15"
       :rois="confirmedRois"
       :selected-roi-ids="selectedRoiIds"
       :kmeans-clusters="kmeansClusters"
       :kmeans-visible="kmeansVisible"
       :selected-kmeans-ids="selectedKmeansIds"
+      :imported-masks="importedMasks"
       @export-masks="(payload) => emit('export-masks', payload)"
       @import-masks="(files) => emit('import-masks', files)"
+      @remove-imported-mask="emit('remove-imported-mask', $event)"
+      @toggle-imported-mask="emit('toggle-imported-mask', $event)"
     />
   </CollapsibleSection>
 

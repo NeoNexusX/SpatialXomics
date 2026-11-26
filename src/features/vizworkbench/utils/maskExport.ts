@@ -20,6 +20,7 @@
  * 0/1, H×W — so the .npz and .csv of one mask share the same digest.
  */
 
+import { summarizeRoiMask } from './roiMask'
 import { createSHA256 } from 'hash-wasm'
 import { downloadBlob } from '@/shared/utils/download'
 import {
@@ -310,7 +311,7 @@ export async function importMask(
 }
 
 /**
- * ROI 模块下展示的导入掩膜摘要：name/format 来自导入结果，统计在导入时定格
+ * 区域掩膜模块展示的导入掩膜摘要：name/format 来自导入结果，统计在导入时定格
  * （与手绘 ROI confirm 时计算一次的口径一致，不随后续 m/z 切换重算）。
  */
 export interface ImportedMaskSummary {
@@ -321,45 +322,13 @@ export interface ImportedMaskSummary {
   stats: { mean: number; std: number; min: number; max: number } | null
 }
 
-/**
- * Summarize an imported mask for the ROI panel: pixel count always; mean/std/
- * min/max from the current ion matrix when its length matches the raster
- * (skips non-finite values the same way useROI.computeStats does).
- */
 export function summarizeImportedMask(
   result: MaskImportResult,
   name: string,
   matrix: Float32Array | null,
 ): ImportedMaskSummary {
-  const mask = result.mask
-  let pixelCount = 0
-  for (let i = 0; i < mask.length; i++) if (mask[i]) pixelCount++
-  const base = { name, format: result.format, pixelCount }
-  if (!matrix || matrix.length !== mask.length) return { ...base, stats: null }
-
-  let sum = 0
-  let count = 0
-  let min = Infinity
-  let max = -Infinity
-  for (let i = 0; i < mask.length; i++) {
-    if (!mask[i]) continue
-    const v = matrix[i] ?? 0
-    if (!Number.isFinite(v)) continue
-    sum += v
-    count++
-    if (v < min) min = v
-    if (v > max) max = v
-  }
-  if (!count) return { ...base, stats: null }
-  const mean = sum / count
-  let sumSq = 0
-  for (let i = 0; i < mask.length; i++) {
-    if (!mask[i]) continue
-    const v = matrix[i] ?? 0
-    if (!Number.isFinite(v)) continue
-    sumSq += (v - mean) ** 2
-  }
-  return { ...base, stats: { mean, std: Math.sqrt(sumSq / count), min, max } }
+  const { pixelCount, stats } = summarizeRoiMask(result.mask, matrix)
+  return { name, format: result.format, pixelCount, stats }
 }
 
 // ── pixel payload (the canonical bytes every format shares) ───────
@@ -540,67 +509,22 @@ function buildZipStore(
   return out
 }
 
-// ── mask composition ─────────────────────────────────────────────
-
-/** All-false mask of the given size, indexed [row][col]. */
-export function createMask(width: number, height: number): boolean[][] {
-  const mask: boolean[][] = new Array(height)
-  for (let r = 0; r < height; r++) mask[r] = new Array<boolean>(width).fill(false)
-  return mask
-}
-
-/**
- * OR `src` into `dest` in place: a destination pixel becomes true if either
- * side is true. Sizes are assumed to match; rows/cols beyond either raster are
- * skipped defensively.
- */
-export function orMask(dest: boolean[][], src: boolean[][]): void {
-  const rows = Math.min(dest.length, src.length)
-  for (let r = 0; r < rows; r++) {
-    const destRow = dest[r]!
-    const srcRow = src[r]!
-    const cols = Math.min(destRow.length, srcRow.length)
-    for (let c = 0; c < cols; c++) {
-      if (srcRow[c]) destRow[c] = true
-    }
-  }
-}
-
-/**
- * Merge the given KMeans clusters into a binary mask: a pixel is foreground
- * when its label is one of `clusterIds`. Background (label -1) is therefore
- * always excluded.
- */
-export function labelsToUnionMask(
-  labels: Int32Array,
-  width: number,
-  height: number,
-  clusterIds: Iterable<number>,
-): boolean[][] {
-  const selected = new Set(clusterIds)
-  const mask: boolean[][] = new Array(height)
-  for (let r = 0; r < height; r++) {
-    const row = new Array<boolean>(width)
-    const off = r * width
-    for (let c = 0; c < width; c++) {
-      row[c] = selected.has(labels[off + c]!)
-    }
-    mask[r] = row
-  }
-  return mask
-}
-
 // ── public API ───────────────────────────────────────────────────
+
+interface FlatMask {
+  data: Uint8Array<ArrayBuffer>
+  shape: readonly [height: number, width: number]
+}
 
 /** Pure build step: compute payload/hash/meta and assemble the file bytes. */
 export async function buildMaskExport(
-  mask: boolean[][],
+  mask: boolean[][] | FlatMask,
   format: ExportFormat,
   meta: MaskExportMeta,
 ): Promise<{ bytes: Uint8Array<ArrayBuffer>; filename: string; mime: string }> {
-  const height = mask.length
-  const width = mask[0]?.length ?? 0
-  const payload = maskToPayload(mask)
+  const [height, width] = Array.isArray(mask) ? [mask.length, mask[0]?.length ?? 0] : mask.shape
+  const payload = Array.isArray(mask) ? maskToPayload(mask) : mask.data
+  if (payload.length !== height * width) throw new Error('Mask size does not match its shape')
   const sha256 = await sha256Hex(payload)
 
   const embedded: EmbeddedMaskMeta = {
@@ -632,7 +556,9 @@ export async function buildMaskExport(
       : []),
     `# sha256: ${embedded.sha256}`,
   ]
-  for (const row of mask) lines.push(row.map((v) => (v ? '1' : '0')).join(','))
+  for (let row = 0; row < height; row++) {
+    lines.push(payload.subarray(row * width, (row + 1) * width).join(','))
+  }
   return {
     bytes: new TextEncoder().encode(lines.join('\n')),
     filename: `${stem}.csv`,
@@ -642,7 +568,7 @@ export async function buildMaskExport(
 
 /** Download a single mask as .npz (uint8 + meta) or .csv (0/1 rows + # header). */
 export async function exportMask(
-  mask: boolean[][],
+  mask: boolean[][] | FlatMask,
   format: ExportFormat,
   meta: MaskExportMeta,
 ): Promise<void> {

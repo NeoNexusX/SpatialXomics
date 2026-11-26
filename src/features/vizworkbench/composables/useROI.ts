@@ -1,12 +1,17 @@
+import type { Region } from '@/features/vizworkbench/utils/region'
 import { ref, shallowRef, markRaw } from 'vue'
 import { roiColorAt, rgbCss } from '@/features/vizworkbench/utils/regionPalette'
 
-export type ROIType = 'rectangle' | 'freehand'
+import {
+  paintRoiShape,
+  summarizeRoiMask,
+  type DraftROI,
+  type ROIType,
+} from '@/features/vizworkbench/utils/roiMask'
 
-export interface ROIPoint {
-  x: number
-  y: number
-}
+export type { DraftROI, ROIPoint, ROIType } from '@/features/vizworkbench/utils/roiMask'
+
+export const DEFAULT_ROI_OPACITY = 0.4
 
 interface ROIStats {
   pixelCount: number
@@ -19,28 +24,35 @@ interface ROIStats {
 
 export interface ConfirmedROI {
   id: string
-  type: ROIType
+  type: ROIType | 'composite'
   label: string
   color: string
-  mask: boolean[][]
+  mask: Uint8Array
+  shape: [height: number, width: number]
+  pixelCount: number
   stats: ROIStats | null
   spectrum: { mz: number; intensity: number }[] | null
 }
 
-export interface DraftROI {
-  type: ROIType
-  rect: { x0: number; y0: number; x1: number; y1: number } | null
-  path: ROIPoint[]
+export function roiToRegion(roi: ConfirmedROI, runId: string): Region {
+  return {
+    id: `roi:${roi.id}`,
+    kind: 'roi',
+    sourceId: roi.id,
+    label: roi.label,
+    color: roi.color,
+    pixelCount: roi.pixelCount,
+    grid: { runId, shape: roi.shape },
+    mask: roi.mask,
+  }
 }
 
 export function useROI() {
-  // State
-  const selectedTool = ref<ROIType | null>(null)
-  const draft = ref<DraftROI | null>(null)
-  // shallowRef: ROI masks are large boolean[][] arrays — deep-proxying them
+  // shallowRef: ROI masks are large arrays — deep-proxying them
   // costs significant memory/CPU. All updates below are replace-style, and
   // consumers only read, so shallow reactivity is behavior-identical.
   const confirmedROIs = shallowRef<ConfirmedROI[]>([])
+  const roiOpacities = shallowRef<ReadonlyMap<string, number>>(new Map())
   // Selected ROI ids: null = all selected (same convention as
   // selectedKmeansIds in useOverlayData). Drives the ion-image highlight and
   // the export mask. Always replaced wholesale, never mutated in place — a
@@ -48,113 +60,8 @@ export function useROI() {
   const selectedRoiIds = ref<Set<string> | null>(null)
 
   let nextId = 1
-  let nextColorIdx = 0
   // ROI colors come from the shared region palette, starting past the slots
   // KMeans can occupy - a ROI never shares a color with any cluster.
-
-  // Methods
-  function selectTool(type: ROIType | null) {
-    selectedTool.value = type
-    draft.value = type ? { type, rect: null, path: [] } : null
-  }
-
-  function clearDraft() {
-    draft.value = null
-    selectedTool.value = null
-  }
-
-  function generateMask(draftROI: DraftROI, w: number, h: number): boolean[][] {
-    const mask: boolean[][] = []
-    for (let r = 0; r < h; r++) {
-      mask.push(new Array(w).fill(false))
-    }
-
-    if (draftROI.type === 'rectangle' && draftROI.rect) {
-      const { x0, y0, x1, y1 } = draftROI.rect
-      const minX = Math.max(0, Math.min(x0, x1))
-      const maxX = Math.min(w - 1, Math.max(x0, x1))
-      const minY = Math.max(0, Math.min(y0, y1))
-      const maxY = Math.min(h - 1, Math.max(y0, y1))
-      for (let r = minY; r <= maxY; r++) {
-        for (let c = minX; c <= maxX; c++) {
-          mask[r]![c] = true
-        }
-      }
-    }
-
-    if (draftROI.type === 'freehand' && draftROI.path.length > 2) {
-      const path = draftROI.path
-      const canvas = document.createElement('canvas')
-      canvas.width = w
-      canvas.height = h
-      const ctx = canvas.getContext('2d')
-      if (ctx) {
-        ctx.beginPath()
-        ctx.moveTo(path[0]!.x, path[0]!.y)
-        for (let i = 1; i < path.length; i++) {
-          ctx.lineTo(path[i]!.x, path[i]!.y)
-        }
-        ctx.closePath()
-        ctx.fill('evenodd')
-        const imgData = ctx.getImageData(0, 0, w, h)
-        for (let r = 0; r < h; r++) {
-          for (let c = 0; c < w; c++) {
-            if (imgData.data[(r * w + c) * 4 + 3]! > 0) {
-              mask[r]![c] = true
-            }
-          }
-        }
-      }
-    }
-
-    return mask
-  }
-
-  function computeStats(
-    matrix: Float32Array,
-    w: number,
-    h: number,
-    mask: boolean[][],
-  ): ROIStats | null {
-    let sum = 0,
-      count = 0,
-      min = Infinity,
-      max = -Infinity
-    for (let r = 0; r < h; r++) {
-      const rowOff = r * w
-      const maskRow = mask[r]!
-      for (let c = 0; c < w; c++) {
-        if (!maskRow[c]) continue
-        const v = matrix[rowOff + c] ?? 0
-        if (!Number.isFinite(v)) continue
-        sum += v
-        count++
-        if (v < min) min = v
-        if (v > max) max = v
-      }
-    }
-    if (count === 0) return null
-    const mean = sum / count
-    let sumSq = 0
-    for (let r = 0; r < h; r++) {
-      const rowOff = r * w
-      const maskRow = mask[r]!
-      for (let c = 0; c < w; c++) {
-        if (!maskRow[c]) continue
-        const v = matrix[rowOff + c] ?? 0
-        if (!Number.isFinite(v)) continue
-        sumSq += (v - mean) ** 2
-      }
-    }
-    return {
-      pixelCount: count,
-      mean,
-      std: Math.sqrt(sumSq / count),
-      min,
-      max,
-      sum,
-    }
-  }
 
   function confirmROI(
     matrix: Float32Array,
@@ -163,34 +70,57 @@ export function useROI() {
     draftROI: DraftROI,
     label?: string,
   ): ConfirmedROI | null {
-    if (!w || !h) return null
-    const mask = generateMask(draftROI, w, h)
-    const pixelCount = mask.flat().filter(Boolean).length
-    if (pixelCount === 0) return null
+    const mask = new Uint8Array(w * h)
+    paintRoiShape(mask, w, h, draftROI, 1)
+    return confirmMask(matrix, w, h, mask, draftROI.type, label)
+  }
 
-    const stats = computeStats(matrix, w, h, mask)
+  function confirmMask(
+    matrix: Float32Array,
+    w: number,
+    h: number,
+    raster: Uint8Array,
+    type: ConfirmedROI['type'],
+    label?: string,
+  ): ConfirmedROI | null {
+    if (!w || !h || raster.length !== w * h) return null
+    const { pixelCount, sampleCount, sum, stats } = summarizeRoiMask(raster, matrix)
+    if (!pixelCount) return null
+    const number = nextId++
     const roi: ConfirmedROI = markRaw({
-      id: `roi-${nextId++}`,
-      type: draftROI.type,
-      label: label ?? `ROI ${nextId - 1}`,
-      color: rgbCss(roiColorAt(nextColorIdx)),
-      mask,
-      stats,
+      id: `roi-${number}`,
+      type,
+      label: label ?? `ROI ${number}`,
+      color: rgbCss(roiColorAt(number - 1)),
+      mask: raster.slice(),
+      shape: [h, w],
+      pixelCount,
+      stats: stats && { ...stats, pixelCount: sampleCount, sum },
       spectrum: null,
     })
-    nextColorIdx++
     confirmedROIs.value = [...confirmedROIs.value, roi]
     // Keep the just-confirmed ROI visible: with an explicit selection set,
     // add the new id so it highlights immediately (null = all already covers it).
     if (selectedRoiIds.value !== null) {
       selectedRoiIds.value = new Set(selectedRoiIds.value).add(roi.id)
     }
-    clearDraft()
     return roi
+  }
+
+  function updateRoiOpacity(id: string, opacity: number) {
+    if (!Number.isFinite(opacity) || !confirmedROIs.value.some((roi) => roi.id === id)) return
+    const value = Math.max(0, Math.min(1, opacity))
+    if (value === (roiOpacities.value.get(id) ?? DEFAULT_ROI_OPACITY)) return
+    roiOpacities.value = new Map(roiOpacities.value).set(id, value)
   }
 
   function deleteROI(id: string) {
     confirmedROIs.value = confirmedROIs.value.filter((r) => r.id !== id)
+    if (roiOpacities.value.has(id)) {
+      const next = new Map(roiOpacities.value)
+      next.delete(id)
+      roiOpacities.value = next
+    }
     // Drop the id from the selection too. Counts are computed by filtering
     // confirmedROIs (never by Set.size), so stale ids are harmless — but
     // keeping the set honest avoids the trap for future callers.
@@ -203,10 +133,9 @@ export function useROI() {
 
   function clearAllROIs() {
     confirmedROIs.value = []
+    roiOpacities.value = new Map()
     selectedRoiIds.value = null
-    clearDraft()
     nextId = 1
-    nextColorIdx = 0
   }
 
   // ---- Selection (mirrors toggleKmeansCluster / selectAll / clearAll) ----
@@ -233,15 +162,16 @@ export function useROI() {
   }
 
   return {
-    selectedTool,
     confirmedROIs,
+    roiOpacities,
+    updateRoiOpacity,
     selectedRoiIds,
     isRoiSelected,
     toggleRoiSelection,
     selectAllRois,
     clearRoiSelection,
-    selectTool,
     confirmROI,
+    confirmMask,
     deleteROI,
     clearAllROIs,
   }

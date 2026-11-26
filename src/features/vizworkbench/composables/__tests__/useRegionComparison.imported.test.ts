@@ -1,40 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, nextTick, ref } from 'vue'
 import { mzAxisRef, resetZarrSharedState, setZarrStore } from '@/services/zarr/zarrSharedState'
-import type { KmeansCluster } from '../useOverlayData'
+import type { Region } from '@/features/vizworkbench/utils/region'
 import { useRegionComparison } from '../useRegionComparison'
-import type { ImportedMask } from '../useImportedMasks'
 
-/**
- * 只覆盖「导入掩膜作为可比较区域」这一层：availableRegions 的编排、
- * parseRegion 产出的 source、以及选择集失效后的自动清理。扫描本身是 zarr store
- * 的事，这里只用假 store 看取消的语义。
- */
-
-function makeImportedMask(id: string, name: string): ImportedMask {
+function makeImportedMask(id: string, name: string): Region {
   return {
-    id,
-    name,
-    format: 'npz',
+    id: `imported:${id}`,
+    kind: 'imported',
+    sourceId: id,
+    label: name,
+    pixelCount: 1,
+    grid: { runId: 'test-run', shape: [2, 2] },
     mask: new Uint8Array(4),
-    summary: { name, format: 'npz', pixelCount: 1, stats: null },
-    active: true,
     color: 'rgb(86,180,233)',
   }
 }
 
-function setup(importedMasks: ImportedMask[]) {
+function setup(importedMasks: Region[]) {
   let api!: ReturnType<typeof useRegionComparison>
   // onScopeDispose 在无活动 scope 时会告警，套一层 effectScope 消掉
   effectScope().run(() => {
     api = useRegionComparison({
-      kmeansClusters: ref<KmeansCluster[]>([]),
-      kmeansLabelsAvailable: ref(false),
-      getKmeansLabels: () => null,
-      confirmedROIs: ref([]),
-      importedMasks: ref(importedMasks),
-      ionCols: ref(2),
-      ionRows: ref(2),
+      regions: ref(importedMasks),
+      runId: ref('test-run'),
       dataMode: ref(null),
       onSelectMzIndex: () => {},
     })
@@ -44,17 +33,23 @@ function setup(importedMasks: ImportedMask[]) {
 
 describe('useRegionComparison · imported masks', () => {
   it('lists every imported mask as a selectable region', () => {
-    const api = setup([makeImportedMask('import-1', 'tumor.npz'), makeImportedMask('import-2', 'normal.npz')])
+    const api = setup([
+      makeImportedMask('import-1', 'tumor.npz'),
+      makeImportedMask('import-2', 'normal.npz'),
+    ])
 
     const regions = api.availableRegions.value
-    const imported = regions.filter((r) => r.source.type === 'imported')
-    expect(imported.map((r) => r.value)).toEqual(['imported:import-1', 'imported:import-2'])
+    const imported = regions.filter((r) => r.kind === 'imported')
+    expect(imported.map((r) => r.id)).toEqual(['imported:import-1', 'imported:import-2'])
     expect(imported.map((r) => r.label)).toEqual(['tumor.npz', 'normal.npz'])
     expect(imported.every((r) => r.color === 'rgb(86,180,233)')).toBe(true)
   })
 
   it('allows comparing one imported mask against another', () => {
-    const api = setup([makeImportedMask('import-1', 'tumor.npz'), makeImportedMask('import-2', 'normal.npz')])
+    const api = setup([
+      makeImportedMask('import-1', 'tumor.npz'),
+      makeImportedMask('import-2', 'normal.npz'),
+    ])
 
     api.regionAIds.value = ['imported:import-1']
     api.regionBIds.value = ['imported:import-2']
@@ -66,17 +61,15 @@ describe('useRegionComparison · imported masks', () => {
   })
 
   it('drops selections of removed masks instead of keeping stale ids', async () => {
-    const masks = ref<ImportedMask[]>([makeImportedMask('import-1', 'tumor.npz'), makeImportedMask('import-2', 'normal.npz')])
+    const masks = ref<Region[]>([
+      makeImportedMask('import-1', 'tumor.npz'),
+      makeImportedMask('import-2', 'normal.npz'),
+    ])
     let api!: ReturnType<typeof useRegionComparison>
     effectScope().run(() => {
       api = useRegionComparison({
-        kmeansClusters: ref<KmeansCluster[]>([]),
-        kmeansLabelsAvailable: ref(false),
-        getKmeansLabels: () => null,
-        confirmedROIs: ref([]),
-        importedMasks: masks,
-        ionCols: ref(2),
-        ionRows: ref(2),
+        regions: masks,
+        runId: ref('test-run'),
         dataMode: ref(null),
         onSelectMzIndex: () => {},
       })
@@ -86,7 +79,7 @@ describe('useRegionComparison · imported masks', () => {
     api.regionBIds.value = ['imported:import-2']
 
     // 删除一个掩膜后，指向它的选择应被清理；未删除的保留
-    masks.value = masks.value.filter((m) => m.id !== 'import-1')
+    masks.value = masks.value.filter((m) => m.id !== 'imported:import-1')
     await nextTick()
     expect(api.regionAIds.value).toEqual([])
     expect(api.regionBIds.value).toEqual(['imported:import-2'])
@@ -108,8 +101,11 @@ describe('useRegionComparison · imported masks', () => {
       setZarrStore({
         spatialShape: [2, 2],
         buildPixelMask: async () => ({ mask: new Uint8Array(4), pixelCount: 2 }),
-        streamRegionStatsBySpectra: (_masks: unknown, _progress: unknown, cancelled: () => boolean) =>
-          new Promise((finish) => scans.push({ finish, cancelled })),
+        streamRegionStatsBySpectra: (
+          _masks: unknown,
+          _progress: unknown,
+          cancelled: () => boolean,
+        ) => new Promise((finish) => scans.push({ finish, cancelled })),
       } as never)
       mzAxisRef.value = Float64Array.of(100)
       const api = setup([makeImportedMask('a', 'A'), makeImportedMask('b', 'B')])

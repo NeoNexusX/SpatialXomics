@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import MaskExportPanel from '../MaskExportPanel.vue'
+import type { ImportedMask } from '@/features/vizworkbench/composables/useImportedMasks'
 import type { ConfirmedROI } from '@/features/vizworkbench/composables/useROI'
 import type { KmeansCluster } from '@/features/vizworkbench/composables/useOverlayData'
 import { i18n, loadCoreMessages, loadFeatureMessages } from '@/i18n'
@@ -13,7 +14,9 @@ function roi(id: string, label: string): ConfirmedROI {
     type: 'rectangle',
     label,
     color: '#e11d48',
-    mask: [[true]],
+    mask: Uint8Array.of(1),
+    shape: [1, 1],
+    pixelCount: 1,
     stats: null,
     spectrum: null,
   }
@@ -56,7 +59,7 @@ describe('MaskExportPanel', () => {
   it('leaves clusters out while the KMeans overlay is hidden', async () => {
     const w = mountPanel({ kmeansVisible: false })
     expect(names(w)).toEqual(['ROI 1', 'ROI 2'])
-    expect(w.text()).toContain('KMeans is hidden, so clusters are not exported')
+    expect(w.find('p').exists()).toBe(false)
 
     await exportButton(w).trigger('click')
     expect(w.emitted('export-masks')).toEqual([
@@ -76,14 +79,39 @@ describe('MaskExportPanel', () => {
     ])
   })
 
-  it('explains an empty list and disables export', () => {
+  it('manages imported masks independently of the export list', async () => {
+    const imported: ImportedMask = {
+      id: 'import-1',
+      name: 'tissue.npz',
+      format: 'npz',
+      color: '#56b4e9',
+      mask: new Uint8Array([1]),
+      shape: [1, 1],
+      summary: { name: 'tissue.npz', pixelCount: 1, format: 'npz', stats: null },
+      active: true,
+    }
+    const w = mountPanel({ importedMasks: [imported], kmeansVisible: false })
+    expect(names(w)).toEqual(['ROI 1', 'ROI 2'])
+    expect(w.text()).toContain('tissue.npz')
+    expect(w.text()).toContain('1/1')
+
+    await w.get('input[type="checkbox"]').setValue(false)
+    expect(w.emitted('toggle-imported-mask')).toEqual([['import-1']])
+    await w.setProps({ importedMasks: [{ ...imported, active: false }] })
+    expect(w.text()).toContain('0/1')
+
+    await w.get('button[title="Remove this mask"]').trigger('click')
+    expect(w.emitted('remove-imported-mask')).toEqual([['import-1']])
+  })
+
+  it('disables export when the list is empty', () => {
     const none = mountPanel({ selectedRoiIds: new Set(), kmeansVisible: false })
     expect(names(none)).toEqual([])
-    expect(none.text()).toContain('No regions selected')
+    expect(none.find('p').exists()).toBe(false)
     expect(exportButton(none).attributes('disabled')).toBeDefined()
 
     const empty = mountPanel({ rois: [], kmeansClusters: [] })
-    expect(empty.text()).toContain('Draw a ROI or run KMeans to get a mask to export.')
+    expect(empty.find('p').exists()).toBe(false)
     expect(exportButton(empty).attributes('disabled')).toBeDefined()
   })
 })

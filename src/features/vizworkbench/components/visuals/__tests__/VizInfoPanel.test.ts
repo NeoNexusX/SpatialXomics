@@ -105,7 +105,6 @@ describe('VizInfoPanel sections', () => {
 
     const infoToggle = w.get('h2 > button')
     const infoContent = w.get<HTMLDivElement>(`#${infoToggle.attributes('aria-controls')}`).element
-    await infoToggle.trigger('click')
     expect(infoToggle.attributes('aria-expanded')).toBe('false')
     expect(infoContent.style.display).toBe('none')
     await infoToggle.trigger('click')
@@ -120,8 +119,15 @@ describe('VizInfoPanel sections', () => {
   })
 
   it('puts gamma next to the display range in Intensity', async () => {
-    const w = mountPanel(null, zarrPositive)
-    const slider = w.find('input[type="range"]')
+    const w = mountPanel(null)
+    const slider = w.get('input[type="range"]')
+    const intensityToggle = w.get('h2 > button')
+    expect(intensityToggle.text()).toBe('Intensity')
+    expect(intensityToggle.attributes('aria-expanded')).toBe('false')
+    expect(slider.isVisible()).toBe(false)
+    await intensityToggle.trigger('click')
+    expect(slider.isVisible()).toBe(true)
+
     const help = w.get('button[aria-label="About Gamma"]')
     expect(help.attributes('aria-expanded')).toBe('false')
     expect(w.text()).not.toContain('brighten weak signals')

@@ -1,10 +1,11 @@
-import { ref, watch, onBeforeUnmount, type Ref } from 'vue'
+import { computed, ref, watch, onBeforeUnmount, type Ref } from 'vue'
 import { getZarrUrl } from '@/services/zarr/api/zarrAccessApi'
 import { createClustering } from '@/services/clustering/api/clusteringApi'
 import type { ClusteringTaskResponse, UmapEmbedding } from '@/services/clustering/types/clustering'
 import { ClusteringZarrStore } from '@/services/clustering/clusteringZarrStore'
 import { computeKmeansFromUmap, preloadKmeans } from '@/features/vizworkbench/utils/kmeans'
-import { kmeansColor } from '@/features/vizworkbench/utils/regionPalette'
+import type { Region, RegionGrid } from '@/features/vizworkbench/utils/region'
+import { kmeansColor, rgbCss } from '@/features/vizworkbench/utils/regionPalette'
 import { dataModeRef } from '@/features/vizworkbench/composables/useZarrIonImage'
 import { useToast } from '@/shared/composables/useToast'
 import { downloadCanvas } from '@/shared/utils/download'
@@ -84,6 +85,9 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
   let umapEmbedding: UmapEmbedding | null = null
   let kmeansRgb: Uint8Array | null = null
   let kmeansLabels: Int32Array | null = null
+  let kmeansGrid: RegionGrid | null = null
+  let kmeansRequest = 0
+  let kmeansPublishedRequest = 0
   let dims: { height: number; width: number } | null = null
   // Entry probe runs at most once per run.
   let probedForRun: string | null = null
@@ -91,6 +95,22 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
   /** KMeans clusters (id + sampled color + pixel count), empty until the
    *  user runs a local clustering. */
   const kmeansClusters = ref<KmeansCluster[]>([])
+  const kmeansRegions = computed<Region[]>(() => {
+    const clusters = kmeansClusters.value
+    const grid = kmeansGrid
+    const labels = kmeansLabels
+    if (!grid || !labels || grid.runId !== runId.value) return []
+    return clusters.map(({ id, color: [r, g, b], count }) => ({
+      id: `kmeans:${kmeansPublishedRequest}:${id}`,
+      kind: 'kmeans',
+      clusterId: id,
+      label: t('vizworkbench.kmeans.cluster', { id }),
+      color: rgbCss({ r, g, b }),
+      pixelCount: count,
+      grid,
+      labels,
+    }))
+  })
   /** False until a local KMeans run produced labels - the UI should say so
    *  explicitly rather than hide the picker silently. */
   const kmeansLabelsAvailable = ref(false)
@@ -173,6 +193,9 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     umapEmbedding = null
     kmeansRgb = null
     kmeansLabels = null
+    kmeansGrid = null
+    kmeansRequest++
+    kmeansComputing.value = false
     dims = null
     kmeansClusters.value = []
     kmeansLabelsAvailable.value = false
@@ -253,7 +276,8 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
       stopPolling()
       clusteringComputing.value = false
       // 后端 error_message 不外显（内容/长度不可控），统一一句话；原始任务记录留控制台
-      if (task.error_message) console.error('[useOverlayData] clustering task failed:', task.error_message)
+      if (task.error_message)
+        console.error('[useOverlayData] clustering task failed:', task.error_message)
       overlayError.value = t('vizworkbench.overlay.taskFailed')
       return
     }
@@ -409,16 +433,21 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
    * with a different k replaces the previous result.
    */
   async function runKmeans(k: number): Promise<boolean> {
-    const ok = await loadClusteringData()
-    if (!ok || !umapEmbedding || !dims) return false
+    if (kmeansComputing.value) return false
     const forRun = runId.value
+    const request = ++kmeansRequest
     kmeansComputing.value = true
     try {
-      const result = await computeKmeansFromUmap(umapEmbedding, dims.height, dims.width, k, 42, 30)
-      // 计算期间换了 run：结果属于旧数据集，不能进新 run 的缓存
-      if (forRun !== runId.value) return false
+      const ok = await loadClusteringData()
+      if (!ok || request !== kmeansRequest || forRun !== runId.value || !umapEmbedding || !dims)
+        return false
+      const { height, width } = dims
+      const result = await computeKmeansFromUmap(umapEmbedding, height, width, k, 42, 30)
+      if (request !== kmeansRequest || forRun !== runId.value) return false
       kmeansRgb = result.rgb
       kmeansLabels = result.labels
+      kmeansGrid = { runId: forRun, shape: [height, width] }
+      kmeansPublishedRequest = request
       kmeansClusters.value = deriveKmeansClusters(result.labels)
       kmeansLabelsAvailable.value = true
       selectedKmeansIds.value = null // default: show all clusters
@@ -430,10 +459,11 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
       return true
     } catch (e) {
       console.error('[useOverlayData] local kmeans failed:', e)
-      if (forRun === runId.value) overlayError.value = e instanceof Error ? e.message : String(e)
+      if (request === kmeansRequest && forRun === runId.value)
+        overlayError.value = e instanceof Error ? e.message : String(e)
       return false
     } finally {
-      kmeansComputing.value = false
+      if (request === kmeansRequest) kmeansComputing.value = false
     }
   }
 
@@ -622,6 +652,7 @@ export function useOverlayData(runId: Ref<string>, ionRows: Ref<number>, ionCols
     kmeansAlpha,
     /** KMeans clusters (id + color + pixel count) for the picker UI. */
     kmeansClusters,
+    kmeansRegions,
     /** False until a local KMeans run produced labels - show a hint instead of the picker. */
     kmeansLabelsAvailable,
     /** The k of the current KMeans result (null = never run). */

@@ -30,6 +30,7 @@ export interface ImportedMask {
   format: MaskImportFormat
   /** Flat row-major 0/1 pixels — same indexing as the comparison rasters. */
   mask: Uint8Array<ArrayBuffer>
+  shape: [height: number, width: number]
   /** name/format/统计，导入时定格（与手绘 ROI confirm 同口径，不随后续 m/z 切换重算） */
   summary: ImportedMaskSummary
   /** 过滤是否生效：false = 暂停该掩膜的过滤（导入保留，可随时重新应用） */
@@ -77,6 +78,7 @@ export function useImportedMasks(
       name: file.name,
       format: result.format,
       mask: result.mask,
+      shape: result.shape,
       summary: summarizeImportedMask(result, file.name, deps.matrix.value),
       active: true,
       color: rgbCss(roiColorAt(nextColorIdx++)),

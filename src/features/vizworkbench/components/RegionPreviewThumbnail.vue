@@ -5,9 +5,7 @@
  * Sits under the Compare Regions panel and shows the compared regions (A/B)
  * on a dimmed TIC backdrop, each in its own identity color (kmeans palette
  * color for clusters, palette-assigned color for ROIs). Confirmed ROIs are
- * also rendered as colored fills + outlines, so the thumbnail doubles as the
- * "where are my ROIs" overview (the main ion image intentionally doesn't draw
- * confirmed ROI frames).
+ * also rendered as colored fills when present in the preview.
  *
  * Rendering: masks are H×W grids (row*width+col), drawn into a 1:1 ImageData
  * and upscaled with drawImage - same pattern as the main canvas renderer, so
@@ -120,57 +118,26 @@ function buildImageData(): ImageData | null {
   // A/B highlight so the compared regions stay on top.
   for (const roi of props.rois) {
     const c = hexToRgb(roi.color)
-    if (!c) continue
-    paintMask(buf, roi.mask, w, h, c, 0.85, false)
+    if (!c || roi.shape[0] !== h || roi.shape[1] !== w) continue
+    paintMask(buf, roi.mask, c, 0.85)
   }
 
   // Compared groups: strong fill in each group's fixed color. B is painted
   // after A with lower alpha so overlap shows through instead of reading as
   // B-only - same precedence as the ion-image overlay.
-  for (const r of props.a) paintMask(buf, r.mask, w, h, r.color, COMPARISON_A_ALPHA, false)
-  for (const r of props.b) paintMask(buf, r.mask, w, h, r.color, COMPARISON_B_ALPHA, false)
+  for (const r of props.a) paintMask(buf, r.mask, r.color, COMPARISON_A_ALPHA)
+  for (const r of props.b) paintMask(buf, r.mask, r.color, COMPARISON_B_ALPHA)
 
   return img
 }
 
-/**
- * Alpha-blend a region over the backdrop. `mask` may be a flat Uint8Array
- * (kmeans/comparison raster) or a boolean[][] (ROI). With `outline`, mask
- * edge pixels additionally get the full-strength color.
- */
-function paintMask(
-  buf: Uint8ClampedArray,
-  mask: Uint8Array | boolean[][],
-  w: number,
-  h: number,
-  c: RGB,
-  alpha: number,
-  outline: boolean,
-) {
-  const at = (r: number, col: number): boolean =>
-    Array.isArray(mask) ? !!mask[r]?.[col] : !!mask[r * w + col]
-
-  for (let r = 0; r < h; r++) {
-    for (let col = 0; col < w; col++) {
-      if (!at(r, col)) continue
-      let a = alpha
-      if (outline) {
-        const edge =
-          r === 0 ||
-          col === 0 ||
-          r === h - 1 ||
-          col === w - 1 ||
-          !at(r - 1, col) ||
-          !at(r + 1, col) ||
-          !at(r, col - 1) ||
-          !at(r, col + 1)
-        if (edge) a = 1
-      }
-      const off = (r * w + col) * 4
-      buf[off] = Math.round(buf[off]! * (1 - a) + c.r * a)
-      buf[off + 1] = Math.round(buf[off + 1]! * (1 - a) + c.g * a)
-      buf[off + 2] = Math.round(buf[off + 2]! * (1 - a) + c.b * a)
-    }
+function paintMask(buf: Uint8ClampedArray, mask: Uint8Array, c: RGB, alpha: number) {
+  for (let i = 0; i < mask.length; i++) {
+    if (!mask[i]) continue
+    const off = i * 4
+    buf[off] = Math.round(buf[off]! * (1 - alpha) + c.r * alpha)
+    buf[off + 1] = Math.round(buf[off + 1]! * (1 - alpha) + c.g * alpha)
+    buf[off + 2] = Math.round(buf[off + 2]! * (1 - alpha) + c.b * alpha)
   }
 }
 

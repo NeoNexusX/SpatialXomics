@@ -155,6 +155,16 @@ describe('buildMaskExport (.csv)', () => {
 })
 
 describe('hash semantics', () => {
+  it.each(['npz', 'csv'] as const)(
+    'exports a flat region mask as the same %s payload',
+    async (format) => {
+      const flat = { data: Uint8Array.of(0, 1, 0, 1, 1, 1), shape: [2, 3] as const }
+      const fromRegion = await buildMaskExport(flat, format, META)
+      const fromRows = await buildMaskExport(maskOf(['010', '111']), format, META)
+      expect(fromRegion).toEqual(fromRows)
+    },
+  )
+
   it('is deterministic for identical masks and format-independent', async () => {
     const mask = maskOf(['010', '111'])
     const [npz, csv] = await Promise.all([

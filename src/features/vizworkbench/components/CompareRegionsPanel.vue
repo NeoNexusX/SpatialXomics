@@ -10,11 +10,11 @@
 import { computed } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
 import SectionHelp from '@/features/vizworkbench/components/SectionHelp.vue'
-import type { RegionOption } from '@/features/vizworkbench/composables/useRegionComparison'
+import type { Region } from '@/features/vizworkbench/utils/region'
 import { rgbCss, type RGB } from '@/features/vizworkbench/utils/regionPalette'
 
 const props = defineProps<{
-  regions: RegionOption[]
+  regions: Region[]
   spectrumMode?: string
   regionAIds: string[]
   regionBIds: string[]
@@ -143,20 +143,18 @@ function onEnrichmentRatio(e: Event) {
             >
               <label
                 v-for="r in regions"
-                :key="r.value"
+                :key="r.id"
                 class="flex items-center gap-1.5 cursor-pointer"
                 :class="
-                  isDisabled(side, r.value)
-                    ? 'opacity-40 cursor-not-allowed'
-                    : 'hover:bg-base-200/60'
+                  isDisabled(side, r.id) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-base-200/60'
                 "
               >
                 <input
                   type="checkbox"
                   class="checkbox checkbox-xs"
-                  :checked="(side === 'a' ? regionAIds : regionBIds).includes(r.value)"
-                  :disabled="isDisabled(side, r.value)"
-                  @change="toggleRegion(side, r.value, ($event.target as HTMLInputElement).checked)"
+                  :checked="(side === 'a' ? regionAIds : regionBIds).includes(r.id)"
+                  :disabled="isDisabled(side, r.id)"
+                  @change="toggleRegion(side, r.id, ($event.target as HTMLInputElement).checked)"
                 />
                 <span
                   class="w-2.5 h-2.5 rounded-sm shrink-0 border border-base-content/30"
