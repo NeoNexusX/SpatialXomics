@@ -13,7 +13,7 @@ import {
   spectrumView,
   useZarrIonImage,
 } from '../useZarrIonImage'
-import { ZarrIncompatibleError } from '@/services/zarr/zarrOssStore'
+import { ZarrIncompatibleError } from '@/services/zarr/zarrStore'
 import type { PixelSpectrum } from '@/services/zarr/types/zarr'
 import { loadCoreMessages, loadFeatureMessages } from '@/i18n'
 
@@ -29,15 +29,17 @@ const mocks = vi.hoisted(() => ({
   meanSpectrum: null as Promise<Float32Array> | null,
 }))
 
-vi.mock('@/services/zarr/api/zarrAccessApi', () => ({ getZarrAccess: async () => ({}) }))
+vi.mock('@/services/zarr/api/zarrAccessApi', () => ({
+  getZarrUrl: async () => 'https://cdn.test/run.zarr/',
+}))
 
 vi.mock('@/shared/config/runtimeConfig', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/shared/config/runtimeConfig')>()),
   getConfig: () => ({}),
 }))
 
-vi.mock('@/services/zarr/zarrOssStore', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/services/zarr/zarrOssStore')>()
+vi.mock('@/services/zarr/zarrStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/zarr/zarrStore')>()
   /** 只实现 useZarrIonImage 用到的接口：2×2 的 continuous 数据，3 个 m/z */
   class FakeStore {
     dataMode = 'continuous'
@@ -54,6 +56,9 @@ vi.mock('@/services/zarr/zarrOssStore', async (importOriginal) => {
     async getSummedIonImageByMzIndices() {
       return new Float32Array(4)
     }
+    async loadAcquiredRaster() {
+      return new Uint8Array(4).fill(1)
+    }
     async loadMeanSpectrum() {
       return mocks.meanSpectrum ?? new Float32Array([1, 0, 3])
     }
@@ -64,7 +69,7 @@ vi.mock('@/services/zarr/zarrOssStore', async (importOriginal) => {
     }
     dispose() {}
   }
-  return { ...actual, ZarrOssStore: FakeStore }
+  return { ...actual, ZarrStore: FakeStore }
 })
 
 function spectrum(pixelIndex: number): PixelSpectrum {
@@ -203,6 +208,6 @@ describe('useZarrIonImage pixel spectrum', () => {
   it('reports an unsupported zarr layout with the localized incompatible-format message', async () => {
     mocks.initError = new ZarrIncompatibleError('no v1.1 data group')
     const api = await initSession()
-    expect(api.error.value).toBe('Incompatible result data format: only Zarr v1.1 is supported')
+    expect(api.error).toBe('Incompatible result data format: only Zarr v1.1 is supported')
   })
 })

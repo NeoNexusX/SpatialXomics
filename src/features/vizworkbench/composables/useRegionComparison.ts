@@ -1,9 +1,8 @@
 /**
  * Region comparison composable.
  *
- * Compares two region GROUPS (each a non-empty set of KMeans clusters, ROIs,
- * and/or file-imported masks) by OR-combining the member masks into one
- * raster per side, then
+ * Compares two region GROUPS (each a non-empty set of KMeans clusters and/or
+ * ROIs) by OR-combining the member masks into one raster per side, then
  * streaming through the entire intensity array once and accumulating per-ion
  * statistics (sum, sum-of-squares, non-zero count) for each side. From these
  * it derives mean intensity, detection rate, both ratios (mean and detection),
@@ -18,24 +17,20 @@
  * intensities are aggregated into fixed-width m/z bins via
  * streamIonStatsProcessed, so results are per bin rather than per ion.
  *
- * The 2D raster masks (KMeans labels or ROI boolean[][] -> Uint8Array) are
- * cached after a comparison so that clicking a result row can build an
- * RGBA overlay highlighting the two regions on the ion image without
- * re-fetching any data.
+ * Region inputs use row-major binary rasters before conversion to spectra order.
+ * Results are dropped once a region they were computed from disappears (a
+ * deleted ROI, a re-run KMeans).
  */
 
-import { ref, computed, shallowRef, watch, onScopeDispose, type Ref } from 'vue'
+import { ref, computed, reactive, shallowRef, watch, onScopeDispose, type Ref } from 'vue'
 import {
   getSharedZarrContext,
   meanSpectrumRef,
 } from '@/features/vizworkbench/composables/useZarrIonImage'
-import type { KmeansCluster } from '@/features/vizworkbench/composables/useOverlayData'
-import type { ConfirmedROI } from '@/features/vizworkbench/composables/useROI'
-import type { ImportedMask } from '@/features/vizworkbench/composables/useImportedMasks'
+import { buildRegionMask, type Region, type RegionGrid } from '@/features/vizworkbench/utils/region'
 import {
   COMPARISON_A_RGB,
   COMPARISON_B_RGB,
-  rgbCss,
   type RGB,
 } from '@/features/vizworkbench/utils/regionPalette'
 import type { DataMode } from '@/services/zarr/types/zarr'
@@ -66,28 +61,6 @@ export interface IonComparison {
   category: ComparisonCategory
 }
 
-export type RegionSource =
-  | { type: 'cluster'; id: number }
-  | { type: 'roi'; id: string }
-  | { type: 'imported'; id: string }
-
-export interface RegionOption {
-  /** String id for <select> value: "cluster:0", "roi:roi-1" or "imported:import-1" */
-  value: string
-  label: string
-  source: RegionSource
-  /** CSS color identifying this region (kmeans palette color or ROI color). */
-  color: string
-}
-
-/** Region payload for the preview thumbnail (color resolved, mask gridded). */
-export interface RegionThumbnailRegion {
-  value: string
-  label: string
-  color: RGB
-  mask: Uint8Array
-}
-
 /**
  * Category from per-ion stats. Pure so it can run both at scan time and
  * again client-side when the user adjusts the enrichment ratio — the
@@ -113,16 +86,9 @@ const PROCESSED_BIN_WIDTH = 0.01
 // ---------- composable ----------
 
 export function useRegionComparison(deps: {
-  kmeansClusters: Ref<KmeansCluster[]>
-  kmeansLabelsAvailable: Ref<boolean>
-  getKmeansLabels: () => Int32Array | null
-  confirmedROIs: Ref<ConfirmedROI[]>
-  /** File-imported masks — selectable as comparison regions like ROIs. */
-  importedMasks: Ref<ImportedMask[]>
-  ionCols: Ref<number>
-  ionRows: Ref<number>
-  dataMode: Ref<DataMode | null>
-  onSelectMzIndex: (idx: number) => void | Promise<void>
+  regions: Readonly<Ref<Region[]>>
+  grid: Readonly<Ref<RegionGrid>>
+  dataMode: Readonly<Ref<DataMode | null>>
 }) {
   const regionAIds = ref<string[]>([])
   const regionBIds = ref<string[]>([])
@@ -162,58 +128,28 @@ export function useRegionComparison(deps: {
   onScopeDispose(() => {
     currentRun++
   })
-  // Sources of the last comparison, for involvesRoi / involvesImportedMask.
-  let lastSourcesA: RegionSource[] = []
-  let lastSourcesB: RegionSource[] = []
+  /** Ids of the regions behind the current results. */
+  let lastRegionIds: string[] = []
 
-  const availableRegions = computed<RegionOption[]>(() => {
-    const regions: RegionOption[] = []
-    if (deps.kmeansLabelsAvailable.value) {
-      for (const c of deps.kmeansClusters.value) {
-        regions.push({
-          value: `cluster:${c.id}`,
-          label: t('vizworkbench.kmeans.cluster', { id: c.id }),
-          source: { type: 'cluster', id: c.id },
-          color: rgbCss({ r: c.color[0], g: c.color[1], b: c.color[2] }),
-        })
-      }
-    }
-    for (const roi of deps.confirmedROIs.value) {
-      regions.push({
-        value: `roi:${roi.id}`,
-        label: roi.label,
-        source: { type: 'roi', id: roi.id },
-        color: roi.color,
-      })
-    }
-    for (const m of deps.importedMasks.value) {
-      regions.push({
-        value: `imported:${m.id}`,
-        label: m.name,
-        source: { type: 'imported', id: m.id },
-        color: m.color,
-      })
-    }
-    return regions
+  watch(deps.regions, (regions) => {
+    const ids = new Set(regions.map((region) => region.id))
+    regionAIds.value = regionAIds.value.filter((id) => ids.has(id))
+    regionBIds.value = regionBIds.value.filter((id) => ids.has(id))
+    if (lastRegionIds.some((id) => !ids.has(id))) reset()
   })
 
-  // Deleted regions must not linger in the selectors - otherwise the
-  // thumbnail/overlay would keep showing a region that no longer exists.
-  watch(availableRegions, (regions) => {
-    regionAIds.value = regionAIds.value.filter((id) => regions.some((r) => r.value === id))
-    regionBIds.value = regionBIds.value.filter((id) => regions.some((r) => r.value === id))
-  })
-
-  /** Selected A/B options (stale ids filtered out). */
+  const regionsById = computed(
+    () => new Map(deps.regions.value.map((region) => [region.id, region])),
+  )
   const selectedRegionsA = computed(() =>
     regionAIds.value
-      .map((id) => availableRegions.value.find((r) => r.value === id))
-      .filter((r): r is RegionOption => !!r),
+      .map((id) => regionsById.value.get(id))
+      .filter((region) => region !== undefined),
   )
   const selectedRegionsB = computed(() =>
     regionBIds.value
-      .map((id) => availableRegions.value.find((r) => r.value === id))
-      .filter((r): r is RegionOption => !!r),
+      .map((id) => regionsById.value.get(id))
+      .filter((region) => region !== undefined),
   )
 
   // Group identity colors are fixed (blue A / orange B) regardless of member
@@ -223,91 +159,9 @@ export function useRegionComparison(deps: {
 
   const canCompare = computed(() => {
     if (comparing.value) return false
-    if (!regionAIds.value.length || !regionBIds.value.length) return false
-    // A region may not participate in both groups
+    if (!selectedRegionsA.value.length || !selectedRegionsB.value.length) return false
     return !regionAIds.value.some((id) => regionBIds.value.includes(id))
   })
-
-  // ---------- helpers ----------
-
-  function parseRegion(id: string): RegionSource | null {
-    if (id.startsWith('cluster:')) {
-      return { type: 'cluster', id: parseInt(id.slice(8), 10) }
-    }
-    if (id.startsWith('roi:')) {
-      return { type: 'roi', id: id.slice(4) }
-    }
-    if (id.startsWith('imported:')) {
-      return { type: 'imported', id: id.slice(9) }
-    }
-    return null
-  }
-
-  /** Build a 2D raster mask (Uint8Array, indexed by row*width+col) from a region source. */
-  function buildRaster(source: RegionSource): Uint8Array | null {
-    const ctx = getSharedZarrContext()
-    const store = ctx.store
-    if (!store) return null
-    const [height, width] = store.spatialShape
-
-    if (source.type === 'cluster') {
-      const labels = deps.getKmeansLabels()
-      if (!labels) return null
-      const raster = new Uint8Array(width * height)
-      // Local KMeans labels: -1 = background, 0..K-1 = cluster id
-      for (let i = 0; i < labels.length; i++) {
-        if (labels[i] === source.id) raster[i] = 1
-      }
-      return raster
-    }
-    if (source.type === 'imported') {
-      // Imported masks are stored in exactly the raster layout buildRaster
-      // produces, so the array is handed out as-is (all consumers treat
-      // rasters as read-only).
-      const m = deps.importedMasks.value.find((x) => x.id === source.id)
-      if (!m || m.mask.length !== width * height) return null
-      return m.mask
-    }
-    const roi = deps.confirmedROIs.value.find((r) => r.id === source.id)
-    if (!roi) return null
-    const raster = new Uint8Array(width * height)
-    for (let r = 0; r < height; r++) {
-      const row = roi.mask[r]
-      if (!row) continue
-      for (let c = 0; c < width; c++) {
-        if (row[c]) raster[r * width + c] = 1
-      }
-    }
-    return raster
-  }
-
-  /**
-   * Build per-member rasters for a group of sources. Returns null when any
-   * member's data is unavailable (e.g. KMeans labels not loaded).
-   */
-  function buildMemberRasters(
-    sources: RegionSource[],
-  ): { source: RegionSource; raster: Uint8Array }[] | null {
-    const members: { source: RegionSource; raster: Uint8Array }[] = []
-    for (const source of sources) {
-      const raster = buildRaster(source)
-      if (!raster) return null
-      members.push({ source, raster })
-    }
-    return members
-  }
-
-  /** OR-combine member rasters into one group mask. */
-  function combineRasters(members: { raster: Uint8Array }[], size: number): Uint8Array {
-    const combined = new Uint8Array(size)
-    for (const m of members) {
-      const r = m.raster
-      for (let i = 0; i < size; i++) {
-        if (r[i]) combined[i] = 1
-      }
-    }
-    return combined
-  }
 
   /**
    * Percentile of a sorted-or-unsorted array of values.
@@ -428,10 +282,6 @@ export function useRegionComparison(deps: {
       return
     }
 
-    const sourcesA = regionAIds.value.map(parseRegion).filter((s): s is RegionSource => !!s)
-    const sourcesB = regionBIds.value.map(parseRegion).filter((s): s is RegionSource => !!s)
-    if (!sourcesA.length || !sourcesB.length) return
-
     const run = ++currentRun
     const cancelled = () => run !== currentRun
     comparing.value = true
@@ -440,19 +290,13 @@ export function useRegionComparison(deps: {
     results.value = []
 
     try {
-      // Build per-member rasters, then OR-combine into one group mask per side
-      const membersA = buildMemberRasters(sourcesA)
-      const membersB = buildMemberRasters(sourcesB)
-      if (!membersA || !membersB) {
+      const rasterA = buildRegionMask(selectedRegionsA.value, deps.grid.value)
+      const rasterB = buildRegionMask(selectedRegionsB.value, deps.grid.value)
+      if (!rasterA || !rasterB) {
         error.value = t('vizworkbench.compare.maskBuildFailed')
         return
       }
-
-      const [height, width] = store.spatialShape
-      const rasterA = combineRasters(membersA, width * height)
-      const rasterB = combineRasters(membersB, width * height)
-      lastSourcesA = membersA.map((member) => member.source)
-      lastSourcesB = membersB.map((member) => member.source)
+      lastRegionIds = [...regionAIds.value, ...regionBIds.value]
 
       // Convert to 1D coordinates-order masks
       const [maskA, maskB] = await Promise.all([
@@ -554,76 +398,11 @@ export function useRegionComparison(deps: {
     }
   }
 
-  // ---------- result interaction ----------
-
-  /** Click a result row: load the ion image (continuous mode only).
-   *  Processed mode has no ion image - the row click is a no-op. */
-  function selectMz(ionIndex: number) {
-    deps.onSelectMzIndex(ionIndex)
-  }
-
-  // ---------- thumbnail ----------
-
-  /**
-   * Build thumbnail-ready masks for the currently selected A/B group members.
-   * Reuses buildRaster (kmeans labels / ROI masks / imported masks -> Uint8Array
-   * grid) so the preview works the moment a region is selected, before any
-   * comparison run. Returns null when the zarr store (grid shape) isn't
-   * available yet.
-   */
-  function buildThumbnailRegions(): {
-    a: RegionThumbnailRegion[]
-    b: RegionThumbnailRegion[]
-    dims: { width: number; height: number }
-  } | null {
-    const ctx = getSharedZarrContext()
-    const store = ctx.store
-    if (!store) return null
-    const [height, width] = store.spatialShape
-    const dims = { width, height }
-
-    // Every member carries its GROUP's fixed color (not its own identity
-    // color) so the thumbnail paints each group in a single color.
-    const build = (opts: RegionOption[], groupColor: RGB): RegionThumbnailRegion[] => {
-      const out: RegionThumbnailRegion[] = []
-      for (const opt of opts) {
-        const mask = buildRaster(opt.source)
-        if (!mask) continue
-        out.push({ value: opt.value, label: opt.label, color: groupColor, mask })
-      }
-      return out
-    }
-    return {
-      a: build(selectedRegionsA.value, COMPARISON_A_RGB),
-      b: build(selectedRegionsB.value, COMPARISON_B_RGB),
-      dims,
-    }
-  }
-
   // ---------- cleanup ----------
 
   function cancel() {
     currentRun++
     comparing.value = false
-  }
-
-  /** True when the last comparison involved a member matching `pred`. */
-  function involves(predicate: (source: RegionSource) => boolean): boolean {
-    return lastSourcesA.some(predicate) || lastSourcesB.some(predicate)
-  }
-
-  /** True when the last comparison involved an ROI (either side). With an id,
-   *  only that specific ROI counts. Used to decide whether deleting/clearing
-   *  ROIs should also reset the comparison — a KMeans-vs-KMeans comparison is
-   *  unaffected by ROI changes, and deleting an ROI that wasn't compared
-   *  leaves the results valid. */
-  function involvesRoi(id?: string): boolean {
-    return involves((s) => s.type === 'roi' && (id === undefined || s.id === id))
-  }
-
-  /** Same contract as involvesRoi, but for file-imported masks. */
-  function involvesImportedMask(id?: string): boolean {
-    return involves((s) => s.type === 'imported' && (id === undefined || s.id === id))
   }
 
   function reset() {
@@ -633,11 +412,10 @@ export function useRegionComparison(deps: {
     progress.value = 0
     comparing.value = false
     filterStats.value = { total: 0, kept: 0, filtered: 0 }
-    lastSourcesA = []
-    lastSourcesB = []
+    lastRegionIds = []
   }
 
-  return {
+  return reactive({
     // State
     regionAIds,
     regionBIds,
@@ -650,17 +428,15 @@ export function useRegionComparison(deps: {
     results,
     categorizedResults,
     filterStats,
-    availableRegions,
+    selectedRegionsA,
+    selectedRegionsB,
     canCompare,
     colorA,
     colorB,
     // Actions
     compare,
     cancel,
-    reset,
-    involvesRoi,
-    involvesImportedMask,
-    selectMz,
-    buildThumbnailRegions,
-  }
+  })
 }
+
+export type RegionComparison = ReturnType<typeof useRegionComparison>

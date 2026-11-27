@@ -2,7 +2,7 @@
   <div class="flex h-[320px] flex-col lg:h-full">
     <!-- 标题区：header 插槽放附加控件（如 SpectrumSection 的平均谱 / 像素谱切换） -->
     <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
-      <h3 class="kawaru-text-95 font-semibold">{{ title }}</h3>
+      <h2 class="kawaru-text-87 font-semibold">{{ title }}</h2>
       <slot name="header" />
       <div
         v-if="!loading && !error && showPeakCount"

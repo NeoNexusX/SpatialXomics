@@ -410,3 +410,34 @@ describe('annotation spatial calculation setting', () => {
     expect(ann.summary.value).toEqual(result.summary)
   })
 })
+
+describe('annotation condition help', () => {
+  function openHelp(wrapper: VueWrapper, label: string) {
+    return wrapper.get(`button[aria-label="About ${label}"]`).trigger('click')
+  }
+
+  function dialogText(): string {
+    return [...document.body.querySelectorAll('[role="dialog"]')]
+      .map((el) => el.textContent)
+      .join('\n')
+  }
+
+  it('explains spatial scoring when its help button is clicked', async () => {
+    const { wrapper } = setupAnnotation()
+    await flushPromises()
+    expect(dialogText()).toBe('')
+
+    await openHelp(wrapper, 'Spatial scoring')
+    expect(dialogText()).toContain('Spatial scoring')
+    expect(dialogText()).toContain('Only this top share of matches gets a spatial score')
+  })
+
+  it('explains the score weights with the required total', async () => {
+    const { wrapper } = setupAnnotation()
+    await flushPromises()
+
+    await openHelp(wrapper, 'Score weights')
+    expect(dialogText()).toContain('Weights of mass, adduct fit and spatial in the total')
+    expect(dialogText()).toContain('They must add up to 10.')
+  })
+})

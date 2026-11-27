@@ -1,10 +1,10 @@
 /**
- * Chunk payload decompression for zarr v3 arrays over OSS.
+ * Chunk payload decompression for zarr v3 arrays.
  *
  * gzip / zlib / deflate go through the native DecompressionStream; zstd goes
  * through zstddec (WASM, initialized once as a singleton). Everything here is
  * pure (no instance state, no network) - the network fetch stays in each
- * store via the shared OssClient.
+ * store via the shared zarrHttpClient.
  */
 
 import { ZSTDDecoder } from 'zstddec'

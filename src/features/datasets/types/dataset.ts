@@ -67,7 +67,7 @@ export interface File {
 
 // ── API response types (separated from api/datasetApi.ts) ──
 
-// GET /files/{public_id}/download_raw - pre-signed URLs for imzML + ibd, zero polling
+// GET /files/{public_id}/download_raw - CDN links for imzML + ibd (login required), zero polling
 export interface DownloadRawEntry {
   filename: string
   url: string

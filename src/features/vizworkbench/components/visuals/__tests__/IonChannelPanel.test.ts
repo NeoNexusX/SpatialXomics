@@ -1,8 +1,12 @@
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { reactive } from 'vue'
 import IonChannelPanel from '../IonChannelPanel.vue'
-import type { IonChannel } from '@/features/vizworkbench/composables/useIonChannels'
-import { ION_CHANNEL_COLORS } from '@/features/vizworkbench/utils/ionChannelBlend'
+import type {
+  IonChannel,
+  IonChannelState,
+} from '@/features/vizworkbench/composables/useIonChannels'
+import { ION_CHANNEL_COLORS, MAX_ION_CHANNELS } from '@/features/vizworkbench/utils/ionChannelBlend'
 import { i18n, loadCoreMessages, loadFeatureMessages } from '@/i18n'
 
 // 组件模板用 $t：挂载时装上 i18n 实例，并预先加载英文语言包（断言保持英文原文）
@@ -23,20 +27,30 @@ function channel(over: Partial<IonChannel> = {}): IonChannel {
   }
 }
 
-function mountPanel(over: Record<string, unknown> = {}) {
-  return mount(IonChannelPanel, {
-    props: {
-      enabled: true,
-      channels: [],
-      currentMz: 445.0494,
-      canAdd: true,
-      anyLoading: false,
-      maxChannels: 6,
-      batchAddMode: false,
-      ...over,
-    },
-    global: { plugins: [i18n] },
-  })
+/** The fields and actions the panel uses. */
+function channelState(over: Record<string, unknown> = {}) {
+  return reactive({
+    enabled: true,
+    channels: [] as IonChannel[],
+    currentMz: 445.0494,
+    canAdd: true,
+    channelsLoading: false,
+    batchAddMode: false,
+    setEnabled: vi.fn(),
+    addCurrentChannel: vi.fn(),
+    toggleBatchAdd: vi.fn(),
+    removeChannel: vi.fn(),
+    toggleChannelVisible: vi.fn(),
+    updateChannelColor: vi.fn(),
+    updateChannelOpacity: vi.fn(),
+    retryChannel: vi.fn(),
+    clearChannels: vi.fn(),
+    ...over,
+  }) as unknown as IonChannelState
+}
+
+function mountPanel(state = channelState()) {
+  return mount(IonChannelPanel, { props: { state }, global: { plugins: [i18n] } })
 }
 
 describe('IonChannelPanel', () => {
@@ -47,76 +61,93 @@ describe('IonChannelPanel', () => {
     expect(w.get('button.btn-primary').text()).toContain('445.049400')
   })
 
-  it('emits add-current', async () => {
-    const w = mountPanel()
-    await w.get('button.btn-primary').trigger('click')
-    expect(w.emitted('add-current')).toHaveLength(1)
+  it('adds the current m/z', async () => {
+    const state = channelState()
+    await mountPanel(state).get('button.btn-primary').trigger('click')
+    expect(state.addCurrentChannel).toHaveBeenCalledOnce()
   })
 
-  it('disables add when canAdd is false', () => {
-    const w = mountPanel({ canAdd: false })
+  it('disables add when nothing more can be added', () => {
+    const w = mountPanel(channelState({ canAdd: false }))
     expect(w.get('button.btn-primary').attributes('disabled')).toBeDefined()
   })
 
   it('disables add while the overlay mode is off', () => {
-    const w = mountPanel({ enabled: false })
+    const w = mountPanel(channelState({ enabled: false }))
     expect(w.get('button.btn-primary').attributes('disabled')).toBeDefined()
   })
 
-  it('emits update:enabled from the toggle', async () => {
-    const w = mountPanel({ enabled: false })
-    await w.get('input[type="checkbox"].toggle').setValue(true)
-    expect(w.emitted('update:enabled')?.[0]).toEqual([true])
+  it('turns the mode on from the toggle', async () => {
+    const state = channelState({ enabled: false })
+    await mountPanel(state).get('input[type="checkbox"].toggle').setValue(true)
+    expect(state.setEnabled).toHaveBeenCalledWith(true)
   })
 
   it('renders one row per channel with its m/z at 6 decimals', () => {
-    const w = mountPanel({ channels: [channel(), channel({ id: 2, colorIndex: 1, mz: 500 })] })
+    const w = mountPanel(
+      channelState({ channels: [channel(), channel({ id: 2, colorIndex: 1, mz: 500 })] }),
+    )
     expect(w.findAll('button[aria-label^="Remove channel"]')).toHaveLength(2)
     expect(w.text()).toContain('445.049400')
     expect(w.text()).toContain('500.000000')
   })
 
-  it('emits remove and toggle-visible per row', async () => {
-    const w = mountPanel({ channels: [channel()] })
+  it('removes a row and toggles its visibility', async () => {
+    const state = channelState({ channels: [channel()] })
+    const w = mountPanel(state)
     await w.get('button[aria-label^="Remove channel"]').trigger('click')
-    expect(w.emitted('remove')?.[0]).toEqual([1])
+    expect(state.removeChannel).toHaveBeenCalledWith(1)
 
     await w.get('input[type="checkbox"].checkbox').trigger('change')
-    expect(w.emitted('toggle-visible')?.[0]).toEqual([1])
+    expect(state.toggleChannelVisible).toHaveBeenCalledWith(1)
+  })
+
+  it('updates a row color and opacity', async () => {
+    const state = channelState({ channels: [channel()] })
+    const w = mountPanel(state)
+    await w.get('input[type="color"]').setValue('#0c2238')
+    expect(state.updateChannelColor).toHaveBeenCalledWith(1, { r: 12, g: 34, b: 56 })
+
+    await w.get('input[type="range"]').setValue('0.5')
+    expect(state.updateChannelOpacity).toHaveBeenCalledWith(1, 0.5)
   })
 
   it('shows a retry button instead of the spinner when a channel failed', async () => {
-    const w = mountPanel({ channels: [channel({ error: 'boom', matrix: null })] })
+    const state = channelState({ channels: [channel({ error: 'boom', matrix: null })] })
+    const w = mountPanel(state)
     expect(w.find('.loading').exists()).toBe(false)
-    const retry = w.get('button.text-error')
-    await retry.trigger('click')
-    expect(w.emitted('retry')?.[0]).toEqual([1])
+    await w.get('button.text-error').trigger('click')
+    expect(state.retryChannel).toHaveBeenCalledWith(1)
   })
 
   it('shows a spinner while a channel is loading', () => {
-    const w = mountPanel({ channels: [channel({ loading: true, matrix: null })] })
+    const w = mountPanel(channelState({ channels: [channel({ loading: true, matrix: null })] }))
     expect(w.find('.loading').exists()).toBe(true)
   })
 
   it('reports the channel cap', () => {
-    const many = Array.from({ length: 6 }, (_, i) =>
+    const many = Array.from({ length: MAX_ION_CHANNELS }, (_, i) =>
       channel({ id: i + 1, colorIndex: i, mz: 100 + i }),
     )
-    const w = mountPanel({ channels: many, canAdd: false })
-    expect(w.text()).toContain('Maximum of 6 channels reached.')
+    const w = mountPanel(channelState({ channels: many, canAdd: false }))
+    expect(w.text()).toContain(`Maximum of ${MAX_ION_CHANNELS} channels reached.`)
   })
 
-  it('emits clear', async () => {
-    const w = mountPanel({ channels: [channel()] })
-    const clear = w.findAll('button').find((b) => b.text() === 'Clear')!
+  it('clears the channels', async () => {
+    const state = channelState({ channels: [channel()] })
+    const clear = mountPanel(state)
+      .findAll('button')
+      .find((b) => b.text() === 'Clear')!
     await clear.trigger('click')
-    expect(w.emitted('clear')).toHaveLength(1)
+    expect(state.clearChannels).toHaveBeenCalledOnce()
   })
 
-  it('emits toggle-batch-add from the batch button', async () => {
-    const w = mountPanel()
-    const batch = w.findAll('button').find((b) => b.text().includes('Batch add'))!
+  it('toggles batch add from the batch button', async () => {
+    const state = channelState()
+    const batch = mountPanel(state)
+      .findAll('button')
+      .find((b) => b.text().includes('Batch add'))!
     await batch.trigger('click')
-    expect(w.emitted('toggle-batch-add')).toHaveLength(1)
+    expect(state.toggleBatchAdd).toHaveBeenCalledOnce()
   })
 })

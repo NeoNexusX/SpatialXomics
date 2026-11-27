@@ -1,9 +1,5 @@
 import { reactive } from 'vue'
-import {
-  ossDownloadAndSave,
-  ossDownloadRaw,
-  ossDownloadRawNoauth,
-} from '@/features/datasets/utils/downloadHelper'
+import { ossDownloadAndSave, ossDownloadRaw } from '@/features/datasets/utils/downloadHelper'
 import { useDownloadStore } from '@/features/datasets/stores/downloadStore'
 import { useAuthStore } from '@/shared/auth/authStore'
 import { useToast } from '@/shared/composables/useToast'
@@ -24,9 +20,9 @@ export function useDownloadProgress() {
 
   /**
    * 下载前身份校验：登录用户先 GET /user（auth.fetchUser，带并发去重）拉最新
-   * profile，四个身份字段任一为空则拦截并橙色提示去补全。匿名（无 token，
-   * 公开集合页免登录下载）无从校验，直接放行。前端这层只是引导，真正的
-   * 门禁在后端签发 pre-signed URL 处。
+   * profile，四个身份字段任一为空则拦截并橙色提示去补全。匿名（无 token）不在
+   * 这里拦：调用方已先 requireAuth 跳登录，漏网的请求由后端 download_raw 返回 401。
+   * 前端这层只是引导，真正的门禁在后端 download_raw 返回 CDN 直链之前。
    */
   const ensureProfileComplete = async (): Promise<boolean> => {
     if (!auth.token) return true
@@ -72,8 +68,8 @@ export function useDownloadProgress() {
 
   /**
    * RAW 下载的公共装配：并发去重（packingIds）、客户端限流（一次/冷却窗，默认 60s）、
-   * downloadStore 状态机与 toast 生命周期。auth / no-auth 两个入口只差实际取数
-   * 的 runner 与错误信息映射（mapError）。
+   * downloadStore 状态机与 toast 生命周期。runner 取链接并触发下载，mapError 把
+   * 特定状态码换成本地文案（返回 undefined 时用后端错误原文）。
    */
   const runRawDownload = async (
     publicId: string | undefined,
@@ -119,29 +115,18 @@ export function useDownloadProgress() {
   }
 
   /**
-   * RAW pre-signed download: imzML + ibd from /files/{public_id}/download_raw.
-   * Zero polling — pre-signed URLs are returned immediately.
+   * RAW download: imzML + ibd CDN links from /files/{public_id}/download_raw.
+   * Zero polling — the links are returned immediately.
    * Rate-limited: one download per cooldown window (60s default).
+   * 403 = 账号下载次数用完；503 = 服务端未配置 CDN 域名（后端原文是给运维看的英文）。
    */
-  const handleDownloadRaw = (
-    publicId?: string,
-    options?: { isPublic?: boolean },
-  ) =>
-    runRawDownload(
-      publicId,
-      (id) => ossDownloadRaw(id, { ...options, isPublic: options?.isPublic ?? false }),
-      (error) =>
-        (error as { response?: { status?: number } })?.response?.status === 403
-          ? t('datasets.download.limitReached')
-          : undefined,
-    )
+  const handleDownloadRaw = (publicId?: string) =>
+    runRawDownload(publicId, ossDownloadRaw, (error) => {
+      const status = (error as { response?: { status?: number } })?.response?.status
+      if (status === 403) return t('datasets.download.limitReached')
+      if (status === 503) return t('datasets.download.unavailable')
+      return undefined
+    })
 
-  /**
-   * RAW no-auth download for the public collection page:
-   * /files/{public_id}/download_raw_noauth (backend serves is_public files only).
-   */
-  const handleDownloadPublicRaw = (publicId?: string) =>
-    runRawDownload(publicId, (id) => ossDownloadRawNoauth(id))
-
-  return { handleDownload, handleDownloadRaw, handleDownloadPublicRaw, isPacking, packingIds }
+  return { handleDownload, handleDownloadRaw, isPacking, packingIds }
 }

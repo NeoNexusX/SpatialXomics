@@ -74,27 +74,33 @@
 
 **6. Region of Interest(ROI)**
 
-| 功能                    | 说明                                       |
-| ----------------------- | ------------------------------------------ |
-| **Rect**                | 拖拽绘制矩形 ROI                           |
-| **Lasso**               | 自由绘制不规则 ROI                         |
-| **Confirm/Cancel**      | 确认或取消当前草稿                         |
-| **ROI only / Show all** | 切换：只显示 ROI 区域 或 显示完整图像      |
-| **ROI 统计**            | 每个 ROI 显示：Pixels、Mean、Std、Min、Max |
-| **管理**                | 删除单个 ROI 或 Clear all                  |
+ROI 先在草稿里由一个或多个形状组合而成，保存后进入 ROI 列表。
+
+| 功能                              | 说明                                                                 |
+| --------------------------------- | -------------------------------------------------------------------- |
+| **Rect / Ellipse**                | 在离子图上拖动绘制矩形或椭圆（按住 Shift 画正圆）；确认前可拖动角点调整、拖动中心移动 |
+| **Segments**                      | 逐点单击连成多边形，点击起点或按 Enter 闭合                          |
+| **Freehand**                      | 拖动描边，松手暂停，从末端续画；点击起点或按 Enter 闭合              |
+| **Collect**                       | 按当前离子图选取有信号或无信号的像素，或全部已采集的像素             |
+| **Add / Subtract / Intersect**    | 新形状与草稿的组合方式：并入、减去、取交集                           |
+| **Use an existing region**        | 把已保存的 ROI 或 KMeans 聚类作为一个形状加入草稿                    |
+| **Confirm shape / Discard shape** | 确认或丢弃当前形状，确认后才会更新草稿                               |
+| **Undo / Redo**                   | 撤销或重做草稿的一步（Ctrl/⌘+Z、Shift+Ctrl/⌘+Z）                     |
+| **Save ROI / Cancel draft**       | 把草稿保存为 ROI，或放弃整个草稿                                     |
+| **ROI 列表**                      | 勾选的 ROI 按各自颜色填充到图上并纳入导出掩膜，可单独调节不透明度；每个 ROI 显示像素数与 Mean、Std、Min、Max |
+| **ROI only / Show all**           | 切换：只显示 ROI 区域 或 显示完整图像                                |
+| **管理**                          | 删除单个 ROI 或 Clear all                                            |
 
 **7. Mask Import & Export（掩膜导入/导出）**
 
-可将 ROI 掩膜与 KMeans 聚类结果导出为二值掩膜文件，也可导入掩膜文件作为显示过滤。
+可将 ROI 掩膜与 KMeans 聚类结果导出为二值掩膜文件，也可把掩膜文件导入为 ROI。
 
 | 功能                            | 说明                                                         |
 | ------------------------------- | ------------------------------------------------------------ |
 | **Format**                      | 选择掩膜文件格式（.npz / .csv）                              |
-| **ROI masks / KMeans clusters** | 勾选要包含的区域，勾选的多个区域会合并为一个二值掩膜         |
+| **导出列表**                    | ROI 列表中勾选的 ROI，以及 KMeans 显示时勾选的聚类，合并为一个二值掩膜 |
 | **Export mask**                 | 导出一个掩膜文件，文件内嵌数据集名称、形状、像素尺寸与像素数据的 SHA-256 校验值 |
-| **Import mask**                 | 导入掩膜文件并作为离子图的显示过滤                           |
-| **Apply Mask / Show Original**  | 重新应用已导入的掩膜，或暂停掩膜显示完整图像（导入掩膜后出现） |
-| **Clear imported mask**         | 清除已导入的掩膜                                             |
+| **Import mask**                 | 导入掩膜文件，每个文件成为 ROI 列表中的一项（标签为「导入」），用法与手绘 ROI 相同 |
 
 ![image-20261008182213554](https://cdn.neonexus.top/docs/20261008182213629.jpg_view)
 
@@ -179,11 +185,11 @@ Continuous 数据可将多个离子同时叠加为多个颜色通道显示。开
 
 ##### 2.4.2 用户绘制的 ROIs
 
-1.点击基本信息栏“Region of interest”模块处`Rect`按键，在图中框选感兴趣区域后，再点击`Confirm`得到ROI1
+1.点击基本信息栏“Region of interest”模块处`Rect`按键，在图中框选感兴趣区域后，点击`Confirm shape`，再点击`Save ROI`得到ROI1
 
 ![image-20260914161347627](https://cdn.neonexus.top/docs/20260914161347733.jpg_view)
 
-2.点击`ROI only`后回到初始状态，再进行一遍第一步操作，得到感兴趣的ROI2
+2.再进行一遍第一步操作，得到感兴趣的ROI2
 
 ![image-20260914161613717](https://cdn.neonexus.top/docs/20260914161613765.jpg_view)
 

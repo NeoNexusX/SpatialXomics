@@ -240,8 +240,9 @@ interface FabConfig {
  */
 interface ZarrConfig {
   /**
-   * spectra 组 chunk 缓存上限（LRU，按 chunk 个数计，1 chunk ≈ 1MB，100 ≈ 100MB）。
-   * 缓存的价值在跨请求复用：调整区域后重新比较时，重叠部分直接命中，不重新下载。
+   * spectra 组 chunk 缓存上限（LRU，按 chunk 个数计，1 chunk ≈ 1MB，20 ≈ 20MB）。
+   * 只管本次会话内的复用（像素谱、调整区域后重新比较时重叠部分直接命中）；
+   * zarr 走 CDN 固定 URL，超出这里的 chunk 再次读取时通常由浏览器 HTTP 缓存命中。
    */
   spectraChunkCacheSize?: number
   /**
@@ -289,7 +290,7 @@ export interface AppConfig {
       backoff?: { initialDelayMs?: number; maxDelayMs?: number; jitterRatio?: number }
     }
   }
-  /** 云端 zarr 读取调优参数；缺省时用内置默认（100MB 缓存 / 16 并发） */
+  /** 云端 zarr 读取调优参数；缺省时用内置默认（20 个 chunk ≈ 20MB 缓存 / 16 并发） */
   zarr?: ZarrConfig
   /** OSS 直连域名等；缺省时回退内置默认（测试环境 bucket） */
   oss?: OssConfig
@@ -335,7 +336,7 @@ export async function loadConfig(): Promise<AppConfig> {
   _config = (await res.json()) as AppConfig
   _config.zarr ??= {}
   if (!Number.isInteger(_config.zarr.spectraChunkCacheSize) || _config.zarr.spectraChunkCacheSize! < 1) {
-    _config.zarr.spectraChunkCacheSize = 100
+    _config.zarr.spectraChunkCacheSize = 20
   }
   if (!Number.isInteger(_config.zarr.spectraConcurrency) || _config.zarr.spectraConcurrency! < 1) {
     _config.zarr.spectraConcurrency = 16

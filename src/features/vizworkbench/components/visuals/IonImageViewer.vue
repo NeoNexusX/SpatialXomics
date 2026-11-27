@@ -25,6 +25,7 @@
       class="ion-image-viewport relative flex-1 min-h-0 bg-base-200 rounded-lg border border-base-300 overflow-hidden"
       :class="containerCursorClass"
       @mousedown="onContainerMouseDown"
+      @wheel.prevent="onContainerWheel"
       @click="onContainerClick"
       @mousemove="onHover"
       @mouseleave="hoverPixel = null"
@@ -39,8 +40,8 @@
           width: containerW + 'px',
           height: containerH + 'px',
         }"
-        @wheel.prevent="onContainerWheel"
       />
+      <slot name="drawing" :image-rect="drawingImageRect" />
       <!-- 悬停提示 -->
       <div
         v-if="hoverPixel"
@@ -240,6 +241,21 @@ const { scheduleRender, observeContainer, exportTransparentCanvas } = useCanvasR
   roiHighlightData: computed(() => props.roiHighlightData),
 })
 
+const drawingImageRect = computed(() => {
+  const { ox, oy, drawW, drawH } = computeFitTransform(
+    containerW.value,
+    containerH.value,
+    props.matrixCols,
+    props.matrixRows,
+  )
+  return {
+    x: panX.value + ox * zoom.value,
+    y: panY.value + oy * zoom.value,
+    width: drawW * zoom.value,
+    height: drawH * zoom.value,
+  }
+})
+
 /** 容器光标样式 */
 const containerCursorClass = computed(() => {
   if (props.drawMode) return 'cursor-default'
@@ -249,7 +265,6 @@ const containerCursorClass = computed(() => {
 })
 
 function onContainerWheel(e: WheelEvent) {
-  if (props.drawMode) return
   onWheel(e, containerRef.value)
 }
 
@@ -325,12 +340,14 @@ function onHover(e: MouseEvent) {
           intensity: c.matrix[i] ?? 0,
         }))
       : undefined
+    // The ROI-only view hides every pixel outside the ROIs, so they read as empty.
+    const hidden = props.roiMask ? !props.roiMask[i] : false
     hoverPixel.value = {
       x: mx,
       y: my,
       row,
       col,
-      intensity: data?.[i] ?? 0,
+      intensity: hidden ? 0 : (data?.[i] ?? 0),
       channelValues,
     }
   } else {
@@ -387,10 +404,13 @@ function exportImage(format: IonImageFormat = DEFAULT_ION_IMAGE_FORMAT) {
       ? `_mz_${props.selectedMz.toFixed(6)}`
       : ''
   const src = format === 'jpeg' ? flattenOnBackground(canvas, ION_IMAGE_JPEG_BACKGROUND) : canvas
-  downloadCanvas(src, ionImageFilename(label, format), ION_IMAGE_MIME[format], ION_IMAGE_JPEG_QUALITY)
+  downloadCanvas(
+    src,
+    ionImageFilename(label, format),
+    ION_IMAGE_MIME[format],
+    ION_IMAGE_JPEG_QUALITY,
+  )
 }
-
-defineExpose({ canvasContainer: containerRef })
 </script>
 
 <style scoped>

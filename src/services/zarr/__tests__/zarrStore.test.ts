@@ -1,44 +1,40 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ZarrIncompatibleError, ZarrOssStore } from '../zarrOssStore'
-import type { ZarrAccessResponse } from '../types/zarr'
+import { ZarrIncompatibleError, ZarrStore } from '../zarrStore'
+import { ZarrFetchError } from '../zarrHttpClient'
 
-// 内存里的 OSS：key → 对象字节；不存在的 key 按真实客户端的方式抛 not_found
-const { objects } = vi.hoisted(() => ({ objects: new Map<string, ArrayBuffer>() }))
+// 内存里的 zarr 目录：zarr 内相对路径 → 对象字节；不存在的路径按真实客户端的方式抛 not_found。
+// requested 记下每次读取的路径；failures 里的路径读取时抛出给定错误
+const { objects, requested, failures } = vi.hoisted(() => ({
+  objects: new Map<string, ArrayBuffer>(),
+  requested: [] as string[],
+  failures: new Map<string, Error>(),
+}))
 
-vi.mock('../ossClient', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../ossClient')>()
+vi.mock('../zarrHttpClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../zarrHttpClient')>()
   return {
     ...actual,
-    createOssClient: () => ({
-      getObjectArrayBuffer: async (key: string) => {
-        const buf = objects.get(key)
-        if (!buf) throw new actual.OssError('not_found', `OSS object not found: ${key}`, key, 404)
+    createZarrHttpClient: () => ({
+      getObjectArrayBuffer: async (path: string) => {
+        requested.push(path)
+        const failure = failures.get(path)
+        if (failure) throw failure
+        const buf = objects.get(path)
+        if (!buf) {
+          throw new actual.ZarrFetchError('not_found', `object not found: ${path}`, path, 404)
+        }
         return buf.slice(0)
       },
-      listObjects: async () => [],
     }),
   }
 })
 
-const ROOT = 'run.zarr/'
-
-const ACCESS: ZarrAccessResponse = {
-  folder_path: ROOT,
-  bucket: 'test-bucket',
-  region: 'cn-test',
-  sts_token: {
-    AccessKeyId: 'id',
-    AccessKeySecret: 'secret',
-    SecurityToken: 'token',
-    Expiration: '2099-01-01T00:00:00Z',
-  },
-  expires_in: 3600,
-}
+const ZARR_URL = 'https://cdn.test/processed/run.zarr/'
 
 type NumericArray = Float32Array | Float64Array | Uint32Array | BigInt64Array
 
 function putJson(path: string, value: unknown) {
-  objects.set(ROOT + path, new TextEncoder().encode(JSON.stringify(value)).buffer as ArrayBuffer)
+  objects.set(path, new TextEncoder().encode(JSON.stringify(value)).buffer as ArrayBuffer)
 }
 
 function putGroup(path: string, attributes: Record<string, unknown>) {
@@ -64,7 +60,7 @@ function putArray(path: string, dataType: string, shape: number[], chunkShape: n
     const startRow = c * rowsPerChunk
     const endRow = Math.min(shape[0]!, startRow + rowsPerChunk)
     objects.set(
-      `${ROOT}${path}/c/${c}${trailingKey}`,
+      `${path}/c/${c}${trailingKey}`,
       data.buffer.slice(startRow * bytesPerRow, endRow * bytesPerRow) as ArrayBuffer,
     )
   }
@@ -129,15 +125,30 @@ function putContinuous(options: { spectra?: boolean; spectraOffsets?: number[] }
   putArray('spectra/offsets', 'int64', [offsets.length], [offsets.length], int64(offsets))
 }
 
+/** v1.1 processed：只有 spectra（像素主序，每个点自带 m/z），没有 ion_image、axes/mz、平均谱 */
+function putProcessed() {
+  putCommon()
+  putGroup('spectra', { row_axis: 'pixel', encoding: 'processed' })
+  putArray('spectra/intensity', 'float32', [7], [4], Float32Array.from([1, 2, 3, 4, 5, 6, 7]))
+  const mz = Float64Array.from([101, 102, 103, 201, 202, 301, 302])
+  putArray('spectra/mz', 'float64', [7], [4], mz)
+  // 像素 2 与像素 4 的谱为空
+  putArray('spectra/offsets', 'int64', [N_PIXELS + 1], [N_PIXELS + 1], int64([0, 3, 5, 5, 7, 7]))
+}
+
+const forbidden = (path: string) => new ZarrFetchError('forbidden', `forbidden: ${path}`, path, 403)
+
 async function openStore() {
-  const store = new ZarrOssStore(ACCESS)
+  const store = new ZarrStore(ZARR_URL)
   await store.init()
   return store
 }
 
-describe('ZarrOssStore', () => {
+describe('ZarrStore', () => {
   beforeEach(() => {
     objects.clear()
+    requested.length = 0
+    failures.clear()
     // DEV 模式下 init 会打印结构表 / 缺失的可选数组，测试里静音
     vi.spyOn(console, 'table').mockImplementation(() => {})
     vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -155,7 +166,7 @@ describe('ZarrOssStore', () => {
     putArray('data/intensity', 'float32', [N_MZ * N_PIXELS], [10], new Float32Array(N_MZ * N_PIXELS))
     putArray('data/offsets', 'int64', [N_MZ + 1], [N_MZ + 1], int64([0, 5, 10, 15, 20]))
 
-    await expect(new ZarrOssStore(ACCESS).init()).rejects.toBeInstanceOf(ZarrIncompatibleError)
+    await expect(new ZarrStore(ZARR_URL).init()).rejects.toBeInstanceOf(ZarrIncompatibleError)
   })
 
   it('reads a continuous pixel spectrum from the spectra group across chunk boundaries', async () => {
@@ -182,6 +193,25 @@ describe('ZarrOssStore', () => {
     expect(await store.findPixelByPosition(1, 1)).toBe(4)
   })
 
+  it('rasterizes the acquired cells, leaving background and out-of-grid coordinates out', async () => {
+    putContinuous()
+    const store = await openStore()
+    // 2×3 网格，(3, 2) 没有采集
+    expect(Array.from(await store.loadAcquiredRaster())).toEqual([1, 1, 1, 1, 1, 0])
+
+    // 第 3 个像素的坐标落在网格外（x = 4），不占任何格子
+    const coords = COORDS.map(([x, y], i) => (i === 2 ? [4, y] : [x, y]))
+    putArray(
+      'axes/coordinates',
+      'uint32',
+      [N_PIXELS, 3],
+      [N_PIXELS, 3],
+      Uint32Array.from(coords.flatMap(([x, y]) => [x!, y!, 1])),
+    )
+    const shifted = await openStore()
+    expect(Array.from(await shifted.loadAcquiredRaster())).toEqual([1, 1, 0, 1, 1, 0])
+  })
+
   it('requires the spectra group for continuous pixel spectra', async () => {
     putContinuous({ spectra: false })
     const store = await openStore()
@@ -196,12 +226,7 @@ describe('ZarrOssStore', () => {
   })
 
   it('reads processed spectra when spectra/ is the main data group', async () => {
-    putCommon()
-    putGroup('spectra', { row_axis: 'pixel', encoding: 'processed' })
-    putArray('spectra/intensity', 'float32', [7], [4], Float32Array.from([1, 2, 3, 4, 5, 6, 7]))
-    putArray('spectra/mz', 'float64', [7], [4], Float64Array.from([101, 102, 103, 201, 202, 301, 302]))
-    // 像素 2 与像素 4 的谱为空
-    putArray('spectra/offsets', 'int64', [N_PIXELS + 1], [N_PIXELS + 1], int64([0, 3, 5, 5, 7, 7]))
+    putProcessed()
 
     const store = await openStore()
     expect(store.dataMode).toBe('processed')
@@ -210,5 +235,41 @@ describe('ZarrOssStore', () => {
     expect(Array.from(spectrum!.mz)).toEqual([201, 202])
     expect(Array.from(spectrum!.intensity)).toEqual([4, 5])
     expect(await store.getPixelSpectrum(2)).toBeNull()
+  })
+
+  it('settles processed data from spectra/ without requesting objects it cannot have', async () => {
+    putProcessed()
+    await openStore()
+
+    // CDN 不缓存 404：processed 没有 ion_image/ 和平均谱，请求它们每次都要回源
+    expect(requested).not.toContain('ion_image/zarr.json')
+    expect(requested).not.toContain('stats/mean_spectrum/zarr.json')
+    expect(requested.filter((path) => path === 'spectra/zarr.json')).toHaveLength(1)
+  })
+
+  it('reads each group zarr.json once when opening continuous data', async () => {
+    putContinuous()
+    const store = await openStore()
+
+    expect(store.hasSpectra).toBe(true)
+    expect(requested.filter((path) => path === 'spectra/zarr.json')).toHaveLength(1)
+    expect(requested.filter((path) => path === 'ion_image/zarr.json')).toHaveLength(1)
+  })
+
+  it('still opens continuous data without pixel spectra when spectra/zarr.json is unreadable', async () => {
+    putContinuous()
+    failures.set('spectra/zarr.json', forbidden('spectra/zarr.json'))
+
+    const store = await openStore()
+    expect(store.dataMode).toBe('continuous')
+    expect(store.hasSpectra).toBe(false)
+  })
+
+  it('fails when spectra/ would be the main data group but cannot be read', async () => {
+    putProcessed()
+    const failure = forbidden('spectra/zarr.json')
+    failures.set('spectra/zarr.json', failure)
+
+    await expect(new ZarrStore(ZARR_URL).init()).rejects.toBe(failure)
   })
 })

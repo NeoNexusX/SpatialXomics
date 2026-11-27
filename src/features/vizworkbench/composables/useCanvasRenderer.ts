@@ -29,7 +29,7 @@ interface CanvasRendererOptions {
   channels?: Ref<BlendChannel[]>
   /** Whether the multi-ion overlay is currently active. */
   channelsMode?: Ref<boolean>
-  /** Active view mask (1 = keep), including ROI-only and imported masks. */
+  /** Active view mask (1 = keep) of the ROI-only view. */
   roiMask?: Ref<Uint8Array | null>
   /** Selected-ROI highlight (RGBA, ion-grid sized). Drawn as a SECOND overlay
    *  layer, independent of `overlayData` — that one is mutually exclusive

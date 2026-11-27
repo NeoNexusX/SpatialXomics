@@ -9,11 +9,12 @@
  */
 import { computed } from 'vue'
 import SvgIcon from '@/shared/components/SvgIcon.vue'
-import type { RegionOption } from '@/features/vizworkbench/composables/useRegionComparison'
+import SectionHelp from '@/features/vizworkbench/components/SectionHelp.vue'
+import type { Region } from '@/features/vizworkbench/utils/region'
 import { rgbCss, type RGB } from '@/features/vizworkbench/utils/regionPalette'
 
 const props = defineProps<{
-  regions: RegionOption[]
+  regions: Region[]
   spectrumMode?: string
   regionAIds: string[]
   regionBIds: string[]
@@ -84,24 +85,35 @@ function onEnrichmentRatio(e: Event) {
 <template>
   <div class="rounded-xl border-2 border-base-content/30 bg-base-100 overflow-hidden flex flex-col">
     <!-- Collapsible header bar: the whole strip is the toggle (side panel, collapsed state) -->
-    <div
-      class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-base-200/60 select-none kawaru-text-87"
-      @click.stop="toggle"
-    >
-      <!-- Expand / collapse chevron -->
-      <SvgIcon :type="expanded ? 'chevron_down' : 'chevron_right'" class="text-base-content/60" />
-      <!-- Title -->
-      <span class="kawaru-text-87 font-semibold text-base-content">{{
-        $t('vizworkbench.compare.title')
-      }}</span>
-      <!-- Show a compact status when collapsed -->
-      <span
-        v-if="!expanded && comparing"
-        class="ml-auto flex items-center gap-1 text-base-content/50"
+    <div class="flex items-center">
+      <h2 class="min-w-0 flex-1 kawaru-text-87 font-semibold text-base-content">
+        <button
+          type="button"
+          class="flex w-full items-center gap-2 px-3 py-2 text-left cursor-pointer hover:bg-base-200/60 select-none"
+          :aria-expanded="expanded"
+          @click.stop="toggle"
+        >
+          <SvgIcon
+            :type="expanded ? 'chevron_down' : 'chevron_right'"
+            class="text-base-content/60"
+          />
+          {{ $t('vizworkbench.compare.title') }}
+          <span
+            v-if="!expanded && comparing"
+            class="ml-auto flex items-center gap-1 font-normal text-base-content/50"
+          >
+            <span class="loading loading-spinner loading-xs"></span>
+            {{ progress }}%
+          </span>
+        </button>
+      </h2>
+      <SectionHelp
+        v-if="isComparisonAvailable && !noRegions"
+        class="mr-2"
+        :label="$t('vizworkbench.compare.title')"
       >
-        <span class="loading loading-spinner loading-xs"></span>
-        {{ progress }}%
-      </span>
+        {{ $t('vizworkbench.compare.unionHint') }}
+      </SectionHelp>
     </div>
 
     <!-- Expanded content (side panel, expanded state) -->
@@ -131,20 +143,18 @@ function onEnrichmentRatio(e: Event) {
             >
               <label
                 v-for="r in regions"
-                :key="r.value"
+                :key="r.id"
                 class="flex items-center gap-1.5 cursor-pointer"
                 :class="
-                  isDisabled(side, r.value)
-                    ? 'opacity-40 cursor-not-allowed'
-                    : 'hover:bg-base-200/60'
+                  isDisabled(side, r.id) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-base-200/60'
                 "
               >
                 <input
                   type="checkbox"
                   class="checkbox checkbox-xs"
-                  :checked="(side === 'a' ? regionAIds : regionBIds).includes(r.value)"
-                  :disabled="isDisabled(side, r.value)"
-                  @change="toggleRegion(side, r.value, ($event.target as HTMLInputElement).checked)"
+                  :checked="(side === 'a' ? regionAIds : regionBIds).includes(r.id)"
+                  :disabled="isDisabled(side, r.id)"
+                  @change="toggleRegion(side, r.id, ($event.target as HTMLInputElement).checked)"
                 />
                 <span
                   class="w-2.5 h-2.5 rounded-sm shrink-0 border border-base-content/30"
@@ -153,9 +163,6 @@ function onEnrichmentRatio(e: Event) {
                 <span class="truncate">{{ r.label }}</span>
               </label>
             </div>
-          </div>
-          <div class="text-base-content/50">
-            {{ $t('vizworkbench.compare.unionHint') }}
           </div>
         </div>
 

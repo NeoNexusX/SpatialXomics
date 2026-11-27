@@ -11,7 +11,14 @@
         <slot>{{ message }}</slot>
       </p>
       <div class="modal-action">
-        <button v-if="!hideCancel" class="btn kawaru-text-87" @click="$emit('cancel')" :disabled="loading">{{ $t('common.action.cancel') }}</button>
+        <button
+          v-if="!hideCancel"
+          class="btn kawaru-text-87"
+          :disabled="loading"
+          @click="$emit('cancel')"
+        >
+          {{ cancelLabel ?? $t('common.action.cancel') }}
+        </button>
         <button
           v-if="!hideConfirm"
           :class="['btn kawaru-text-87', danger ? 'btn-error text-white' : 'btn-primary']"
@@ -36,6 +43,7 @@ withDefaults(
     title: string
     message?: string
     confirmLabel?: string
+    cancelLabel?: string
     danger?: boolean
     loading?: boolean
     hideCancel?: boolean

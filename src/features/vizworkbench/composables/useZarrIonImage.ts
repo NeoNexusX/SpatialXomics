@@ -1,7 +1,7 @@
 import { findMzRangeIndices, loadIonSliceSum } from '@/services/zarr/ionRead'
 export { loadIonMatrixByIndex, findClosestMzIndex } from '@/services/zarr/ionRead'
 /**
- * Ion image composable — loads zarr data on demand via OSS STS.
+ * Ion image composable — loads zarr data on demand from the run's zarr CDN URL.
  *
  * Supports two data modes:
  *   - continuous: ion image + mean spectrum, plus per-pixel spectra read from
@@ -22,9 +22,9 @@ export { loadIonMatrixByIndex, findClosestMzIndex } from '@/services/zarr/ionRea
  * 或新一轮 init()，旧 init 在每个 await 检查点放弃并 dispose 自己的孤儿 store。
  */
 
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
-import { getZarrAccess } from '@/services/zarr/api/zarrAccessApi'
-import { ZarrIncompatibleError, ZarrOssStore } from '@/services/zarr/zarrOssStore'
+import { computed, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue'
+import { getZarrUrl } from '@/services/zarr/api/zarrAccessApi'
+import { ZarrIncompatibleError, ZarrStore } from '@/services/zarr/zarrStore'
 import {
   // 共享状态收在 services 层（跨 feature API）：这里引入内部使用 + 转发导出
   store,
@@ -52,7 +52,6 @@ import {
 import { buildSpectrumChartData } from '@/features/vizworkbench/utils/spectrumChartData'
 import { ZARR_STORE } from '@/shared/config/defaults'
 import { getConfig } from '@/shared/config'
-import { formatNumber } from '@/shared/utils/format'
 import { t } from '@/i18n'
 
 // 转发导出：feature 内既有导入路径不变（SpectrumSection / useAnnotation /
@@ -80,7 +79,7 @@ export {
 /**
  * Release all module-level state. Call on VizWorkbench unmount so that large
  * TypedArrays (mzAxis, meanChartData, ticMatrix, pixelSpectrum) and the
- * ZarrOssStore (chunk caches, in-flight requests) become GC-eligible instead
+ * ZarrStore (chunk caches, in-flight requests) become GC-eligible instead
  * of persisting for the entire SPA lifetime.
  */
 export function disposeZarrState(): void {
@@ -221,10 +220,7 @@ export async function loadPixelSpectrum(pixelIndex: number): Promise<void> {
 }
 
 const normalizationCache = new Map<'tic', Float32Array>()
-const normalizationPending = new Map<
-  'tic',
-  { store: ZarrOssStore; promise: Promise<Float32Array> }
->()
+const normalizationPending = new Map<'tic', { store: ZarrStore; promise: Promise<Float32Array> }>()
 let normalizationRequestId = 0
 let ionImageRequestId = 0
 let pixelSpectrumRequestId = 0
@@ -238,6 +234,10 @@ export function useZarrIonImage() {
   const selectedMzIndex = ref(0)
   const mzTolerance = ref<number>(ZARR_STORE.defaultMzTolerance)
   const ionMatrix = ref<Float32Array | null>(null)
+  /** m/z of the loaded ionMatrix. selectedMz moves before the new image arrives, and a failed load keeps the old one. */
+  const ionMatrixMz = shallowRef<number | null>(null)
+  /** Acquired grid cells (1 = has a spectrum), from axes/coordinates. */
+  const acquiredMask = shallowRef<Uint8Array | null>(null)
   const normalizationFactors = shallowRef<Float32Array | null>(null)
   const normalizationLoading = ref(false)
   const normalizationError = ref<string | null>(null)
@@ -248,10 +248,12 @@ export function useZarrIonImage() {
   // Computed
   const ionCols = computed(() => ionDims.value?.width ?? 0)
   const ionRows = computed(() => ionDims.value?.height ?? 0)
-  const totalPeaks = computed(() => (mzAxisRef.value ? formatNumber(mzAxisRef.value.length) : '--'))
 
+  const dataMode = computed(() => dataModeRef.value)
   const isContinuous = computed(() => dataModeRef.value === 'continuous')
   const isProcessed = computed(() => dataModeRef.value === 'processed')
+  /** The single image of this dataset: the selected ion image, or the TIC image of processed data. */
+  const imageMatrix = computed(() => (isProcessed.value ? ticMatrix.value : ionMatrix.value))
 
   /** zarr 是否预存 stats/tic（TIC 归一化的唯一数据源，ready 后才有值） */
   const hasTic = computed(() => (ready.value ? !!store?.hasTIC : false))
@@ -284,6 +286,7 @@ export function useZarrIonImage() {
       // Ignore a stale response after another peak/run has been selected.
       if (requestId !== ionImageRequestId || store !== requestStore) return
       ionMatrix.value = matrix
+      ionMatrixMz.value = mzAxisRef.value?.[idx] ?? null
     } catch (e) {
       if (requestId !== ionImageRequestId || store !== requestStore) return
       // UI 只说「什么问题」，底层原因留在控制台
@@ -357,6 +360,10 @@ export function useZarrIonImage() {
     normalizationLoading.value = false
   }
 
+  function setMzTolerance(value: number) {
+    mzTolerance.value = value
+  }
+
   const loadDefaultImage = async () => {
     const axis = mzAxisRef.value
     if (!axis?.length || !ready.value) return
@@ -400,28 +407,30 @@ export function useZarrIonImage() {
     normalizationFactors.value = null
     normalizationError.value = null
     ionMatrix.value = null
+    ionMatrixMz.value = null
+    acquiredMask.value = null
 
     /** True while this init is still the latest lifecycle (no dispose/re-init since). */
     const isCurrent = () => gen === initGeneration
     /** Abort this stale init: dispose the store we created (it is no longer
      *  reachable via the module-level `store`) and stop writing shared refs. */
-    const abortIfStale = (s: ZarrOssStore): boolean => {
+    const abortIfStale = (s: ZarrStore): boolean => {
       if (isCurrent() && store === s) return false
       s.dispose()
       return true
     }
 
     try {
-      // spectra 读取的缓存/并发走运行时 config.json 的 zarr 块（缺省 100MB/16）
+      // 离子图 / m/z chunk 缓存取 ZARR_STORE；spectra 的缓存/并发走运行时 config.json
+      // 的 zarr 块（缺省 20 个 chunk ≈ 20MB / 16 并发）
       const zarrCfg = getConfig().zarr
-      const s = new ZarrOssStore(await getZarrAccess(runId), {
+      const s = new ZarrStore(await getZarrUrl(runId), {
         intensityChunkCacheSize: ZARR_STORE.intensityChunkCacheSize,
+        mzChunkCacheSize: ZARR_STORE.mzChunkCacheSize,
         spectraChunkCacheSize: zarrCfg?.spectraChunkCacheSize,
         spectraConcurrency: zarrCfg?.spectraConcurrency,
-        // STS 过期时自动重拉凭据，避免结果页久置后所有 OSS 读取 403
-        refreshAccess: () => getZarrAccess(runId),
       })
-      // 如果 await getZarrAccess 期间发生了 dispose/重新 init，直接放弃本次加载
+      // 如果 await getZarrUrl 期间发生了 dispose/重新 init，直接放弃本次加载
       if (!isCurrent()) {
         s.dispose()
         return
@@ -439,6 +448,13 @@ export function useZarrIonImage() {
       // Set spatial dimensions
       const [height, width] = s.spatialShape
       ionDims.value = { width, height }
+      // Only the ROI collect tool reads it, and the coordinates behind it load with the first image anyway.
+      s.loadAcquiredRaster().then(
+        (raster) => {
+          if (isCurrent() && store === s) acquiredMask.value = raster
+        },
+        (e: unknown) => console.warn('[useZarrIonImage] acquired pixels unavailable:', e),
+      )
 
       if (s.dataMode === 'continuous') {
         // Load shared m/z axis
@@ -470,15 +486,19 @@ export function useZarrIonImage() {
     }
   }
 
-  return {
+  return reactive({
     // Common
     selectedMzIndex,
     selectedMz,
     mzTolerance,
+    setMzTolerance,
     ionMatrix,
+    ionMatrixMz,
+    imageMatrix,
+    acquiredMask,
     ionCols,
     ionRows,
-    totalPeaks,
+    dataMode,
     isContinuous,
     isProcessed,
     loading,
@@ -487,12 +507,16 @@ export function useZarrIonImage() {
     init,
 
     // Continuous mode
-    onSpectrumClickByIndex: loadForMzIndex,
+    /** Load the ion image of an m/z axis index; selectedMzIndex moves at once. */
+    selectMzIndex: loadForMzIndex,
     loadNormalization,
     clearNormalization,
     normalizationFactors,
     normalizationLoading,
     normalizationError,
     hasTic,
-  }
+  })
 }
+
+/** The dataset session of the result page: the selected image and its loading state. */
+export type ZarrSession = ReturnType<typeof useZarrIonImage>

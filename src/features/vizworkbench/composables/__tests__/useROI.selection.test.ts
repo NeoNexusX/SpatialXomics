@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { useROI, type DraftROI } from '../useROI'
+import { ref } from 'vue'
+import { useROI } from '../useROI'
+import type { RegionGrid } from '@/features/vizworkbench/utils/region'
+import type { DraftROI } from '@/features/vizworkbench/utils/roiMask'
 
 const rect = (x0: number, y0: number, x1: number, y1: number): DraftROI => ({
   type: 'rectangle',
@@ -8,16 +11,21 @@ const rect = (x0: number, y0: number, x1: number, y1: number): DraftROI => ({
 })
 
 function setup(w = 4, h = 4) {
-  const roi = useROI()
-  const matrix = new Float32Array(w * h).fill(1)
-  const add = (d: DraftROI) => roi.confirmROI(matrix, w, h, d)!
+  const matrix = ref(new Float32Array(w * h).fill(1))
+  const roi = useROI(matrix, ref<RegionGrid>({ runId: '', shape: [h, w] }))
+  const add = (d: DraftROI) => {
+    roi.editor.stageShape(d)
+    roi.editor.confirmShape()
+    roi.saveDraft()
+    return roi.confirmedROIs[roi.confirmedROIs.length - 1]!
+  }
   return { roi, add }
 }
 
 describe('useROI selection', () => {
   it('defaults to all-selected (null) and a new ROI is selected', () => {
     const { roi, add } = setup()
-    expect(roi.selectedRoiIds.value).toBeNull()
+    expect(roi.selectedRoiIds).toBeNull()
     const a = add(rect(0, 0, 1, 1))
     expect(roi.isRoiSelected(a.id)).toBe(true)
   })
@@ -41,7 +49,7 @@ describe('useROI selection', () => {
     roi.clearRoiSelection()
 
     const b = add(rect(2, 2, 3, 3))
-    // confirm re-adds the new id so the just-drawn ROI is always visible
+    // saving re-adds the new id so the just-drawn ROI is always visible
     expect(roi.isRoiSelected(b.id)).toBe(true)
   })
 
@@ -51,20 +59,20 @@ describe('useROI selection', () => {
     const b = add(rect(2, 2, 3, 3))
 
     roi.toggleRoiSelection(a.id) // explicit set { b }
-    expect(roi.selectedRoiIds.value!.has(b.id)).toBe(true)
+    expect(roi.selectedRoiIds!.has(b.id)).toBe(true)
 
     roi.deleteROI(b.id)
-    expect(roi.selectedRoiIds.value!.has(b.id)).toBe(false)
+    expect(roi.selectedRoiIds!.has(b.id)).toBe(false)
   })
 
   it('resets the selection to null on clearAll', () => {
     const { roi, add } = setup()
     add(rect(0, 0, 1, 1))
     roi.clearRoiSelection()
-    expect(roi.selectedRoiIds.value).not.toBeNull()
+    expect(roi.selectedRoiIds).not.toBeNull()
 
     roi.clearAllROIs()
-    expect(roi.selectedRoiIds.value).toBeNull()
-    expect(roi.confirmedROIs.value).toHaveLength(0)
+    expect(roi.selectedRoiIds).toBeNull()
+    expect(roi.confirmedROIs).toHaveLength(0)
   })
 })

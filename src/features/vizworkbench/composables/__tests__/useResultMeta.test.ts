@@ -59,7 +59,7 @@ function mountMeta(id = '7') {
   const wrapper = mount(
     defineComponent({
       setup() {
-        meta = useResultMeta(ref(id))
+        meta = useResultMeta(id)
         return () => null
       },
     }),
@@ -85,11 +85,11 @@ describe('useResultMeta source file metadata', () => {
     expect(api.getFileMetadata).toHaveBeenCalledWith(FILE_ID)
     // state 已带齐名称 / 状态 / methods：不再回查处理记录
     expect(api.listMyProcesses).not.toHaveBeenCalled()
-    expect(meta.sourceFile.value?.maldiMatrix).toBe('DHB')
-    expect(meta.sourceFile.value?.organism).toBe('Mouse (Mus musculus)')
-    expect(meta.acquisition.value.polarity).toBe('Positive')
-    expect(meta.acquisition.value.ionSource).toBe('MALDI')
-    expect(meta.pixelSizeUm.value).toEqual({ x: 20, y: 20 })
+    expect(meta.sourceFile?.maldiMatrix).toBe('DHB')
+    expect(meta.sourceFile?.organism).toBe('Mouse (Mus musculus)')
+    expect(meta.acquisition.polarity).toBe('Positive')
+    expect(meta.acquisition.ionSource).toBe('MALDI')
+    expect(meta.pixelSizeUm).toEqual({ x: 20, y: 20 })
   })
 
   it('loads metadata for a run outside my process list (public data, old runs)', async () => {
@@ -100,9 +100,9 @@ describe('useResultMeta source file metadata', () => {
     await flushPromises()
 
     expect(api.listMyProcesses).toHaveBeenCalledTimes(1)
-    expect(meta.status.value).toBe('')
-    expect(meta.sourceFile.value?.maldiMatrix).toBe('DHB')
-    expect(meta.acquisition.value.polarity).toBe('Positive')
+    expect(meta.status).toBe('')
+    expect(meta.sourceFile?.maldiMatrix).toBe('DHB')
+    expect(meta.acquisition.polarity).toBe('Positive')
   })
 
   it.each([
@@ -119,21 +119,21 @@ describe('useResultMeta source file metadata', () => {
     }
     await flushPromises()
 
-    expect(meta.acquisition.value.polarity).toBe('negative')
-    expect(meta.acquisition.value.analyzer).toBe('Orbitrap')
+    expect(meta.acquisition.polarity).toBe('negative')
+    expect(meta.acquisition.analyzer).toBe('Orbitrap')
     // zarr 没有的字段由文件记录补齐
-    expect(meta.acquisition.value.ionSource).toBe('MALDI')
+    expect(meta.acquisition.ionSource).toBe('MALDI')
   })
 
   it('keeps the Peak Picking adjustment when zarr attrs arrive last', async () => {
     api.getFileMetadata.mockResolvedValue(fileRecord({ spectrum_mode: 'profile' }))
     const { meta } = mountMeta()
     await flushPromises()
-    expect(meta.spectrumMode.value).toBe('centroid')
+    expect(meta.spectrumMode).toBe('centroid')
 
     metadataAttrsRef.value = { profile_spectrum: true } as MetadataAttrs
     await flushPromises()
-    expect(meta.spectrumMode.value).toBe('centroid')
+    expect(meta.spectrumMode).toBe('centroid')
   })
 
   it('falls back to zarr-only metadata when the source file is gone', async () => {
@@ -145,8 +145,8 @@ describe('useResultMeta source file metadata', () => {
     const { meta } = mountMeta()
     await flushPromises()
 
-    expect(meta.sourceFile.value).toBeNull()
-    expect(meta.acquisition.value.polarity).toBe('positive')
+    expect(meta.sourceFile).toBeNull()
+    expect(meta.acquisition.polarity).toBe('positive')
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
   })
@@ -159,7 +159,7 @@ describe('useResultMeta source file metadata', () => {
     resolve(fileRecord())
     await flushPromises()
 
-    expect(meta.sourceFile.value).toBeNull()
+    expect(meta.sourceFile).toBeNull()
     // polarityRef 是模块级共享状态，迟到的响应不能写进去
     expect(polarityRef.value).toBe('')
   })

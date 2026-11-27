@@ -159,9 +159,9 @@ const currentStats = computed(() =>
 </script>
 
 <template>
-  <!-- 桌面端在首屏剩余空间内与离子图按 2:5 分高，并允许随视口收缩。 -->
+  <!-- 桌面端在首屏剩余空间内与离子图按 3:4 分高，并允许随视口收缩。 -->
   <div
-    class="shrink-0 lg:h-auto lg:min-h-0 lg:flex-[2_1_0%] lg:shrink card bg-base-100 border-2 border-base-content/30 p-2"
+    class="shrink-0 lg:h-auto lg:min-h-0 lg:flex-[3_1_0%] lg:shrink card bg-base-100 border-2 border-base-content/30 p-2"
   >
     <div
       v-if="isStale"

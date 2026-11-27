@@ -131,8 +131,7 @@ async function fetch() {
 
 const updatedDate = computed(() => formatDate(detail.value?.updatedAt))
 
-// 下载与数据集分享页统一：走认证 download_raw（含登录 + 身份完整校验）；
-// noauth 端点保留但不再使用。匿名查看由路由 requiresAuth 守卫拦截。
+// 与数据集分享页一样，下载走认证 download_raw 并校验身份信息。
 const { handleDownloadRaw } = useDownloadProgress()
 
 function downloadMember(member: CollectionMember) {
