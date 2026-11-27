@@ -70,10 +70,20 @@ export async function getSiDbDownload(): Promise<SiDbDownloadInfo> {
  * 列表接口走的正是这条路。fetch 整库 CSV 需要读响应体，直连绝对地址会跨域，
  * 改写后三个环境行为一致。浏览器整库下载（downloadSiDbCsv）不经这里——契约
  * 要求用 <a> 直连直链以保留进度条与断点续传。
+ *
+ * 回传的路径本身可能已带 /api 前缀（后端部署在 https://<站点>/api 下时回传
+ * https://<站点>/api/annotations/si-db/relay/download），也可能是不带前缀的裸路由；
+ * 先去掉前缀再拼，否则会拼出 /api/api/… 而 404。
  */
 export function toProxiedRelayUrl(url: string): string {
   const u = new URL(url)
-  return `${ENV.apiBase.replace(/\/+$/, '')}${u.pathname}${u.search}`
+  const apiBase = ENV.apiBase.replace(/\/+$/, '')
+  // apiBase 的路径部分（'/api'）；配成绝对地址时同样取到路径
+  const basePath = new URL(apiBase, 'http://localhost').pathname.replace(/\/+$/, '')
+  const route = u.pathname.startsWith(`${basePath}/`)
+    ? u.pathname.slice(basePath.length)
+    : u.pathname
+  return `${apiBase}${route}${u.search}`
 }
 
 /**
