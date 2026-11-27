@@ -76,6 +76,7 @@ Before downloading:
 - You must be signed in, and your profile must include your institution, position, research field, and region. Otherwise a message asks you to complete it first (see [Account Management](./account-management)).
 - A download consists of two files, .imzML and .ibd, which the browser saves separately.
 - After a download starts, you must wait 60 seconds before starting another. When your account's download quota runs out, you see **Download limit reached**; check your quota on the profile page.
+- If you see **Downloads are temporarily unavailable**, the server-side download service is temporarily unavailable; try again later or contact the administrator.
 
 ## Share
 

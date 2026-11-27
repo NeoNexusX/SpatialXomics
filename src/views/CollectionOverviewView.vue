@@ -162,6 +162,10 @@
          弹窗在 kawaru-text-100 容器之外，需自行挂 kawaru-text-100 继承流体字号基准 -->
     <dialog class="modal" :class="{ 'modal-open': addOpen }">
       <div class="modal-box max-w-2xl kawaru-text-100">
+        <!-- 已达成员上限：选择器照常可浏览，但任何追加都会被拦下并提示 -->
+        <p v-if="pickerRemaining === 0" class="text-error kawaru-text-87 mb-3">
+          {{ $t('collections.overview.memberLimitHint', { max: COLLECTION_MEMBER_LIMIT }) }}
+        </p>
         <CollectionDatasetPicker
           :datasets="pickerDatasets"
           :loading="pickerLoading"
@@ -175,7 +179,7 @@
 :title="$t('collections.overview.addMembers')"
           :exclude-public-ids="memberPublicIds"
           @update:query="pickerQuery = $event"
-          @toggle="pickerSelection.toggle"
+          @toggle="togglePickerDataset"
           @go-to-page="pickerGoToPage"
           @change-size="pickerChangeSize"
         />
@@ -196,6 +200,14 @@
       </form>
     </dialog>
 
+    <!-- 增删成员后：样本 / 采集字段因此受影响时，先列出变化让用户确认，再按成员更新 -->
+    <SummaryFieldsDialog
+      :changes="summaryChanges"
+      :updating="updatingSummary"
+      @confirm="confirmSummaryUpdate"
+      @cancel="cancelSummaryUpdate"
+    />
+
     <!-- 删除集合确认 -->
     <ConfirmDialog
       :open="deleteConfirm.isOpen"
@@ -215,6 +227,7 @@ import { useRouter } from 'vue-router'
 import CollectionDatasetPicker from '@/features/collections/components/CollectionDatasetPicker.vue'
 import CollectionMemberList from '@/features/collections/components/CollectionMemberList.vue'
 import CollectionMetadataPanel from '@/features/collections/components/CollectionMetadataPanel.vue'
+import SummaryFieldsDialog from '@/features/collections/components/SummaryFieldsDialog.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useConfirmDelete } from '@/shared/composables/useConfirmDelete'
 import { useToast } from '@/shared/composables/useToast'
@@ -229,6 +242,7 @@ import { useCollectionDetail } from '@/features/collections/composables/useColle
 import { useCollectionEdit } from '@/features/collections/composables/useCollectionEdit'
 import { useCollectionMembers } from '@/features/collections/composables/useCollectionMembers'
 import { useOrderedSelection } from '@/features/collections/composables/useOrderedSelection'
+import { COLLECTION_MEMBER_LIMIT } from '@/features/collections/constants/collectionLimits'
 import { t } from '@/i18n'
 
 const router = useRouter()
@@ -249,6 +263,7 @@ const {
 
 const memberOps = useCollectionMembers({ detail, refresh: fetch })
 const { members, adding, removing, reordering, add } = memberOps
+const { summaryChanges, updatingSummary, confirmSummaryUpdate, cancelSummaryUpdate } = memberOps
 
 const memberPublicIds = computed(() => members.value.map((m) => m.publicId))
 
@@ -309,8 +324,21 @@ const {
 const pickerDatasets = computed(() =>
   rawPickerDatasets.value.filter((d) => d.status === 'completed'),
 )
-const pickerSelection = useOrderedSelection<File>()
+const pickerSelection = useOrderedSelection<File>([], {
+  // 上限是集合的成员总数：已有成员占掉一部分名额，每次 toggle 时按当时的剩余求值
+  max: () => COLLECTION_MEMBER_LIMIT - members.value.length,
+})
 const pickerQuery = ref('')
+
+/** 剩余可添加的名额（历史数据可能已超上限，下限取 0） */
+const pickerRemaining = computed(() => Math.max(0, COLLECTION_MEMBER_LIMIT - members.value.length))
+
+/** 已达成员上限时拒绝追加并提示；取消选中始终允许，所以只在被拒绝时提示 */
+function togglePickerDataset(file: File): void {
+  if (!pickerSelection.toggle(file)) {
+    showToast(t('collections.validation.memberLimit', { max: COLLECTION_MEMBER_LIMIT }), 'error')
+  }
+}
 
 // 300ms 防抖搜索（与创建页一致）
 let debounceTimer: ReturnType<typeof setTimeout> | null = null

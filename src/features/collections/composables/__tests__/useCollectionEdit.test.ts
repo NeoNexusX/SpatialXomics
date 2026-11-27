@@ -105,6 +105,70 @@ describe('useCollectionEdit', () => {
     expect(edit.editing.value).toBe(true)
   })
 
+  // 上限与后端写入校验一致（128），文案带上限值
+  it('名称超过字段表上限时不发请求，提示里带上限值', async () => {
+    edit.start()
+    edit.draft.value!.name = 'x'.repeat(129)
+    await edit.save()
+
+    expect(updateMock).not.toHaveBeenCalled()
+    expect(edit.validationError.value).toBe('Name must be at most 128 characters.')
+    expect(edit.editing.value).toBe(true)
+  })
+
+  it('名称恰好等于上限时正常保存', async () => {
+    updateMock.mockResolvedValue(makeDetail())
+    const atLimit = 'x'.repeat(128)
+
+    edit.start()
+    edit.draft.value!.name = atLimit
+    await edit.save()
+
+    expect(updateMock).toHaveBeenCalledWith('aB3xK9mQ2rT7wY1z', { name: atLimit })
+    expect(edit.validationError.value).toBe('')
+  })
+
+  // 简介上限同样取自字段表（512），文案带上限值
+  it('简介超过字段表上限时不发请求，提示里带上限值', async () => {
+    edit.start()
+    edit.draft.value!.description = 'd'.repeat(513)
+    await edit.save()
+
+    expect(updateMock).not.toHaveBeenCalled()
+    expect(edit.validationError.value).toBe('Description must be at most 512 characters.')
+    expect(edit.editing.value).toBe(true)
+  })
+
+  it('简介恰好等于上限时正常保存', async () => {
+    updateMock.mockResolvedValue(makeDetail())
+    const atLimit = 'd'.repeat(512)
+
+    edit.start()
+    edit.draft.value!.description = atLimit
+    await edit.save()
+
+    expect(updateMock).toHaveBeenCalledWith('aB3xK9mQ2rT7wY1z', { description: atLimit })
+    expect(edit.validationError.value).toBe('')
+  })
+
+  // 回归：清空日期时曾发出 ""，后端当成非法日期返回 422（实测 "input is too short"）
+  it('清空发表时间时发送 null 而不是空串', async () => {
+    updateMock.mockResolvedValue(makeDetail())
+    detail.value = {
+      ...makeDetail(),
+      publishTime: '2024-05-01',
+      metadata: { name: 'Kidney Atlas', publish_time: '2024-05-01' },
+    }
+
+    edit.start()
+    expect(edit.draft.value!.publish_time).toBe('2024-05-01')
+    edit.draft.value!.publish_time = ''
+    await edit.save()
+
+    expect(updateMock).toHaveBeenCalledWith('aB3xK9mQ2rT7wY1z', { publish_time: null })
+    expect(edit.editing.value).toBe(false)
+  })
+
   it('保存失败留在编辑态，草稿不丢可重试', async () => {
     updateMock.mockRejectedValue(new Error('boom'))
 

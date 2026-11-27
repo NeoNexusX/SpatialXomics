@@ -38,7 +38,8 @@ export function useCollectionsPage() {
   const search = ref('')
 
   // 服务端筛选体（§4.3）：name/title/journal_name/owner_username 模糊、
-  // member_type/collection_type 精确、词表字段「集合内包含」；多值数组 = OR。
+  // member_type/collection_type 与集合上的数组做交集匹配（大小写不敏感）、
+  // 词表字段「集合内包含」；多值数组 = OR。
   // 空数组/空串后端视为不筛选，直接透传即可
   const filters = ref<Record<string, string | string[]>>({})
 

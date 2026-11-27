@@ -36,26 +36,28 @@
               v-model="d[field.key]"
               type="text"
               class="input input-bordered w-full kawaru-text-95"
-              :maxlength="field.key === 'name' ? 80 : undefined"
+              :maxlength="field.maxLength"
               :placeholder="placeholderOf(field)"
             />
             <!-- date 档位：原生日期选择器（点选录入，杜绝手输格式问题）。空值格式提示
                  跟随浏览器语言、无法定制，属可接受代价；值/草稿均为 YYYY-MM-DD（ISO 8601），
-                 清空即显式置空，PATCH 会发送 '' -->
+                 清空即显式置空，PATCH 会发送 null（后端对日期只认 null，空串会 422） -->
             <input
               v-else-if="field.type === 'date'"
               v-model="d[field.key]"
               type="date"
               class="input input-bordered w-full kawaru-text-95"
             />
-            <!-- 长文本统一 300 上限（与创建页 description 的 maxlength 一致；
-                 后端逐字段上限确认后可再按字段细化） -->
+            <!-- 长文本上限按字段取（字段定义表的 maxLength）：description 512、
+                 abstract / cite_information 16000，与后端写入校验一致。
+                 高度随内容增长（field-sizing-content，同 agent 的输入框），到上限后在框内滚动；
+                 不支持该属性的浏览器保持 rows=2 的固定高度 -->
             <textarea
               v-else-if="field.type === 'long'"
               v-model="d[field.key]"
               rows="2"
-              maxlength="300"
-              class="textarea textarea-bordered w-full kawaru-text-95 resize-none"
+              :maxlength="field.maxLength"
+              class="textarea textarea-bordered w-full kawaru-text-95 field-sizing-content max-h-80 overflow-y-auto resize-none"
               :placeholder="placeholderOf(field)"
             ></textarea>
             <TagInput
@@ -69,6 +71,15 @@
               :placeholder="placeholderOf(field)"
             />
           </component>
+
+          <!-- 有上限的长文本显示字符计数：maxlength 会静默截断超长的粘贴，计数让截断可见。
+               放在 label 之外，控件的访问名保持纯字段名 -->
+          <span
+            v-if="field.type === 'long' && field.maxLength"
+            class="text-right kawaru-text-75 text-base-content/50"
+          >
+            {{ d[field.key].length }}/{{ field.maxLength }}
+          </span>
 
           <!-- 用户接管了自动推导的字段后，给一个回到「按数据集识别」的入口 -->
           <div

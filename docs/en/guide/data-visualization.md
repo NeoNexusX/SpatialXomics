@@ -25,15 +25,17 @@ When you click **Explore > Generate**, the platform creates a task and redirects
 
 The visualization page has five main areas:
 
-![Page layout](https://cdn.neonexus.top/docs/20260911150203309.jpg_view)
-
 1. **Ion intensity image** (center) — spatial heatmap of the selected m/z
 2. **Pixel spectrum** (bottom) — mean spectrum or per-pixel spectrum
 3. **Region comparison** (bottom panel) — compare two regions side by side
-4. **Info & controls** (right sidebar) — metadata, display settings, clustering, ROIs
+4. **Toolbox** (right sidebar, collapsed by default) — metadata, intensity, clustering, ROIs, masks
 5. **Annotation panel** (left rail) — CSV-based annotation matching
 
-## Right Sidebar Controls
+The right sidebar stays collapsed as a narrow strip until you click **Toolbox**; sections inside it are collapsed by default and expand when you click their headings. The ⓘ icon next to a heading or parameter shows its help text (press Esc to close).
+
+![Toolbox](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127160509530.jpg_view)
+
+## Toolbox (Right Sidebar)
 
 ### Info
 
@@ -41,37 +43,56 @@ Shows dataset metadata: Polarity, Analyzer, Ionisation Source, Pixel Size, Resol
 
 Below it, **Biological & Sample Info** shows the sample details entered at upload: organism, organism part, condition, growth conditions, stabilization, and tissue modification.
 
-These come from the source dataset, so they also appear for preprocessed results. Fields left empty at upload are not shown.
+These come from the source dataset, so they also appear for preprocessed results. Fields left empty at upload are not shown. **Preprocessing** at the end of the block lists the processing methods applied to this result (e.g., "Direct conversion (no preprocessing)").
 
-### Display Range
+![Info](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127160527037.jpg_view)
 
-- Enter Min/Max values directly.
-- The current values are shown as percentiles (e.g., "95.23%").
-
-### Statistic
+### Intensity
 
 - **Intensity histogram** — visualizes the intensity distribution; red lines mark the current Min/Max.
 - **Dimensions** — image size (e.g., 100 × 80).
 - **Non-zero** — number of pixels with non-zero intensity.
 - **TIC** — total ion current.
+- **Max / Min** — enter values directly; the current percentile is shown alongside (e.g., "95.23%").
+- **Gamma** — brightness/contrast curve. Range 0.5–1.5, default 1.0.
 
-### Preprocessing
+A vertical intensity strip sits to the right of the image: its two handles are Max and Min, and a button at the top restores the default range. The strip is greyed out while the multi-ion overlay is active.
 
-Lists the processing methods applied to this result (e.g., "Direct conversion (no preprocessing)").
+![Intensity](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127160548178.jpg_view)
 
-### Visualization Controls
+### Multi-Ion Overlay
 
-Gamma correction is always available; UMAP / KMeans clustering is only available for continuous data.
+Continuous data can overlay several ions at once as separate colour channels. Enable **Overlay mode**, then add the current m/z as a channel — or use **Batch add m/z** and click peaks straight on the spectrum.
+
+- Up to **10 channels**. Each channel is normalized on its own range and added as a colour.
+- Per-channel controls cover visibility, colour, and opacity.
+- Display Range, Colormap, and Gamma do not apply while an overlay is active; their controls are greyed out.
+
+![Multi-ion overlay](https://cdn.neonexus.top/docs/20261008180949956.jpg_view)
+
+### Clustering Controls
+
+UMAP / KMeans clustering is available for continuous data; the first time you enable it you are asked to confirm, and a backend UMAP task is created.
+
+Save an ROI (or import a mask) first, then pick it under **Scope** in the Clustering block: KMeans clusters only the pixels inside it; choose **All pixels** to cluster the whole image. A scope with fewer than 2 clusterable pixels cannot be run.
 
 | Control | Description |
 |---|---|
-| **Gamma** | Brightness/contrast curve. Range 0.5–1.5, default 1.0. |
 | **Enable UMAP/KMeans** | First use requires confirmation; triggers a backend UMAP task. |
 | **UMAP** | Overlay showing UMAP dimensionality reduction. |
 | **KMeans** | Run KMeans on the UMAP embedding (k = 2–20). Runs locally in the browser. |
+| **Scope** | With an ROI selected, only pixels inside it are clustered; **All pixels** clusters the whole image. An ROI with fewer than 2 pixels cannot be clustered and a message is shown. |
 | **Opacity** | Adjust overlay transparency for UMAP and for KMeans separately. |
 | **Export UMAP PNG / Export KMeans PNG** | Download the corresponding overlay as a PNG image. |
 | **Clusters** | Toggle individual clusters on and off. |
+
+**UMAP overlay:**
+
+![UMAP overlay](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127160627242.jpg_view)
+
+**KMeans overlay:**
+
+![KMeans overlay](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127160720811.jpg_view)
 
 ### Region of Interest (ROI)
 
@@ -92,6 +113,18 @@ An ROI is built in a draft from one or more shapes, then saved to the ROI list.
 | **ROI only / Show all** | Toggle between showing only ROI pixels or the full image. |
 | **Delete / Clear all** | Remove individual ROIs or clear everything. |
 
+**Four ROI drawing tools** — pick whichever suits the region (you can also collect pixels with or without signal, or all acquired pixels, from the current ion image):
+
+![ROI tools](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127160910260.jpg_view)
+
+Drawn shapes can also be combined: **Add, Subtract or Intersect** them, then save the result as one ROI. For example, the ROI below subtracts the ellipse on the right from the rectangle on the left:
+
+![ROI combination before saving](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127161821957.jpg_view)
+
+Once saved:
+
+![ROI combination saved](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127161855527.jpg_view)
+
 ### Mask Import & Export
 
 Export ROI masks and KMeans clusters as a binary mask file, or import mask files as ROIs.
@@ -103,7 +136,9 @@ Export ROI masks and KMeans clusters as a binary mask file, or import mask files
 | **Export mask** | Download one mask file. Each file embeds the dataset name, shape, pixel size, and a SHA-256 digest over the pixel payload. |
 | **Import mask** | Load mask files. Each one becomes an entry in the ROI list (tagged “Imported”) and works like a drawn ROI. |
 
-![Mask import & export](https://cdn.neonexus.top/docs/20261008182213629.jpg_view)
+Check the ROIs and/or clusters to export; the example below selects ROI 2, Cluster 2 and Cluster 3:
+
+![Mask export selection](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127162130003.jpg_view)
 
 ## Ion Intensity Image
 
@@ -131,20 +166,10 @@ Displays the spatial intensity distribution for the selected m/z value.
 | **Reset** | Restore all controls to defaults. |
 | **JPG / PNG** | Export the current image. JPG (white background) is the default; hover the button to choose PNG (transparent, lossless). |
 
-### Display Range & Gamma (Right Strip)
+### Intensity Strip & Gamma
 
-- **Min/Max sliders** — drag to adjust contrast.
-- **Gamma slider** — range 0.5–1.5, default 1.0.
-
-## Multi-Ion Overlay
-
-Continuous data can overlay several ions at once as separate colour channels. Enable **Overlay mode**, then add the current m/z as a channel — or use **Batch add m/z** and click peaks straight on the spectrum.
-
-- Up to **10 channels**. Each channel is normalized on its own range and added as a colour.
-- Per-channel controls cover visibility, colour, and opacity.
-- Display Range, Colormap, and Gamma do not apply while an overlay is active; their controls are greyed out.
-
-![Multi-ion overlay](https://cdn.neonexus.top/docs/20261008180949956.jpg_view)
+- **Intensity strip** — the vertical strip beside the image has two drag handles for Max and Min; the top button restores the default range.
+- **Gamma slider** — in the Intensity block of the Toolbox; range 0.5–1.5, default 1.0.
 
 ## Pixel Spectrum
 
@@ -165,42 +190,48 @@ Content depends on the data mode:
 Region comparison is only available for **Centroid** data.
 :::
 
-Compare spectral differences between two regions (A vs. B). Regions can come from:
+Compare spectral differences between two region groups (A vs. B). Regions can come from:
 
 1. **KMeans clusters** (generated in the sidebar)
-2. **User-drawn ROIs**
+2. **User-drawn ROIs** (imported masks appear here too)
 
-Set a minimum detection rate and an intensity threshold, then click **Compare**. Results are grouped into **A only**, **B only**, **A enriched**, **B enriched**, and **Shared**, with detection rates and mean intensities for both sides. Members of a group are combined (union) before comparing.
+There must be at least 2 regions on the page before comparing.
+
+The **Compare regions** panel at the bottom of the page works as follows:
+
+1. Check members into group A and group B; a group can hold several regions, and one region cannot belong to both groups. Members of a group are combined (union) before comparing.
+2. Set three parameters:
+   - **Min detection rate** — 1%–50%, the minimum share of a group in which an ion must be detected.
+   - **Intensity threshold** — 0%–20%, an intensity percentile used to filter noise.
+   - **Enrichment ratio** — 1.1×–4×; a detection-rate ratio at or above it counts as enriched. It only re-labels results and does not require re-comparing.
+3. Click **Compare** to scan; progress is shown and the scan can be cancelled. One row is listed per ion with each group's detection rate, mean intensity and their ratios, grouped into **A only**, **B only**, **A enriched**, **B enriched**, and **Shared**. Results can be filtered by category, sorted and paged; clicking a row switches the ion image and spectrum to that m/z.
+4. Results are discarded when a region they were computed from is deleted or a KMeans run is repeated, so compare again after such changes.
+
+Results can be exported: click **Export A/B only + enriched (annotated)** to save the annotated ions in A only / B only / A enriched / B enriched as a CSV (m/z, detection-rate ratio, intensity ratio, q-value, total score, candidate names) that opens in Excel. Run the annotation panel first.
+
+![Compare regions](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127162723202.jpg_view)
 
 ### Using KMeans Clusters
 
-1. Open the **Visualization** section in the right sidebar and enable KMeans.
+1. Open the **Clustering** section in the Toolbox and enable KMeans.
 
-   ![KMeans controls](https://cdn.neonexus.top/docs/20260914160650461.jpg_view)
+   ![KMeans controls](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127162239718.jpg_view)
 
 2. Choose the number of clusters.
 
-   ![Cluster result](https://cdn.neonexus.top/docs/20260914160834781.jpg_view)
+   ![Cluster result](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127162317073.jpg_view)
 
    ![Cluster overlay](https://cdn.neonexus.top/docs/20260914160853673.jpg_view)
 
-3. Select two clusters to compare.
+3. In **Compare regions**, check the two clusters into groups A and B, then click **Compare**.
 
    ![Comparison result](https://cdn.neonexus.top/docs/20260914161105137.jpg_view)
 
-### Using ROIs
+### Using ROIs for Comparison
 
-1. Click **Rect** in the ROI section, draw a region, click **Confirm shape**, then **Save ROI** to create ROI 1.
+In **Compare regions**, check ROI 1 into group A and ROI 2 into group B, then click **Compare**.
 
-   ![ROI 1](https://cdn.neonexus.top/docs/20260914161347733.jpg_view)
-
-2. Repeat step 1 to create ROI 2.
-
-   ![ROI 2](https://cdn.neonexus.top/docs/20260914161613765.jpg_view)
-
-3. Select both ROIs for comparison.
-
-   ![ROI comparison](https://cdn.neonexus.top/docs/20260914161809308.jpg_view)
+![ROI comparison](https://cdn.neonexus.top/docs/20260914161809308.jpg_view)
 
 ## Annotation Panel
 
@@ -219,6 +250,10 @@ Click **Choose annotation CSV** to open a local file, or open the **Platform** d
 - **Encoding**: UTF-8 (with or without BOM) and GBK/GB18030; the delimiter is detected automatically.
 - Peaks come directly from the dataset's mean spectrum. Zero-intensity points are excluded; the slider drops the weakest 0–99% by intensity rank (default 0%). The percentage counts peaks and takes effect when the slider is released. Every retained peak has its original m/z-axis index for ion images and navigation.
 - Click **Start** beside **Spatial scoring** to run annotation. Opening the panel, returning to a result, or changing the database, peak filter, tolerance, spatial percentage, score weights or adducts never starts matching automatically. Changed conditions clear the previous results and require another click. Each result remembers only its settings.
+
+  **Example annotation result:**
+
+  ![Annotation example](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127163049647.jpg_view)
 
 ### Conditions
 

@@ -5,6 +5,7 @@ import { useDatasetList } from '@/features/datasets/composables/useDatasetList'
 import type { File } from '@/features/datasets/types/dataset'
 import { useToast } from '@/shared/composables/useToast'
 import { collectionErrorMessage, createCollection } from '../api/collectionApi'
+import { COLLECTION_MEMBER_LIMIT } from '../constants/collectionLimits'
 import { DERIVED_METADATA_KEYS } from '../utils/deriveCollectionMetadata'
 import { METADATA_FIELDS, hasMetadataValue } from '../constants/metadataFields'
 import { buildCollectionCreatePayload, toMetadataDraft } from '../utils/metadataPatch'
@@ -79,8 +80,24 @@ export function useCreateCollection() {
   })
 
   // ---- 2) 已选列表（选择序 = 显示序）----
-  const { selected, isSelected, toggle, move, moveUp, moveDown, removeById, clear } =
-    useOrderedSelection<File>()
+  // 上限 = 后端写入校验的成员上限（创建接口 file_public_ids ≤ 300）
+  const {
+    selected,
+    isSelected,
+    toggle: toggleSelection,
+    move,
+    moveUp,
+    moveDown,
+    removeById,
+    clear,
+  } = useOrderedSelection<File>([], { max: COLLECTION_MEMBER_LIMIT })
+
+  /** 达到上限后拒绝追加并提示；取消选中始终允许，所以这里只在被拒绝时提示 */
+  function toggle(file: File): void {
+    if (!toggleSelection(file)) {
+      showToast(t('collections.validation.memberLimit', { max: COLLECTION_MEMBER_LIMIT }), 'error')
+    }
+  }
 
   const selectedCount = computed(() => selected.value.length)
   const selectedOrganisms = computed(() =>

@@ -74,6 +74,12 @@ describe('toProxiedRelayUrl', () => {
       '/api/annotations/si-db/relay/download?token=abc%2Fx',
     )
   })
+
+  it('does not double the /api prefix when the backend already returns the url under /api', () => {
+    expect(
+      toProxiedRelayUrl('https://sxo.neonexus.top/api/annotations/si-db/relay/download?token=abc%2Fx'),
+    ).toBe('/api/annotations/si-db/relay/download?token=abc%2Fx')
+  })
 })
 
 describe('fetchSiDbCsv', () => {

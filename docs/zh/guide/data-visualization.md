@@ -26,53 +26,72 @@
 
 ### 2. 可视化页面简介
 
-可视化页面可主要分为离子强度图、像素谱图、区域比较栏、基本信息栏、注释面板五个功能模块。后文将对以上五个模块功能详细介绍。
+可视化页面可主要分为离子强度图、像素谱图、区域比较栏、右侧工具区（Toolbox）与左侧注释面板五个功能模块。后文将对以上五个模块功能详细介绍。
 
-![image-20260911150203224](https://cdn.neonexus.top/docs/20260911150203309.jpg_view)
+右侧工具区默认收起为窄条，点击顶部的`Toolbox`展开或收起；其中的各区块默认收起，点击区块标题展开，标题或参数旁的 ⓘ 图标可查看说明（按 Esc 关闭）。
 
-#### 2.1 基本信息栏
+![1af90621a08586877aca820db51abff2](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127160509530.jpg_view)
 
-**1.Info（信息）**
+#### 2.1 右侧工具区（Toolbox）
+
+**1. Info（信息）**
 
 显示数据集元数据：Polarity（极性）、Analyzer（质量分析器）、Ionisation Source（离子源）、Pixel Size（像素尺寸）、Resolving Power（分辨率）、Matrix（基质）、Matrix Application（基质涂布方式）、Solvent（溶剂）、Spectrum Mode（谱图模式）、Storage Mode（imzml存储模式）。
 
 下方的 **Biological & Sample Info（生物与样本信息）** 显示上传时填写的样本信息：物种、组织部位、实验条件、培养条件、稳定化处理、组织前处理。
 
-这些信息取自源数据集，预处理后的结果同样会显示；上传时未填写的字段不显示。
+这些信息取自源数据集，预处理后的结果同样会显示；上传时未填写的字段不显示。区块末尾的 **Preprocessing（预处理）** 列出该结果使用的处理方法，如 "Direct conversion (no preprocessing)"。
 
-**2. Display Range（显示范围）**
+![image-20261127160526974](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127160527037.jpg_view)
 
-- 直接输入 Min/Max 数值
-- 实时显示当前值对应的**百分位**（如 "95.23%")
-
-**3. Statistic（统计）**
+**2. Intensity（强度）**
 
 - **强度直方图**：可视化强度分布，红线标记当前 Min/Max
 - **Dimensions**：图像尺寸（如 100 × 80)
 - **Non-zero**：非零像素数量
 - **TIC**：总离子流
+- **Max / Min**：直接输入数值，右侧实时显示当前值对应的**百分位**（如 "95.23%"）
+- **Gamma 校正**：滑块范围 0.5–1.5，默认 1.0，调整图像亮度/对比度曲线
 
-**4. Preprocessing（预处理）**
+图像右侧另有一条强度条：上下两个手柄分别对应 Max / Min，拖动即可调整对比度，顶部按钮恢复默认范围。多离子叠加时该条置灰。
 
-显示该结果使用的处理方法列表，如 "Direct conversion (no preprocessing)"
+![image-20261127160548123](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127160548178.jpg_view)
 
-**5. Visualization（可视化控件）**
+**3. Multi-ion overlay（多离子叠加）**（仅 Continuous）
 
-- Gamma 校正：
-  - 滑块范围 0.5–1.5，默认 1.0
-  - 调整图像亮度/对比度曲线
-- UMAP / KMeans 降维聚类（仅 Continuous 模式）
+Continuous 数据可将多个离子同时叠加为多个颜色通道显示。开启`Overlay mode`后，可将当前 m/z 添加为一个通道；也可使用`Batch add m/z`，直接在谱图上点击峰批量添加。
+
+- 最多支持 **10 个通道**，每个通道按各自的强度范围独立归一化后叠加为不同颜色；
+- 每个通道可单独控制可见性、颜色与透明度；
+- 叠加激活时，Display Range、Colormap 与 Gamma 控件均会置灰（叠加渲染不使用这些设置）。
+
+![ec58781ec5cf85b8de67931dec1da39e](https://cdn.neonexus.top/docs/20261008180949956.jpg_view)
+
+**4. Clustering（聚类）**（仅 Continuous）
+
+UMAP / KMeans 降维聚类；首次开启需确认，后端创建 UMAP 计算任务。
+
+先保存 ROI（或导入掩膜），再在 Clustering 区块的 `Scope` 中选择它：KMeans 只对该 ROI 内的像素聚类；选择 `All pixels` 则对全图聚类。所选 ROI 内可聚类像素少于 2 个时无法运行。
 
 | 功能                   | 说明                                                  |
 | ---------------------- | ----------------------------------------------------- |
 | **Enable UMAP/KMeans** | 首次开启需确认，后端创建 UMAP 计算任务                |
 | **UMAP**               | 显示 UMAP 降维嵌入的二维分布覆盖层                    |
 | **KMeans**             | 在 UMAP 基础上做 KMeans 聚类（k=2–20)，本地浏览器计算 |
+| **Scope**              | 选择某个 ROI 时只对该 ROI 内的像素聚类，选择「全部像素」则对全图聚类；所选 ROI 少于 2 个像素时无法聚类并给出提示 |
 | **Opacity**            | 分别调节 UMAP/KMeans 覆盖层透明度                     |
 | **Export PNG**         | 导出 UMAP/KMeans 图像                                 |
 | **Cluster 筛选**       | 勾选/取消特定 cluster，控制显示范围                   |
 
-**6. Region of Interest(ROI)**
+**Umap图：**
+
+![image-20261127160627109](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127160627242.jpg_view)
+
+**KMeans图：**
+
+![image-20261127160720691](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127160720811.jpg_view)
+
+**5. Region of Interest（ROI）**
 
 ROI 先在草稿里由一个或多个形状组合而成，保存后进入 ROI 列表。
 
@@ -91,9 +110,23 @@ ROI 先在草稿里由一个或多个形状组合而成，保存后进入 ROI �
 | **ROI only / Show all**           | 切换：只显示 ROI 区域 或 显示完整图像                                |
 | **管理**                          | 删除单个 ROI 或 Clear all                                            |
 
-**7. Mask Import & Export（掩膜导入/导出）**
+**四种ROI绘制工具**，用户可以自行选择合适的工具：（也可按当前离子图选取有信号或无信号的像素，或全部已采集的像素）
 
-可将 ROI 掩膜与 KMeans 聚类结果导出为二值掩膜文件，也可把掩膜文件导入为 ROI。
+![image-20261127160910131](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127160910260.jpg_view)
+
+此外，用户可以根据需要自由组合ROI，工具支持绘制图形后的**合并，减去以及取交集**，最终保存成需要的ROI。如:
+
+下图是左侧矩形删去右侧椭圆形后的ROI：
+
+![image-20261127161821833](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127161821957.jpg_view)
+
+保存后为：
+
+![image-20261127161855435](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127161855527.jpg_view)
+
+**6. Region masks（区域掩膜）**
+
+可将 ROI 与 KMeans 聚类结果导出为二值掩膜文件，也可把掩膜文件导入为 ROI。
 
 | 功能                            | 说明                                                         |
 | ------------------------------- | ------------------------------------------------------------ |
@@ -102,7 +135,9 @@ ROI 先在草稿里由一个或多个形状组合而成，保存后进入 ROI �
 | **Export mask**                 | 导出一个掩膜文件，文件内嵌数据集名称、形状、像素尺寸与像素数据的 SHA-256 校验值 |
 | **Import mask**                 | 导入掩膜文件，每个文件成为 ROI 列表中的一项（标签为「导入」），用法与手绘 ROI 相同 |
 
-![image-20261008182213554](https://cdn.neonexus.top/docs/20261008182213629.jpg_view)
+用户可以自行勾选需要的ROI或者聚类结果进行导出，如下图是选择ROI2,Cluster2,Cluster3：
+
+![image-20261127162129922](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127162130003.jpg_view)
 
 #### 2.2 离子强度图
 
@@ -130,20 +165,10 @@ ROI 先在草稿里由一个或多个形状组合而成，保存后进入 ROI �
 | **Reset**           | 一键恢复所有控件到默认值                                     |
 | **JPG / PNG**       | 导出当前图像：默认 JPG（白底），悬停导出按钮可选 PNG（透明背景、无损） |
 
-**3. 强度调节（右侧条）**
+**3. 强度调节**
 
-- **Display Range 滑块**：拖动调整 Min/Max，改变对比度
-- **Gamma 校正**：右侧滑块，范围 0.5–1.5，默认 1.0
-
-**4. 多离子叠加**
-
-Continuous 数据可将多个离子同时叠加为多个颜色通道显示。开启`Overlay mode`后，可将当前 m/z 添加为一个通道；也可使用`Batch add m/z`，直接在谱图上点击峰批量添加。
-
-- 最多支持 **10 个通道**，每个通道按各自的强度范围独立归一化后叠加为不同颜色；
-- 每个通道可单独控制可见性、颜色与透明度；
-- 叠加激活时，Display Range、Colormap 与 Gamma 控件均会置灰（叠加渲染不使用这些设置）。
-
-![ec58781ec5cf85b8de67931dec1da39e](https://cdn.neonexus.top/docs/20261008180949956.jpg_view)
+- **图像右侧强度条**：上下两个手柄分别为 Max / Min，拖动即时改变对比度；顶部按钮重置为默认范围。多离子叠加时置灰。
+- **Intensity 区块**：可直接输入 Max / Min（右侧显示百分位）；Gamma 滑块范围 0.5–1.5，默认 1.0。
 
 #### 2.3 像素谱图
 
@@ -159,45 +184,45 @@ Continuous 数据可将多个离子同时叠加为多个颜色通道显示。开
 - 当前选中 m/z 用**竖线高亮**
 - 底部显示统计：Peaks、Intensity、Selected/Tolerance 或 Pixel
 
-
-
 #### 2.4 区域比较
 
-**仅 Centroid 数据可用**，用于比较两个区域（A vs B）的谱图差异。主要有两类数据来源，KMeans 聚类产生的 clusters或用户绘制的 ROIs，现就以上两类数据比较做一流程介绍。
+**仅 Centroid 数据可用**，用于比较两个区域组（A 组 vs B 组）的谱图差异。区域来源有两类：KMeans 聚类产生的 clusters，以及用户绘制的 ROI（导入的掩膜也作为 ROI 出现在列表中）。页面上至少要有 2 个区域才能开始比较。
 
-设置最低检出率（Min detection rate）与强度阈值（Intensity threshold）后点击`Compare`进行比较。比较时同一组的多个成员先合并（并集），结果分为五类：**仅 A（A only）**、**仅 B（B only）**、**A 富集（A enriched）**、**B 富集（B enriched）**、**共有（Shared）**，并显示两边的检出率与平均强度。
+比较在页面底部的 **Compare regions（区域比较）** 面板中进行：
+
+1. 分别勾选 A 组与 B 组的成员，每组可以包含多个区域；同一个区域不能同时属于两组。组内成员先取并集，再作为一组参与比较。
+2. 设置三个参数：
+   - **Min detection rate（最低检出率）**：1%–50%，离子在该组中被检出的最低比例。
+   - **Intensity threshold（强度阈值）**：0%–20%，按强度分位过滤噪声。
+   - **Enrichment ratio（富集倍数）**：1.1×–4×，检出率比达到该倍数即视为富集；它只影响结果分类，调整后无需重新比较。
+3. 点击 `Compare` 开始扫描，过程中显示进度、可取消。结果按离子逐行列出，显示两组的检出率、平均强度及各自的比值，并分为 **A only**、**B only**、**A enriched**、**B enriched**、**Shared** 五类；结果可按类别筛选、排序和分页，点击一行会切换到该 m/z 的离子图与谱图。
+4. 删除某个区域或重新运行 KMeans 后，基于它的比较结果会失效，需要重新比较。
+
+比较结果可以导出：点击 `Export A/B only + enriched (annotated)`，把 A only / B only / A enriched / B enriched 中已经注释到的离子导出为 CSV（m/z、检出率比、强度比、q 值、总分、候选名），可用 Excel 打开；导出前需要先在注释面板运行注释。
+
+![image-20261127162723116](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127162723202.jpg_view)
 
 ##### 2.4.1 KMeans 聚类产生的 clusters
 
-1.在基本信息栏“Visualization”模块处，进入KMeans聚类操作
+1.展开右侧`Toolbox`，在“Clustering（聚类）”区块开启并运行 KMeans
 
-![image-20260914160650389](https://cdn.neonexus.top/docs/20260914160650461.jpg_view)
+![image-20261127162239645](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127162239718.jpg_view)
 
 2.选择聚类层数得到聚类结果
 
-![image-20260914160834734](https://cdn.neonexus.top/docs/20260914160834781.jpg_view)
+![image-20261127162316984](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127162317073.jpg_view)
 
 ![image-20260914160853610](https://cdn.neonexus.top/docs/20260914160853673.jpg_view)
 
-3.选择需要比较的类别进行比较，得到最终结果
+3.在“Compare regions（区域比较）”面板把两个聚类分别勾选到 A 组和 B 组，点击`Compare`得到比较结果
 
 ![image-20260914161105052](https://cdn.neonexus.top/docs/20260914161105137.jpg_view)
 
-##### 2.4.2 用户绘制的 ROIs
+##### 2.4.2 比较时，也可使用用户绘制的 ROIs
 
-1.点击基本信息栏“Region of interest”模块处`Rect`按键，在图中框选感兴趣区域后，点击`Confirm shape`，再点击`Save ROI`得到ROI1
-
-![image-20260914161347627](https://cdn.neonexus.top/docs/20260914161347733.jpg_view)
-
-2.再进行一遍第一步操作，得到感兴趣的ROI2
-
-![image-20260914161613717](https://cdn.neonexus.top/docs/20260914161613765.jpg_view)
-
-3.选择两个ROI进行比较得到比较结果
+在“Compare regions（区域比较）”面板把 ROI1 勾选到 A 组、ROI2 勾选到 B 组，点击`Compare`得到比较结果
 
 ![image-20260914161809226](https://cdn.neonexus.top/docs/20260914161809308.jpg_view)
-
-
 
 #### 2.5 注释面板
 
@@ -212,10 +237,18 @@ Continuous 数据可将多个离子同时叠加为多个颜色通道显示。开
 点击 **选择注释 CSV** 打开本地文件；**平台库** 下拉则列出平台的参考数据库（见[数据库](./database)）。选中后 Chrome/Edge 会弹出「另存为」对话框并**默认定位到系统下载文件夹**（点一次「保存」即可，按钮显示下载进度），整库 CSV 保存为本地文件后再导入；再次导入（包括清除当前库之后）会直接复用已保存的文件、不再重新下载，文件被删除或服务端更新后才重新拉取。Firefox/Safari 不支持保存文件句柄，仍为在线拉取后直接导入。两种方式导入的库都只在当前浏览器读取并保存，不上传到服务器；下次打开可以恢复用户此前选择的库，也可以清除或重新选择。
 
 - 库模板为 `ID,Name,Formula,InChI,Mass`，一行一个化合物。`Formula` 必需；`Mass` 为单同位素中性质量（Da），缺失时根据分子式计算，其余列可选。同分子式的异构体合并为多个候选。
+
 - 可选的 `Origin` 列标注化合物来源：`endogenous`（内源）、`expected`（预期内源）、`unknown`（未定）、`exogenous`（外源）。同分子式的候选按这个顺序排列，同级保持文件里的先后，排第一的就是显示名。来源只决定先后和标签，不计入总分，也不影响 q 值；没有这一列时候选按文件顺序排列。
+
 - 编码支持 UTF-8（含 BOM）和 GBK/GB18030，分隔符自动识别。
+
 - 待匹配峰直接来自数据集平均谱，先去掉平均强度为 0 的轴点，再通过滑动条按强度排名去掉最低的 0–99%（默认 0%）。百分比按峰数计算，松手后生效。峰本身就在 m/z 轴上，可以直接读取离子图和跳转。
+
 - 点击 **空间计算** 输入框右侧的 **开始** 按钮后运行。打开面板、重新进入结果页或更换库、峰过滤比例、容差、空间计算比例、评分权重、加合物时都不会自动匹配；条件变化会清除旧结果，需要再次点击按钮。每个结果页只记住设置。
+
+  **示例注释结果：**
+
+  ![image-20261127163049514](https://official-oss.oss-cn-hongkong.aliyuncs.com/docs/20261127163049647.jpg_view)
 
 **2. 条件**
 

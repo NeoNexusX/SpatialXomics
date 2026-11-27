@@ -1,8 +1,24 @@
 import { computed, ref, shallowRef, type ShallowRef } from 'vue'
 import { useToast } from '@/shared/composables/useToast'
-import { addMembers, collectionErrorMessage, removeMembers, reorderMembers } from '../api/collectionApi'
+import {
+  addMembers,
+  collectionErrorMessage,
+  removeMembers,
+  reorderMembers,
+  updateCollection,
+} from '../api/collectionApi'
 import { isCollectionApiError } from '../types/collection'
-import type { CollectionDetail, CollectionMember } from '../types/collection'
+import type {
+  CollectionDetail,
+  CollectionMember,
+  CollectionPatchPayload,
+} from '../types/collection'
+import {
+  deriveCollectionMetadata,
+  mergeDerivedMetadata,
+  type DerivedMetadata,
+  type DerivedMetadataChange,
+} from '../utils/deriveCollectionMetadata'
 import { t } from '@/i18n'
 
 /** 409 order conflict 的标准处理：提示 + 拉最新列表让用户重试（不自动合并） */
@@ -18,6 +34,9 @@ export interface UseCollectionMembersOptions {
 /**
  * 集合成员管理：添加（追加到末尾）/ 批量移除（removed/skipped 对账）/ 调序
  * （全量重写语义 + 乐观更新）。所有操作的 409 细分文案在此收口。
+ *
+ * 增删成员还会牵动样本 / 采集 8 个汇总字段：后端不按成员汇总，所以成员变化后这里
+ * 比对出受影响的字段，交给用户确认后再提交（summaryChanges / confirmSummaryUpdate）。
  */
 export function useCollectionMembers(options: UseCollectionMembersOptions) {
   const { detail, refresh } = options
@@ -39,14 +58,55 @@ export function useCollectionMembers(options: UseCollectionMembersOptions) {
     return collectionErrorMessage(err, fallback)
   }
 
+  // ---- 汇总字段跟进：成员变化后比对，用户确认后提交 ----
+  /** 待用户确认的汇总字段变更；非空即显示确认框 */
+  const summaryChanges = shallowRef<DerivedMetadataChange[]>([])
+  const updatingSummary = ref(false)
+
+  /** before 是成员变化前按成员推导的值：用它判断这次变化影响到了哪些字段 */
+  function proposeSummaryUpdate(before: DerivedMetadata) {
+    const current = detail.value
+    summaryChanges.value = current
+      ? mergeDerivedMetadata(current.metadata, before, deriveCollectionMetadata(current.members))
+      : []
+  }
+
+  /** 用户确认：只提交有变更的字段。失败时确认框保持打开，可以重试或改为取消 */
+  async function confirmSummaryUpdate() {
+    const current = detail.value
+    const changes = summaryChanges.value
+    if (!current || !changes.length || updatingSummary.value) return
+    updatingSummary.value = true
+    try {
+      const patch: CollectionPatchPayload = {}
+      for (const change of changes) patch[change.key] = change.after
+      detail.value = await updateCollection(current.publicId, patch)
+      syncFromServer()
+      summaryChanges.value = []
+      showToast(t('collections.toast.summaryUpdated'), 'success')
+    } catch (err: unknown) {
+      showToast(errorText(err, t('common.feedback.updateFailed')), 'error')
+    } finally {
+      updatingSummary.value = false
+    }
+  }
+
+  /** 用户选择不更新：汇总字段保持原值，之后可以在 Edit 里手动改 */
+  function cancelSummaryUpdate() {
+    if (updatingSummary.value) return
+    summaryChanges.value = []
+  }
+
   // ---- 添加成员：响应即完整 CollectionDetail，直接回写。
   // 返回是否成功——调用方据此决定是否关闭选集弹窗（失败时保留用户的选择便于重试）----
   async function add(filePublicIds: string[]): Promise<boolean> {
     if (!detail.value || !filePublicIds.length || adding.value) return false
+    const summaryBefore = deriveCollectionMetadata(detail.value.members)
     adding.value = true
     try {
       detail.value = await addMembers(detail.value.publicId, filePublicIds)
       syncFromServer()
+      proposeSummaryUpdate(summaryBefore)
       showToast(t('common.feedback.added'), 'success')
       return true
     } catch (err: any) {
@@ -62,6 +122,7 @@ export function useCollectionMembers(options: UseCollectionMembersOptions) {
   // ---- 移除成员：消费 removed/skipped 对账后重拉 ----
   async function remove(publicIds: string[]) {
     if (!detail.value || !publicIds.length || removing.value) return
+    const summaryBefore = deriveCollectionMetadata(detail.value.members)
     removing.value = true
     try {
       const result = await removeMembers(detail.value.publicId, publicIds)
@@ -71,6 +132,7 @@ export function useCollectionMembers(options: UseCollectionMembersOptions) {
       }
       showToast(parts.join(t('collections.toast.separator')), 'success')
       await refresh()
+      proposeSummaryUpdate(summaryBefore)
     } catch (err: any) {
       showToast(errorText(err, t('common.feedback.removeFailed')), 'error')
     } finally {
@@ -112,5 +174,17 @@ export function useCollectionMembers(options: UseCollectionMembersOptions) {
     }
   }
 
-  return { members, adding, removing, reordering, add, remove, reorder }
+  return {
+    members,
+    adding,
+    removing,
+    reordering,
+    add,
+    remove,
+    reorder,
+    summaryChanges,
+    updatingSummary,
+    confirmSummaryUpdate,
+    cancelSummaryUpdate,
+  }
 }

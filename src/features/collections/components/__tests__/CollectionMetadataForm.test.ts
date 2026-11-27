@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { reactive } from 'vue'
+import { nextTick, reactive } from 'vue'
 import CollectionMetadataForm from '../CollectionMetadataForm.vue'
 import { toMetadataDraft } from '../../utils/metadataPatch'
 import { REQUIRED_METADATA_KEYS } from '../../constants/metadataFields'
@@ -117,5 +117,47 @@ describe('CollectionMetadataForm', () => {
       'https://doi.org/10.1038/s41586-020-2649-2',
       'http://dx.doi.org/10.1000/def',
     ])
+  })
+
+  // 长度上限按字段取自字段定义表（与后端写入校验一致），不再是长文本统一 300
+  it('takes each text field maxlength from the field table', () => {
+    const wrapper = mountForm()
+    const textarea = (selector: string) => wrapper.find(selector).attributes('maxlength')
+    const placeholder = (text: string) => `textarea[placeholder="${text}"]`
+    const input = (text: string) =>
+      wrapper.find(`input[placeholder="${text}"]`).attributes('maxlength')
+
+    expect(wrapper.find('input[type="text"]').attributes('maxlength')).toBe('128') // name
+    expect(textarea('textarea:not([placeholder])')).toBe('512') // description
+    expect(textarea(placeholder('Enter the article abstract'))).toBe('16000')
+    expect(textarea(placeholder('Enter the article citation (ACS or RSC style recommended)'))).toBe(
+      '16000',
+    )
+    // 单行文本同样按字段取：title 500、journal_name 255
+    expect(input('Enter the article title')).toBe('500')
+    expect(input('Enter the journal name')).toBe('255')
+  })
+
+  // 长文本放开到 16000 后，输入框高度随内容增长（CSS field-sizing，不支持的浏览器退回固定高度）；
+  // jsdom 不算布局，只能钉住类名
+  it('lets long text areas grow with their content', () => {
+    const wrapper = mountForm()
+
+    expect(
+      wrapper.findAll('textarea').every((t) => t.classes().includes('field-sizing-content')),
+    ).toBe(true)
+  })
+
+  // maxlength 会静默截断超长的粘贴，计数让截断可见
+  it('shows a live character counter on limited text areas', async () => {
+    const formDraft = draft()
+    const wrapper = mountForm({ draft: formDraft })
+
+    expect(wrapper.text()).toContain('0/16000')
+
+    formDraft.abstract = 'An abstract'
+    await nextTick()
+
+    expect(wrapper.text()).toContain('11/16000')
   })
 })

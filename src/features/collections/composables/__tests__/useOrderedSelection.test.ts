@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ref } from 'vue'
 import { useOrderedSelection } from '../useOrderedSelection'
 
 interface Stub {
@@ -90,5 +91,44 @@ describe('useOrderedSelection', () => {
   it('starts from the initial items', () => {
     const { selected } = useOrderedSelection<Stub>([{ publicId: 'aB3xK9mQ2rT7wY1z', label: 'x' }])
     expect(selected.value).toEqual([{ publicId: 'aB3xK9mQ2rT7wY1z', label: 'x' }])
+  })
+
+  // 集合成员上限：达到后追加被拒绝，取消选中不受影响；返回 false 供调用方提示
+  describe('max', () => {
+    const stub = (id: string): Stub => ({ publicId: id, label: id })
+
+    it('rejects appends beyond the max and reports it, while removal still works', () => {
+      const { selected, toggle } = useOrderedSelection<Stub>([], { max: 2 })
+
+      expect(toggle(stub('aB3xK9mQ2rT7wY1a'))).toBe(true)
+      expect(toggle(stub('aB3xK9mQ2rT7wY1b'))).toBe(true)
+      expect(toggle(stub('aB3xK9mQ2rT7wY1c'))).toBe(false)
+      expect(selected.value.map((d) => d.publicId)).toEqual([
+        'aB3xK9mQ2rT7wY1a',
+        'aB3xK9mQ2rT7wY1b',
+      ])
+
+      // 已达上限时取消选中照常生效
+      expect(toggle(stub('aB3xK9mQ2rT7wY1a'))).toBe(true)
+      expect(selected.value.map((d) => d.publicId)).toEqual(['aB3xK9mQ2rT7wY1b'])
+      expect(toggle(stub('aB3xK9mQ2rT7wY1c'))).toBe(true)
+    })
+
+    it('evaluates a getter on every toggle, so the remaining quota can shrink', () => {
+      // 如「300 − 集合现有成员数」：名额被现有成员占掉后不能再追加
+      const limit = ref(2)
+      const { selected, toggle } = useOrderedSelection<Stub>([], { max: () => limit.value })
+
+      toggle(stub('aB3xK9mQ2rT7wY1a'))
+      limit.value = 1
+      expect(toggle(stub('aB3xK9mQ2rT7wY1b'))).toBe(false)
+      expect(selected.value).toHaveLength(1)
+    })
+
+    it('does not limit when max is not set', () => {
+      const { toggle } = useOrderedSelection<Stub>()
+      expect(toggle(stub('aB3xK9mQ2rT7wY1a'))).toBe(true)
+      expect(toggle(stub('aB3xK9mQ2rT7wY1b'))).toBe(true)
+    })
   })
 })

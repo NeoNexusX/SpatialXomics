@@ -50,7 +50,9 @@ export function toMetadataDraft(metadata: CollectionMetadata): CollectionMetadat
 
 /**
  * 草稿 → 差量 PATCH 载荷：逐字段与当前值比较（比较前同样归一化），
- * 只保留发生变化的键。清空字段会发送 '' / []（合法的显式置空）。
+ * 只保留发生变化的键。清空字段发送显式空值：列表 []、字符串 ''、日期 null。
+ * 草稿里日期同样用 '' 表示空，但后端只认 null——空串会被当成非法日期返回 422；
+ * publish_time 也是 PATCH 里唯一允许 null 的字段，其余字段发 null 同样 422。
  */
 export function buildMetadataPatch(
   current: CollectionMetadata,
@@ -67,7 +69,7 @@ export function buildMetadataPatch(
           : raw ?? ''
     const next = field.type === 'list' ? normalizeMetadataList(draft[field.key]) : draft[field.key]
     if (JSON.stringify(normalized) !== JSON.stringify(next)) {
-      ;(patch as Record<string, unknown>)[field.key] = next
+      ;(patch as Record<string, unknown>)[field.key] = field.type === 'date' ? next || null : next
     }
   }
   return patch

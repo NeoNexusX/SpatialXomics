@@ -112,7 +112,15 @@
     },
     "panel": {
       "title": "Collection Metadata",
-      "fieldsCount": "{filled}/{total} fields"
+      "fieldsCount": "{filled}/{total} fields",
+      "expand": "Show full text",
+      "collapse": "Show less"
+    },
+    "summarySync": {
+      "title": "Update sample and acquisition fields?",
+      "message": "Members have changed, so the fields below need to follow. Confirm to apply the changes shown; all other values are left untouched.",
+      "confirm": "Update these fields",
+      "empty": "Not filled"
     },
     "members": {
       "title": "Members",
@@ -144,7 +152,8 @@
       "target": "collection",
       "addMembers": "Add Members",
       "addButton": "Add datasets | Add {count} dataset | Add {count} datasets",
-      "shareLink": "Share link: {url}"
+      "shareLink": "Share link: {url}",
+      "memberLimitHint": "This collection already holds the maximum of {max} datasets, so no more can be added."
     },
     "public": {
       "notFoundDesc": "This collection does not exist or is no longer public.",
@@ -155,12 +164,15 @@
       "removedCount": "Removed {count}",
       "skippedCount": "{count} were no longer in the collection",
       "separator": " · ",
-      "reorderConflict": "Members were changed elsewhere. Refreshed to the latest order."
+      "reorderConflict": "Members were changed elsewhere. Refreshed to the latest order.",
+      "summaryUpdated": "Sample and acquisition fields updated from the current members."
     },
     "validation": {
       "nameRequired": "Name is required.",
-      "nameTooLong": "Name must be at most 80 characters.",
-      "descriptionTooLong": "Description must be at most 300 characters."
+      "nameTooLong": "Name must be at most {max} characters.",
+      "descriptionTooLong": "Description must be at most {max} characters.",
+      "requestInvalid": "Some fields did not pass validation. Please check them and try again.",
+      "memberLimit": "A collection can hold at most {max} datasets."
     },
     "vocab": {
       "memberType": {

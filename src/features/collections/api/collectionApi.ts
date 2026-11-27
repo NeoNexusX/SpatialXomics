@@ -17,16 +17,26 @@ import type {
  * Collection API 客户端。约定（同 datasetApi）：所有函数返回解包后的响应体，
  * 并已通过 collectionMapper 转成前端类型；错误统一转成 CollectionApiError
  * （携带 status + 后端 detail 原文），供 composable 判定 409/403/404 细分文案。
+ * 422（请求体校验失败）例外：message 是一句本地化提示，后端原文只进 console.error。
  *
  * 除公开页（getPublicCollection 走免登录 api 实例）外全部 auth_api。
  */
 
 function toCollectionApiError(err: any): CollectionApiError {
-  const e = new Error(extractBackendError(err, t('common.state.error'))) as CollectionApiError
-  e.status = err?.response?.status
+  const status: number | undefined = err?.response?.status
+  // 422 是请求体校验失败：detail 是 Pydantic 的英文技术信息（且不带字段名），不直接给用户看，
+  // 只提示一句，原文进控制台排查。能提前拦住的校验（长度等）由前端在表单里做掉
+  const rejectedByValidation = status === 422
+  const e = new Error(
+    rejectedByValidation
+      ? t('collections.validation.requestInvalid')
+      : extractBackendError(err, t('common.state.error')),
+  ) as CollectionApiError
+  e.status = status
   // 409 的 detail 是字符串原文（invalid collection members 等）；422 时是校验数组，String 化即可
   const detail = err?.response?.data?.detail
   e.backendMessage = typeof detail === 'string' ? detail : String(detail ?? e.message)
+  if (rejectedByValidation) console.error('[collections] 422 validation rejected:', detail)
   return e
 }
 
@@ -40,9 +50,9 @@ async function request<T>(call: () => Promise<{ data: T }>): Promise<T> {
 }
 
 /**
- * 取用户可读错误文案。CollectionApiError 的 message 已是后端 detail 原文
- * （extractBackendError 在包装时已归一化），不能再走 extractBackendError——
- * 它把非 axios 错误直接替换成 fallback，会吞掉 409 的细分原因。
+ * 取用户可读错误文案。CollectionApiError 的 message 已是可直接展示的文案
+ * （一般是后端 detail 原文，extractBackendError 在包装时已归一化；422 是一句本地化提示），
+ * 不能再走 extractBackendError——它把非 axios 错误直接替换成 fallback，会吞掉 409 的细分原因。
  */
 export function collectionErrorMessage(err: any, fallback: string): string {
   if (isCollectionApiError(err)) return err.message || err.backendMessage || fallback
@@ -52,8 +62,8 @@ export function collectionErrorMessage(err: any, fallback: string): string {
 /**
  * 集合列表筛选体（POST body）。不筛选也要发 {}——后端对缺失 body 返回 422；
  * 字段支持单值或数组（数组 = OR），语义见后端接口文档 §4.3：
- * name/title/journal_name/owner_username 模糊、member_type/collection_type 精确、
- * organism 等词表字段为「集合内包含该值」。
+ * name/title/journal_name/owner_username 模糊；member_type / collection_type 与集合上的
+ * 数组做交集匹配（大小写不敏感）；organism 等词表字段为「集合内包含该值」。
  */
 export type CollectionListFilters = Record<string, any>
 

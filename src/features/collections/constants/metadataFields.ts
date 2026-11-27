@@ -33,6 +33,17 @@ export interface MetadataFieldDef {
   /** 输入提示（getter，理由同 label）；缺省时文本框无提示、list 字段用 TagInput 的默认提示 */
   placeholder?: () => string
   /**
+   * 文本字段的最大长度（字符），与后端写入校验一致：name 128、description 512、
+   * title 500、journal_name 255、abstract / cite_information 16000。
+   * 驱动输入框 maxlength、字符计数与保存前校验。
+   */
+  maxLength?: number
+  /**
+   * 只读面板里超过几行就折叠、可展开全文。留给可长达上万字符的字段（引用 / 摘要）；
+   * 简介上限只有 512，整段显示并不占地，不折叠。
+   */
+  collapsible?: boolean
+  /**
    * 前端必填字段（创建集合时校验，仅影响前端提交门槛与星号，后端 API 不变）。
    * Growth Conditions / Tissue Modification 保持可选。
    */
@@ -58,12 +69,19 @@ export const METADATA_GROUPS: { id: MetadataGroupId; label: () => string }[] = [
 
 export const METADATA_FIELDS: MetadataFieldDef[] = [
   // General
-  { key: 'name', label: () => t('common.field.name'), type: 'text', group: 'general' },
+  {
+    key: 'name',
+    label: () => t('common.field.name'),
+    type: 'text',
+    group: 'general',
+    maxLength: 128,
+  },
   {
     key: 'description',
     label: () => t('collections.meta.description'),
     type: 'long',
     group: 'general',
+    maxLength: 512,
   },
   {
     key: 'member_type',
@@ -90,6 +108,7 @@ export const METADATA_FIELDS: MetadataFieldDef[] = [
     type: 'text',
     group: 'citation',
     placeholder: () => t('collections.metaForm.placeholder.title'),
+    maxLength: 500,
   },
   {
     key: 'doi',
@@ -113,6 +132,7 @@ export const METADATA_FIELDS: MetadataFieldDef[] = [
     type: 'text',
     group: 'citation',
     placeholder: () => t('collections.metaForm.placeholder.journal'),
+    maxLength: 255,
   },
   // 发表时间：date 档位走原生日期选择器（草稿/载荷统一 YYYY-MM-DD；响应可能是
   // 完整 ISO，由 metadataPatch 的 toDateStringInput 归一）；不参与自动推导
@@ -123,6 +143,8 @@ export const METADATA_FIELDS: MetadataFieldDef[] = [
     type: 'long',
     group: 'citation',
     placeholder: () => t('collections.metaForm.placeholder.citation'),
+    maxLength: 16000,
+    collapsible: true,
   },
   {
     key: 'abstract',
@@ -130,6 +152,8 @@ export const METADATA_FIELDS: MetadataFieldDef[] = [
     type: 'long',
     group: 'citation',
     placeholder: () => t('collections.metaForm.placeholder.abstract'),
+    maxLength: 16000,
+    collapsible: true,
   },
   // Sample
   {
@@ -201,6 +225,11 @@ export const METADATA_FIELDS: MetadataFieldDef[] = [
 /** 创建集合时前端必填的字段键（由字段表的 required 标记派生，单一事实来源） */
 export const REQUIRED_METADATA_KEYS: readonly (keyof CollectionMetadata)[] =
   METADATA_FIELDS.filter((f) => f.required).map((f) => f.key)
+
+/** 文本字段的最大长度（字符）；字段未定义上限时为 undefined */
+export function metadataMaxLength(key: keyof CollectionMetadata): number | undefined {
+  return METADATA_FIELDS.find((f) => f.key === key)?.maxLength
+}
 
 /** 该字段是否有可展示的值（空串/null/undefined/空数组都视为未填写） */
 export function hasMetadataValue(metadata: CollectionMetadata, field: MetadataFieldDef): boolean {

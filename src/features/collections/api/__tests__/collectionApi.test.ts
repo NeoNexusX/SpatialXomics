@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/shared/api/httpClient', () => ({
   auth_api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
@@ -7,7 +7,11 @@ vi.mock('@/shared/api/httpClient', () => ({
     err?.response?.data?.detail ?? err?.message ?? fallback ?? 'Collection request failed',
 }))
 
+// 422 的提示是本地化文案：预先加载英文语言包，断言保持英文原文
+beforeAll(() => Promise.all([loadCoreMessages('en'), loadFeatureMessages('collections')]))
+
 import { api, auth_api } from '@/shared/api/httpClient'
+import { loadCoreMessages, loadFeatureMessages } from '@/i18n'
 import {
   addMembers,
   createCollection,
@@ -186,5 +190,31 @@ describe('collectionApi', () => {
     expect(err.status).toBe(409)
     expect(err.backendMessage).toBe('invalid collection members')
     expect(err.message).toBe('invalid collection members')
+  })
+
+  // 422 的 detail 是 Pydantic 的英文技术信息（不带字段名）：界面只提示一句，原文进控制台
+  it('shows one localized sentence for 422 and logs the raw validation detail', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const detail = [
+      {
+        type: 'datetime_from_date_parsing',
+        loc: ['body', 'publish_time'],
+        msg: 'Input should be a valid datetime or date, input is too short',
+        input: '',
+      },
+    ]
+    authPatch.mockRejectedValueOnce({
+      response: { status: 422, data: { detail } },
+      message: 'Request failed with status code 422',
+    })
+
+    const err = await updateCollection(CID, { title: 'x' }).catch((e) => e)
+
+    expect(err.status).toBe(422)
+    expect(err.message).toBe(
+      'Some fields did not pass validation. Please check them and try again.',
+    )
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('422'), detail)
+    consoleError.mockRestore()
   })
 })

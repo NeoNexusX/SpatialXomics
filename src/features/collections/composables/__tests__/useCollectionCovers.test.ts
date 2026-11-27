@@ -41,6 +41,15 @@ const detailWith = (imagePaths: (string | null)[]) => ({
     status: 'completed',
     isPublic: true,
     experimentType: 'imzML',
+    // 成员行没带的样本 / 采集元数据（封面只用到 imagePath）
+    organism: null,
+    organismPart: null,
+    sampleStabilization: null,
+    sampleGrowthConditions: null,
+    tissueModification: null,
+    polarity: null,
+    ionSource: null,
+    analyzer: null,
   })),
 })
 
