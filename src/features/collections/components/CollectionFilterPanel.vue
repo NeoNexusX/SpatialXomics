@@ -21,8 +21,8 @@ import { t } from '@/i18n'
 /**
  * 集合列表筛选面板：POST /collections/list(_all) 的筛选体（后端 §4.3）。
  * 与 DatasetFilterPanel 同构（枚举 TagInput 多选、文本单值模糊），但语义有差：
- * member_type / collection_type 是精确匹配；organism 等词表字段是
- * 「集合内包含该值」——集合这些字段是成员文件取值的汇总数组，不是「等于」。
+ * member_type / collection_type 与集合上的数组做交集匹配（大小写不敏感）；organism 等
+ * 词表字段是「集合内包含该值」——集合这些字段是成员文件取值的汇总数组，不是「等于」。
  * 多值 payload 走数组（同字段多值 = OR，字段间 AND）；空数组后端视为不筛选。
  * doi / access 不参与筛选（后端未开放）。
  */

@@ -1,9 +1,18 @@
 import { computed, reactive, ref, type Ref } from 'vue'
 import { useToast } from '@/shared/composables/useToast'
 import { collectionErrorMessage, updateCollection } from '../api/collectionApi'
+import { metadataMaxLength } from '../constants/metadataFields'
 import { buildMetadataPatch, toMetadataDraft } from '../utils/metadataPatch'
 import type { CollectionDetail, CollectionMetadata, CollectionMetadataDraft } from '../types/collection'
 import { t } from '@/i18n'
+
+/**
+ * 保存前的长度校验与输入框 maxlength 同源（字段定义表的 maxLength，即后端写入校验的上限）。
+ * 输入框已经拦住了输入，这里是兜底：绕过 maxlength 进到草稿里的超长内容不能发出去。
+ * 未定义上限的字段不设限。
+ */
+const NAME_MAX_LENGTH = metadataMaxLength('name') ?? Number.POSITIVE_INFINITY
+const DESCRIPTION_MAX_LENGTH = metadataMaxLength('description') ?? Number.POSITIVE_INFINITY
 
 /**
  * Overview 页的原地编辑（不再弹窗）：Edit → 页内字段变输入框 → Save/Cancel。
@@ -66,12 +75,14 @@ export function useCollectionEdit(options: {
       validationError.value = t('collections.validation.nameRequired')
       return
     }
-    if (name.length > 80) {
-      validationError.value = t('collections.validation.nameTooLong')
+    if (name.length > NAME_MAX_LENGTH) {
+      validationError.value = t('collections.validation.nameTooLong', { max: NAME_MAX_LENGTH })
       return
     }
-    if ((current.description ?? '').length > 300) {
-      validationError.value = t('collections.validation.descriptionTooLong')
+    if ((current.description ?? '').length > DESCRIPTION_MAX_LENGTH) {
+      validationError.value = t('collections.validation.descriptionTooLong', {
+        max: DESCRIPTION_MAX_LENGTH,
+      })
       return
     }
 

@@ -143,8 +143,9 @@ test.describe('Collection full lifecycle', () => {
     await page.getByRole('button', { name: 'Edit' }).click()
     const renamed = `${name} (edited)`
     const newTitle = 'E2E Title Before Delete'
-    await page.locator('input[maxlength="80"]').fill(renamed)
-    // 编辑表单里 Description/Citation/Abstract 三个 textarea 同为 maxlength=300，按角色+名称定位
+    await page.locator('input[maxlength="128"]').fill(renamed)
+    // 编辑表单里 Description / Citation / Abstract 三个 textarea 上限各不相同（按字段定义表），
+    // 按角色 + 名称定位
     await page.getByRole('textbox', { name: 'Description' }).fill('E2E description before delete')
     await page.getByPlaceholder('Enter the article title').fill(newTitle)
     await page.getByRole('button', { name: 'Save Changes' }).click()
@@ -175,6 +176,13 @@ test.describe('Collection full lifecycle', () => {
     await modal.getByRole('button', { name: /^Add 1 dataset$/ }).click()
     await expect(page.locator('.toast')).toContainText('Added', { timeout: 15_000 })
     await expect(modal).toBeHidden()
+    // 成员变化若牵动样本 / 采集字段（物种、极性等），会弹出「更新这些字段」的确认。
+    // 本用例只验证成员流程，出现就选取消、保持原值。确认框与添加弹窗在同一次渲染里切换，
+    // 所以上面断言添加弹窗隐藏之后同步判断即可
+    const keepCurrent = page
+      .locator('dialog.modal-open')
+      .getByRole('button', { name: 'Cancel', exact: true })
+    if (await keepCurrent.isVisible()) await keepCurrent.click()
     await expect
       .poll(async () => (await memberNames()).length, { timeout: 15_000 })
       .toBe(4)

@@ -5,6 +5,7 @@ import {
   toDateStringInput,
   toMetadataDraft,
 } from '../metadataPatch'
+import { METADATA_FIELDS } from '../../constants/metadataFields'
 import type { CollectionMetadata } from '../../types/collection'
 
 const current: CollectionMetadata = {
@@ -111,15 +112,40 @@ describe('date fields (publish_time)', () => {
     expect(buildMetadataPatch(withDate, draft)).toEqual({})
   })
 
-  it('sends the date-only string when changed, and explicit empty when cleared', () => {
+  it('sends the date-only string when changed, and null when cleared', () => {
     const withDate: CollectionMetadata = { ...current, publish_time: '2024-05-01T08:00:00Z' }
     const draft = toMetadataDraft(withDate)
     draft.publish_time = '2025-01-15'
     expect(buildMetadataPatch(withDate, draft)).toEqual({ publish_time: '2025-01-15' })
 
+    // 草稿里清空是 ''，但后端把空串当成非法日期（422 "input is too short"），只认 null
     const cleared = toMetadataDraft(withDate)
     cleared.publish_time = ''
-    expect(buildMetadataPatch(withDate, cleared)).toEqual({ publish_time: '' })
+    expect(buildMetadataPatch(withDate, cleared)).toEqual({ publish_time: null })
+  })
+
+  // 后端写入校验：清空列表传 []、清空字符串传 ""、清空日期传 null；其余字段出现 null 一律 422
+  it('clears every field with its typed empty value, and null only for the date', () => {
+    const full = Object.fromEntries(
+      METADATA_FIELDS.map((field) => [
+        field.key,
+        field.type === 'list' ? ['a value'] : field.type === 'date' ? '2024-05-01' : 'some text',
+      ]),
+    ) as unknown as CollectionMetadata
+    const draft = toMetadataDraft(full)
+    // 联合键循环赋值需要宽化的视图；传给被测函数的仍是原类型的草稿
+    const cleared = draft as Record<string, string | string[]>
+    for (const field of METADATA_FIELDS) {
+      cleared[field.key] = field.type === 'list' ? [] : ''
+    }
+
+    const patch = buildMetadataPatch(full, draft) as Record<string, unknown>
+
+    expect(Object.keys(patch).sort()).toEqual(METADATA_FIELDS.map((f) => f.key).sort())
+    expect(patch.publish_time).toBeNull()
+    expect(patch.title).toBe('')
+    expect(patch.doi).toEqual([])
+    expect(Object.keys(patch).filter((key) => patch[key] === null)).toEqual(['publish_time'])
   })
 
   it('create payload omits an unset date and carries a picked one', () => {

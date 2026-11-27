@@ -12,7 +12,7 @@
           v-if="selected.length"
           class="badge badge-sm font-medium border border-base-300 bg-base-200 text-base-content/70 kawaru-text-75"
         >
-          {{ selected.length }} {{ $t('collections.unit.dataset', selected.length) }}
+          {{ selected.length }}/{{ limit }} {{ $t('collections.unit.dataset', selected.length) }}
         </span>
       </h2>
       <button
@@ -120,9 +120,12 @@ import DatasetThumb from '@/features/collections/components/DatasetThumb.vue'
 import { useDragReorder } from '@/features/collections/composables/useDragReorder'
 import { vocabLabel } from '@/features/datasets/constants/vocabLabels'
 import type { File } from '@/features/datasets/types/dataset'
+import { COLLECTION_MEMBER_LIMIT } from '../constants/collectionLimits'
 
 defineProps({
   selected: { type: Array as PropType<File[]>, required: true },
+  /** 成员上限（后端写入校验），徽标显示为 N/上限；创建页的拦截在 useCreateCollection 里 */
+  limit: { type: Number, default: COLLECTION_MEMBER_LIMIT },
 })
 
 const emit = defineEmits<{

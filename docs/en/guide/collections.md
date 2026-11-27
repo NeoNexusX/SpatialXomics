@@ -36,7 +36,7 @@ Click **View Collection** to open the detail page in a new tab. **Share** copies
 
 Click **Create Collection** on the list page to start the four-step flow:
 
-**Step 1 — Select datasets.** Pick members from completed public imzML datasets; search is supported, and selections persist across pages.
+**Step 1 — Select datasets.** Pick members from completed public imzML datasets (up to 300); search is supported, and selections persist across pages.
 
 ![image-20261008160500321](https://cdn.neonexus.top/docs/20261008160500400.jpg_view)
 
@@ -44,11 +44,11 @@ Click **Create Collection** on the list page to start the four-step flow:
 
 ![9a30c6537827d8fbe01e8d5e3d3bee19](https://cdn.neonexus.top/docs/20261008160602518.jpg_view)
 
-**Step 3 — Collection info.** Enter the collection **name** (required, max 80 characters) and **description** (optional, max 300 characters).
+**Step 3 — Collection info.** Enter the collection **name** (required, max 128 characters) and **description** (optional, max 512 characters).
 
 ![image-20261008160820237](https://cdn.neonexus.top/docs/20261008160820287.jpg_view)
 
-**Step 4 — Metadata.** Member type, collection type, and the sample/acquisition fields organism, organism part, sample stabilization, polarity, ionisation source, and analyzer are required. Sample and acquisition fields are auto-filled from the selected datasets; once you edit a field by hand it stops auto-updating, and **Reset to detected** restores the detected value. Citation fields (DOI, title, journal, access URL, publication time, citation, abstract) are all optional; a DOI must look like `10.1000/xyz123`, `doi:10.1000/xyz123`, or `https://doi.org/10.1000/xyz123`.
+**Step 4 — Metadata.** Member type, collection type, and the sample/acquisition fields organism, organism part, sample stabilization, polarity, ionisation source, and analyzer are required. Sample and acquisition fields are auto-filled from the selected datasets; once you edit a field by hand it stops auto-updating, and **Reset to detected** restores the detected value. Citation fields (DOI, title, journal, access URL, publication time, citation, abstract) are all optional; a DOI must look like `10.1000/xyz123`, `doi:10.1000/xyz123`, or `https://doi.org/10.1000/xyz123`. The title is limited to 500 characters, the journal name to 255, and the citation and abstract to 16,000 each.
 
 ![A](https://cdn.neonexus.top/docs/20261008160932254.jpg_view)
 
@@ -62,9 +62,9 @@ Click **Create Collection** to submit; you'll be redirected to the new collectio
 
 ## View & Edit a Collection
 
-The detail page shows the name, description, full academic metadata, and the member list.
+The detail page shows the name, description, full academic metadata, and the member list. Long citation and abstract text is collapsed to a few lines; click **Show full text** to read it all.
 
-Owners and admins can click **Edit** to modify the name, description, and metadata in place, then click **Save Changes** to submit (only changed fields are sent). The name is required and capped at 80 characters; the description at 300.
+Owners and admins can click **Edit** to modify the name, description, and metadata in place, then click **Save Changes** to submit (only changed fields are sent). The name is required and capped at 128 characters; the description at 512.
 
 ![image-20261008161053722](https://cdn.neonexus.top/docs/20261008161053801.jpg_view)
 
@@ -81,6 +81,7 @@ Owners and admins can manage members on the detail page:
 - **Remove Selected:** tick members and remove them; the toast reports how many were actually removed, and members already removed elsewhere are skipped with a separate note.
 
   ![e76d5da425ab50194ce54ed4ecee5868](https://cdn.neonexus.top/docs/20261008161347873.jpg_view)
+- **Sample and acquisition fields:** after members are added or removed, any values that should be added or dropped as a result are listed together with the field's current and suggested values; confirm to apply them or cancel to keep the current values. Other values are left untouched.
 - **Reorder:** in edit mode, drag members or use the move up/down buttons; if the order was changed elsewhere, the page shows a notice and refreshes to the latest order.
 - **Limit:** a collection holds at most 300 datasets.
 - **Download:** each member can be downloaded individually; see [Dataset Overview](./dataset-overview) for the rules.

@@ -1,5 +1,16 @@
 import { computed, shallowRef } from 'vue'
 
+/** 可选上限：数字，或每次求值的 getter（剩余名额随集合已有成员变化时用） */
+export type SelectionMax = number | (() => number)
+
+export interface OrderedSelectionOptions {
+  /**
+   * 可追加项数的上限（含初始项）。达到后 toggle 只允许取消已有项，不会追加。
+   * 未设置时不限制。每次 toggle 时求值，便于按实时剩余名额拦截（如「300 − 现有成员数」）。
+   */
+  max?: SelectionMax
+}
+
 /**
  * 有序多选状态机（纯逻辑，无外部依赖）。
  *
@@ -13,7 +24,10 @@ import { computed, shallowRef } from 'vue'
  * 整体替换（而非原地 splice）：既绕开泛型 ref 的 UnwrapRef 摊平问题，也让每次
  * 变更语义清晰。
  */
-export function useOrderedSelection<T extends { publicId: string }>(initial: T[] = []) {
+export function useOrderedSelection<T extends { publicId: string }>(
+  initial: T[] = [],
+  options: OrderedSelectionOptions = {},
+) {
   const selected = shallowRef<T[]>([...initial])
   const selectedIds = computed(() => new Set(selected.value.map((d) => d.publicId)))
 
@@ -21,12 +35,26 @@ export function useOrderedSelection<T extends { publicId: string }>(initial: T[]
     return selectedIds.value.has(publicId)
   }
 
-  /** 选中（追加到尾部，选择序 = 显示序）；已选中则移除。 */
-  function toggle(item: T): void {
+  /** 当前上限；未设置时为 Infinity（每次调用都求值，getter 形式能跟随实时名额） */
+  function limit(): number {
+    const raw = typeof options.max === 'function' ? options.max() : options.max
+    return raw ?? Number.POSITIVE_INFINITY
+  }
+
+  /**
+   * 选中（追加到尾部，选择序 = 显示序）；已选中则移除。
+   * 返回是否发生了变更：达到上限时追加被拒绝（false），取消选中始终允许。
+   */
+  function toggle(item: T): boolean {
     const arr = selected.value
     const idx = arr.findIndex((d) => d.publicId === item.publicId)
-    selected.value =
-      idx >= 0 ? arr.filter((_, i) => i !== idx) : [...arr, item]
+    if (idx >= 0) {
+      selected.value = arr.filter((_, i) => i !== idx)
+      return true
+    }
+    if (arr.length >= limit()) return false
+    selected.value = [...arr, item]
+    return true
   }
 
   /** splice 语义：把 from 的项移到 to 位置。越界或相同索引时 no-op。 */

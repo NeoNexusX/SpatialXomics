@@ -5,6 +5,18 @@ import CollectionMemberList from '../CollectionMemberList.vue'
 import type { CollectionMember } from '../../types/collection'
 import { i18n, loadCoreMessages, loadFeatureMessages } from '@/i18n'
 
+// 成员行没带的样本 / 采集元数据一律归一成 null；成员列表只用 publicId / filename / imagePath
+const NO_METADATA = {
+  organism: null,
+  organismPart: null,
+  sampleStabilization: null,
+  sampleGrowthConditions: null,
+  tissueModification: null,
+  polarity: null,
+  ionSource: null,
+  analyzer: null,
+}
+
 const members = (n: number): CollectionMember[] =>
   Array.from({ length: n }, (_, i) => ({
     publicId: `pub-${i}`,
@@ -14,6 +26,7 @@ const members = (n: number): CollectionMember[] =>
     status: 'completed',
     isPublic: true,
     experimentType: 'MALDI',
+    ...NO_METADATA,
   }))
 
 const mountList = (props: Record<string, unknown> = {}) =>

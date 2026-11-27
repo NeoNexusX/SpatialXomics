@@ -158,6 +158,7 @@ import { useDragReorder } from '@/features/collections/composables/useDragReorde
 import { formatBytes } from '@/shared/utils/format'
 import { t } from '@/i18n'
 import type { CollectionMember } from '../types/collection'
+import { COLLECTION_MEMBER_LIMIT } from '../constants/collectionLimits'
 
 const props = defineProps({
   members: { type: Array as PropType<CollectionMember[]>, required: true },
@@ -168,9 +169,9 @@ const props = defineProps({
   adding: { type: Boolean, default: false },
   removing: { type: Boolean, default: false },
   reordering: { type: Boolean, default: false },
-  /** 后端成员上限（超出 409 collection member limit exceeded）。
-   *  必须是字面量：defineProps 会被提升到模块作用域，不能引用本地变量。 */
-  limit: { type: Number, default: 300 },
+  /** 后端成员上限（超出 409 collection member limit exceeded），与 constants/collectionLimits
+   *  同源。这里是显示用的徽标；拦截在「添加成员」弹窗里按剩余名额做。 */
+  limit: { type: Number, default: COLLECTION_MEMBER_LIMIT },
 })
 
 const emit = defineEmits<{

@@ -45,7 +45,7 @@
 
 在列表页点击`Create Collection`进入创建流程，共四步：
 
-**第 1 步：选择数据集。** 从已完成处理的公开 imzML 数据集中勾选成员，支持搜索定位；已勾选的数据集在翻页后保持选择状态。
+**第 1 步：选择数据集。** 从已完成处理的公开 imzML 数据集中勾选成员（最多 300 个），支持搜索定位；已勾选的数据集在翻页后保持选择状态。
 
 ![image-20261008160500321](https://cdn.neonexus.top/docs/20261008160500400.jpg_view)
 
@@ -53,11 +53,11 @@
 
 ![9a30c6537827d8fbe01e8d5e3d3bee19](https://cdn.neonexus.top/docs/20261008160602518.jpg_view)
 
-**第 3 步：集合信息。** 填写集合`Name`（必填，最多 80 个字符）与`Description`（选填，最多 300 个字符）。
+**第 3 步：集合信息。** 填写集合`Name`（必填，最多 128 个字符）与`Description`（选填，最多 512 个字符）。
 
 ![image-20261008160820237](https://cdn.neonexus.top/docs/20261008160820287.jpg_view)
 
-**第 4 步：元数据。** `Member Type`、`Collection Type`以及`Sample`/`Acquisition`组中的`Organism`、`Organism Part`、`Sample Stabilization`、`Polarity`、`Ionisation Source`、`Analyzer`为必填；`Sample`与`Acquisition`相关字段会根据所选数据集自动填写，手动修改某个字段后，该字段不再随数据集自动更新，需要时可点击`Reset to detected`还原。`Citation`信息（`DOI`、`Title`、`Journal`、`Access`、`Published`、`Citation`、`Abstract`）均为选填，其中 DOI 需符合 `10.1000/xyz123`、`doi:10.1000/xyz123` 或 `https://doi.org/10.1000/xyz123` 格式。
+**第 4 步：元数据。** `Member Type`、`Collection Type`以及`Sample`/`Acquisition`组中的`Organism`、`Organism Part`、`Sample Stabilization`、`Polarity`、`Ionisation Source`、`Analyzer`为必填；`Sample`与`Acquisition`相关字段会根据所选数据集自动填写，手动修改某个字段后，该字段不再随数据集自动更新，需要时可点击`Reset to detected`还原。`Citation`信息（`DOI`、`Title`、`Journal`、`Access`、`Published`、`Citation`、`Abstract`）均为选填，其中 DOI 需符合 `10.1000/xyz123`、`doi:10.1000/xyz123` 或 `https://doi.org/10.1000/xyz123` 格式；`Title`最多 500 个字符，`Journal`最多 255 个字符，`Citation`与`Abstract`最多 16000 个字符。
 
 ![A](https://cdn.neonexus.top/docs/20261008160932254.jpg_view)
 
@@ -71,9 +71,9 @@
 
 ### 5. 查看与编辑集合详情
 
-集合详情页展示名称、简介、完整学术元数据与成员列表。
+集合详情页展示名称、简介、完整学术元数据与成员列表。较长的`Citation`与`Abstract`默认只显示前几行，点击`展开全文`查看全部。
 
-集合所有者与管理员可点击`Edit`进入编辑状态，原地修改名称、简介与元数据，点击`Save Changes`后提交（仅提交发生变化的字段）；`Name`必填且不超过 80 个字符，`Description`不超过 300 个字符，超出时页面会提示。
+集合所有者与管理员可点击`Edit`进入编辑状态，原地修改名称、简介与元数据，点击`Save Changes`后提交（仅提交发生变化的字段）；`Name`必填且不超过 128 个字符，`Description`不超过 512 个字符，超出时页面会提示。
 
 ![image-20261008161053722](https://cdn.neonexus.top/docs/20261008161053801.jpg_view)
 
@@ -90,6 +90,8 @@
 - **移除成员**：勾选成员后点击`Remove Selected`，完成后提示实际移除数量；已被他人在别处移除的成员会自动跳过并单独提示。
 
   ![e76d5da425ab50194ce54ed4ecee5868](https://cdn.neonexus.top/docs/20261008161347873.jpg_view)
+
+- **样本与采集字段**：成员变化后，若物种、极性等取值因此需要增减，页面会列出受影响的字段及其当前值和建议值；确认后更新，取消则保持原值。其余取值不会被改动。
 
 - **调整顺序**：在编辑状态下，可拖动成员或使用`Move up`/`Move down`调整顺序；若他人在别处修改过顺序，页面会提示并自动刷新为最新顺序。
 

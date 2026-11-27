@@ -16,7 +16,7 @@
         <input
           :value="name"
           type="text"
-          maxlength="80"
+          :maxlength="nameMaxLength"
           class="input input-bordered w-full kawaru-text-95"
 :placeholder="$t('collections.form.namePlaceholder')"
           @input="$emit('update:name', ($event.target as HTMLInputElement).value)"
@@ -32,13 +32,13 @@
         <textarea
           :value="description"
           rows="3"
-          maxlength="300"
+          :maxlength="descriptionMaxLength"
           class="textarea textarea-bordered w-full kawaru-text-95 resize-none"
 :placeholder="$t('collections.form.descriptionPlaceholder')"
           @input="$emit('update:description', ($event.target as HTMLTextAreaElement).value)"
         ></textarea>
         <span class="text-right kawaru-text-75 text-base-content/50">
-          {{ description.length }}/300
+          {{ description.length }}/{{ descriptionMaxLength }}
         </span>
       </label>
     </div>
@@ -46,10 +46,16 @@
 </template>
 
 <script setup lang="ts">
+import { metadataMaxLength } from '../constants/metadataFields'
+
 defineProps<{
   name: string
   description: string
 }>()
+
+/** 名称 / 简介的上限与编辑表单、保存前校验同源（字段定义表的 maxLength，即后端写入校验的上限） */
+const nameMaxLength = metadataMaxLength('name')
+const descriptionMaxLength = metadataMaxLength('description')
 
 defineEmits<{
   (e: 'update:name', value: string): void

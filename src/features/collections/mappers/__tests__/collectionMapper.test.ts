@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { mapCollectionDetail, mapCollectionSummary } from '../collectionMapper'
+import { deriveCollectionMetadata } from '../../utils/deriveCollectionMetadata'
+
+/** 成员行没带的样本 / 采集元数据一律归一成 null */
+const NO_METADATA = {
+  organism: null,
+  organismPart: null,
+  sampleStabilization: null,
+  sampleGrowthConditions: null,
+  tissueModification: null,
+  polarity: null,
+  ionSource: null,
+  analyzer: null,
+}
 
 // 真实后端（POST /collections/list）把元数据平铺在顶层，没有嵌套 metadata 对象
 // （pixel_size_* / resolving_power / mz 已随集合级数值字段下线；数字 id 已随
@@ -132,6 +145,7 @@ describe('mapCollectionDetail', () => {
       status: 'completed',
       isPublic: true,
       experimentType: 'imzML',
+      ...NO_METADATA,
     })
     expect(d.members[1]).toEqual({
       publicId: 'zX9cV8bN6mL4kJ2h',
@@ -141,6 +155,46 @@ describe('mapCollectionDetail', () => {
       status: '',
       isPublic: false,
       experimentType: null,
+      ...NO_METADATA,
+    })
+  })
+
+  // 成员行就是完整的 FilePublic：样本 / 采集元数据要带出来，增删成员后才能据此比对汇总字段
+  it('carries member sample / acquisition metadata for deriving summary fields', () => {
+    const d = mapCollectionDetail({
+      ...detailRaw,
+      members: [
+        {
+          public_id: 'qW3rT5yU7iO9pA1s',
+          organism: 'Human (Homo sapiens)',
+          organism_part: 'Brain',
+          polarity: 'Positive',
+          ionisation_source: 'MALDI',
+          analyzer: 'FTICR',
+          // 后端对未填写的字符串字段给的是空串
+          sample_stabilization: '',
+        },
+      ],
+    })
+
+    expect(d.members[0]).toMatchObject({
+      organism: 'Human (Homo sapiens)',
+      organismPart: 'Brain',
+      polarity: 'Positive',
+      ionSource: 'MALDI',
+      analyzer: 'FTICR',
+      sampleStabilization: null,
+      sampleGrowthConditions: null,
+      tissueModification: null,
+    })
+    // 与创建页的数据集共用同一套并集推导
+    expect(deriveCollectionMetadata(d.members)).toMatchObject({
+      organism: ['Human (Homo sapiens)'],
+      organism_part: ['Brain'],
+      polarity: ['Positive'],
+      ionisation_source: ['MALDI'],
+      analyzer: ['FTICR'],
+      sample_stabilization: [],
     })
   })
 

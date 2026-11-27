@@ -14,6 +14,11 @@ import type {
  * 与 types/collection.ts 的混合策略一致。
  */
 
+/** 文本元数据归一：空串 / 非字符串一律成 null（推导汇总字段时空值会被跳过） */
+function text(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
 function mapFilePublicToMember(raw: FilePublicResponse): CollectionMember {
   return {
     publicId: toFilePublicId(raw.public_id),
@@ -23,6 +28,14 @@ function mapFilePublicToMember(raw: FilePublicResponse): CollectionMember {
     status: raw.status || '',
     isPublic: !!raw.is_public,
     experimentType: raw.experiment_type ?? null,
+    organism: text(raw.organism),
+    organismPart: text(raw.organism_part),
+    sampleStabilization: text(raw.sample_stabilization),
+    sampleGrowthConditions: text(raw.sample_growth_conditions),
+    tissueModification: text(raw.tissue_modification),
+    polarity: text(raw.polarity),
+    ionSource: text(raw.ionisation_source),
+    analyzer: text(raw.analyzer),
   }
 }
 

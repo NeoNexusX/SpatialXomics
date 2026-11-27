@@ -59,6 +59,17 @@ export interface CollectionMember {
   status: string
   isPublic: boolean
   experimentType: string | null
+  // ---- 样本 / 采集元数据：集合级汇总字段（organism 等 8 个）的推导来源 ----
+  // 后端成员行就是完整的 FilePublic，本来就带着这些取值。字段名与数据集的 File 保持一致，
+  // 两边共用同一套推导逻辑（utils/deriveCollectionMetadata）。null = 文件上未填写
+  organism: string | null
+  organismPart: string | null
+  sampleStabilization: string | null
+  sampleGrowthConditions: string | null
+  tissueModification: string | null
+  polarity: string | null
+  ionSource: string | null
+  analyzer: string | null
 }
 
 /**

@@ -112,7 +112,15 @@
     },
     "panel": {
       "title": "集合元数据",
-      "fieldsCount": "已填 {filled}/{total} 项"
+      "fieldsCount": "已填 {filled}/{total} 项",
+      "expand": "展开全文",
+      "collapse": "收起"
+    },
+    "summarySync": {
+      "title": "更新样本与采集字段？",
+      "message": "成员已变化，以下字段需要跟着调整。确认后按下方所示更新，其余取值保持不变。",
+      "confirm": "更新这些字段",
+      "empty": "未填写"
     },
     "members": {
       "title": "成员",
@@ -144,7 +152,8 @@
       "target": "数据集合",
       "addMembers": "添加成员",
       "addButton": "添加数据集 | 添加 {count} 个数据集 | 添加 {count} 个数据集",
-      "shareLink": "分享链接：{url}"
+      "shareLink": "分享链接：{url}",
+      "memberLimitHint": "该集合已有 {max} 个数据集，已达成员上限，无法再添加。"
     },
     "public": {
       "notFoundDesc": "该集合不存在，或已不再公开。",
@@ -155,12 +164,15 @@
       "removedCount": "已移除 {count} 个",
       "skippedCount": "{count} 个已不在集合中",
       "separator": " · ",
-      "reorderConflict": "成员已在别处被修改，已刷新为最新顺序。"
+      "reorderConflict": "成员已在别处被修改，已刷新为最新顺序。",
+      "summaryUpdated": "已按当前成员更新样本与采集字段。"
     },
     "validation": {
       "nameRequired": "请填写名称。",
-      "nameTooLong": "名称最多 80 个字符。",
-      "descriptionTooLong": "简介最多 300 个字符。"
+      "nameTooLong": "名称最多 {max} 个字符。",
+      "descriptionTooLong": "简介最多 {max} 个字符。",
+      "requestInvalid": "提交的内容未通过校验，请检查后重试。",
+      "memberLimit": "每个集合最多包含 {max} 个数据集。"
     },
     "vocab": {
       "memberType": {

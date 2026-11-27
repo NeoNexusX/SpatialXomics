@@ -50,6 +50,14 @@
                 {{ collectionVocabLabel(String(item)) }}
               </span>
             </dd>
+            <!-- 引用 / 摘要可长达 16000 字符：默认折叠为几行，被截断时可展开全文 -->
+            <dd
+              v-else-if="field.collapsible"
+              class="kawaru-text-95 leading-relaxed text-base-content/80"
+            >
+              <CollapsibleText :value="String(metadata[field.key] ?? '')" />
+            </dd>
+            <!-- 其余长文本（简介，上限 512）整段展示，保留换行 -->
             <dd
               v-else-if="field.type === 'long'"
               class="kawaru-text-95 leading-relaxed text-base-content/80 whitespace-pre-line"
@@ -73,6 +81,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { PropType } from 'vue'
+import CollapsibleText from './CollapsibleText.vue'
 import CollectionMetadataForm from './CollectionMetadataForm.vue'
 import { collectionVocabLabel } from '../constants/collectionVocab'
 import { formatDate } from '@/shared/utils/format'
