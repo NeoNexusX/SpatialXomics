@@ -29,8 +29,16 @@ features:
     link: /guide/dataset-overview
     linkText: Read Guide
   - title: Data Visualization
-    details: View ion images, TIC plots, and spectra; use UMAP/KMeans, ROIs, region comparison, and annotation matching for spatial analysis.
+    details: View ion intensity images, pixel spectra, and region comparison, and use the Toolbox and annotation panel for clustering, ROIs, and annotation matching.
     link: /guide/data-visualization
+    linkText: Read Guide
+  - title: Data Annotation
+    details: Import annotation databases, set tolerance and score weights, and review, filter, and export results.
+    link: /guide/data-annotation
+    linkText: Read Guide
+  - title: Visualization Toolbox
+    details: Use the Toolbox for intensity settings, multi-ion overlay, clustering, ROI drawing, and region-mask import and export.
+    link: /guide/visualization-toolbox
     linkText: Read Guide
   - title: SXO-Harness Agent
     details: Chat about the current dataset, read ion images, statistics, annotations, and clustering, and look up compounds, pathways, literature, and web sources.

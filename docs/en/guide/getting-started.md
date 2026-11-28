@@ -107,7 +107,9 @@ Pick a topic that matches your workflow:
 | [Account Management](./account-management) | Registration, login, password recovery, profile editing, quotas |
 | [Finding Datasets](./finding-datasets) | Search, filter, and sort public and personal datasets |
 | [Dataset Overview](./dataset-overview) | Metadata fields, downloading, sharing links, making datasets public |
-| [Data Visualization](./data-visualization) | Ion images, TIC plots, spectra, UMAP/KMeans, ROIs, region comparison, annotations |
+| [Data Visualization](./data-visualization) | Ion intensity images, pixel spectra, region comparison |
+| [Data Annotation](./data-annotation) | Annotation databases, conditions, scoring and FDR, filtering and export |
+| [Visualization Toolbox](./visualization-toolbox) | Toolbox, intensity, multi-ion overlay, clustering, ROIs, region masks |
 | [SXO-Harness Agent](./sxo-harness) | Conversational dataset Q&A, connection and model setup, tools and skills, conversation management |
 | [Upload Data](./upload-data) | imzML/ibd upload flow, metadata form, deduplication, resume |
 | [Dataset Analysis](./dataset-analysis) | Choosing compatible preprocessing methods, parameters, submission |

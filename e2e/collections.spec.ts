@@ -30,8 +30,11 @@ async function pickEligibleDataset(scope: Page | Locator, index = 0): Promise<st
   if ((await rows.count()) <= index) return null
 
   const row = rows.nth(index)
-  const label = (await row.locator('input[type="checkbox"]').getAttribute('aria-label')) || ''
-  await row.click()
+  const checkbox = row.locator('input[type="checkbox"]')
+  const label = (await checkbox.getAttribute('aria-label')) || ''
+  // 直接勾选复选框而不是点整行：Firefox 上点带过渡样式的 <li> 会卡在
+  // 点击动作里；复选框自身有 change 处理，语义也更明确。
+  await checkbox.check()
   return label.replace(/^Select /, '')
 }
 
@@ -93,7 +96,11 @@ test.describe('Collection full lifecycle', () => {
 
     // ---- 创建：选 3 个成员 + Step 4 必填元数据 ----
     await page.goto('/collections/new')
-    await expect(page.locator('h2:has-text("Step 1: Choose Datasets")')).toBeVisible()
+    // 冷启动 dev server 时首屏可能超过默认 5s（config + 路由 chunk 都要拉），
+    // 这不是页面错误，给首屏渲染留足时间。
+    await expect(page.locator('h2:has-text("Step 1: Choose Datasets")')).toBeVisible({
+      timeout: 30_000,
+    })
 
     const rows = eligibleRows(page)
     await expect(rows.first().or(page.getByText('No public datasets found.'))).toBeVisible({
@@ -118,8 +125,10 @@ test.describe('Collection full lifecycle', () => {
 
     // 跳转 overview（public_id 进路径，与列表页新标签页打开的 URL 同构）
     await expect(page).toHaveURL(/\/collections\/overview\/[A-Za-z0-9]+$/, { timeout: 15_000 })
-    await expect(page.locator('.toast')).toContainText('Created', { timeout: 10_000 })
-    await expect(page.locator('h1')).toContainText(name)
+    // 创建成功的 toast 只有 3s，overview 首次加载 + 路由跳转可能超过这个时间。
+    // URL 只会在 POST 成功后才变化，配合下面的 h1 已能证明创建成功。
+    await expect(page.locator('.skeleton')).toHaveCount(0, { timeout: 30_000 })
+    await expect(page.locator('h1')).toContainText(name, { timeout: 15_000 })
     await expect(page.getByRole('heading', { name: 'Members' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Collection Metadata' })).toBeVisible()
 
@@ -140,7 +149,9 @@ test.describe('Collection full lifecycle', () => {
 
     // ---- 编辑：页内原地改元数据（改名 + 简介 + 学术字段 Title）----
     // toast 是保存真正落到后端的信号（头部是草稿联动，不能单独作数）
-    await page.getByRole('button', { name: 'Edit' }).click()
+    // Edit 点击后按钮立即被 Cancel / Save 替换；Firefox 下 Playwright 的真实鼠标
+    // 序列会卡在「点击过程中目标被卸载」的按钮上，直接派发 click 更稳。
+    await page.getByRole('button', { name: 'Edit' }).dispatchEvent('click')
     const renamed = `${name} (edited)`
     const newTitle = 'E2E Title Before Delete'
     await page.locator('input[maxlength="128"]').fill(renamed)
@@ -169,7 +180,13 @@ test.describe('Collection full lifecycle', () => {
 
     // 添加：弹窗选择器自动排除已在集合中的成员（行禁选）
     await page.getByRole('button', { name: 'Add Members' }).click()
-    const modal = page.locator('dialog.modal-open .modal-box')
+    // 只锁定「Add Members」弹窗。添加成功后，成员变化可能立刻弹出「更新样本 / 采集字段」
+    // 确认框；如果这里用任意 dialog.modal-open，确认框会接替原弹窗，后面的
+    // toBeHidden 就永远等不到。
+    const modal = page
+      .locator('dialog.modal-open')
+      .filter({ hasText: 'Add Members' })
+      .locator('.modal-box')
     await expect(modal).toBeVisible()
     const added = await pickEligibleDataset(modal, 0)
     expect(added, '加成员弹窗里应有未入集的公开 imzML 数据集').toBeTruthy()
@@ -177,24 +194,32 @@ test.describe('Collection full lifecycle', () => {
     await expect(page.locator('.toast')).toContainText('Added', { timeout: 15_000 })
     await expect(modal).toBeHidden()
     // 成员变化若牵动样本 / 采集字段（物种、极性等），会弹出「更新这些字段」的确认。
-    // 本用例只验证成员流程，出现就选取消、保持原值。确认框与添加弹窗在同一次渲染里切换，
-    // 所以上面断言添加弹窗隐藏之后同步判断即可
-    const keepCurrent = page
-      .locator('dialog.modal-open')
-      .getByRole('button', { name: 'Cancel', exact: true })
-    if (await keepCurrent.isVisible()) await keepCurrent.click()
+    // 本用例只验证成员流程，出现就选取消、保持原值。确认框由新增成员后的详情推导
+    // 触发，可能比 Add 弹窗晚一帧出现，所以显式等一小段时间而不是 isVisible() 立即判断。
+    const summaryDialog = page
+      .locator('dialog')
+      .filter({ hasText: 'Update sample and acquisition fields?' })
+    await summaryDialog.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {})
+    if (await summaryDialog.isVisible()) {
+      await summaryDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    }
+    await expect(summaryDialog).toBeHidden()
     await expect
       .poll(async () => (await memberNames()).length, { timeout: 15_000 })
       .toBe(4)
 
     // 调序：调序控件（手柄拖拽 + 上移/下移）仅编辑态出现，先进 Edit 再操作
-    await page.getByRole('button', { name: 'Edit' }).click()
+    await page.getByRole('button', { name: 'Edit' }).dispatchEvent('click')
     const before = await memberNames()
     await page.getByRole('button', { name: `Move ${before[0]!} down`, exact: true }).click()
     await expect
       .poll(memberNames, { timeout: 15_000 })
       .toEqual([before[1]!, before[0]!, before[2]!, before[3]!])
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await page
+      .getByRole('button', { name: 'Save Changes' })
+      .locator('..')
+      .getByRole('button', { name: 'Cancel', exact: true })
+      .dispatchEvent('click')
 
     // ---- 移除成员：整块跳过 ----
     // 后端 DELETE /collections/{public_id}/members 自 public_id 迁移起 500

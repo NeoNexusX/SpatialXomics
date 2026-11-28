@@ -29,8 +29,16 @@ features:
     link: /zh/guide/dataset-overview
     linkText: 查看指南
   - title: 数据可视化
-    details: 查看离子图、TIC 图与质谱，使用 UMAP/KMeans、ROI、区域比较与注释匹配进行空间分析。
+    details: 查看离子图、像素谱与区域比较，并在工具箱和注释面板中完成聚类、ROI 与注释匹配。
     link: /zh/guide/data-visualization
+    linkText: 查看指南
+  - title: 数据注释
+    details: 导入注释库，设置容差与评分权重，查看、筛选并导出注释结果。
+    link: /zh/guide/data-annotation
+    linkText: 查看指南
+  - title: 可视化工具箱
+    details: 使用 Toolbox 调整强度，进行多离子叠加、聚类、ROI 绘制与区域掩膜导入导出。
+    link: /zh/guide/visualization-toolbox
     linkText: 查看指南
   - title: SXO-Harness 助手
     details: 围绕当前数据集对话，读取离子图、统计、注释与聚类，并检索化合物、通路、文献和网络来源。

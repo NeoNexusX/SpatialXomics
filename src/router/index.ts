@@ -150,6 +150,18 @@ const routes = [
     // 新建分析要选源数据集，会渲染 datasets 的文案
     component: view(() => import('../views/workspace/NewAnalysis.vue'), 'workspace', 'datasets'),
     meta: { requiresAuth: true },
+    // 配额检查放在路由入口：工作台按钮、导航栏链接和直接输入 URL 都走这里。
+    // 动态导入避免 router 与 httpClient 在模块初始化阶段形成循环依赖。
+    beforeEnter: async (to: RouteLocationNormalized) => {
+      const { inspectAnalysisQuota } = await import(
+        '@/features/workspace/dashboard/composables/useAnalysisQuota'
+      )
+      const result = await inspectAnalysisQuota()
+      if (result.allowed) return true
+      // 查询失败已经弹过 toast，不把「查不到数量」误报成「达到上限」。
+      if (result.failed) return { name: 'Workspace' }
+      return { name: 'Workspace', query: { ...to.query, analysisLimit: '1' } }
+    },
   },
   {
     // 可视化工作台：分析结果的离子图/光谱/标注可视化页。

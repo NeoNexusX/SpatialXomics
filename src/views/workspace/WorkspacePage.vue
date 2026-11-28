@@ -136,8 +136,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import ResultTable from '@/features/workspace/dashboard/components/ResultTable.vue'
 import SummaryCard from '@/features/workspace/dashboard/components/SummaryCard.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -148,6 +148,7 @@ import { useAnalysisQuota } from '@/features/workspace/dashboard/composables/use
 import { useConfirmDelete } from '@/shared/composables/useConfirmDelete'
 
 const router = useRouter()
+const route = useRoute()
 
 const {
   recentResults,
@@ -197,16 +198,25 @@ function onDeleteClick(id: string) {
 }
 
 // ---- 新建分析前的配额检查 ----
-// 非直转任务达到上限时留在工作台并提示清理，放行才进入创建页。
-// 数量在点击时实时查询，删除任务后再次点击立即生效。
-const { checking, limit, check } = useAnalysisQuota()
+// 检查已经前移到 /workspace/new 的路由守卫，工作台按钮和导航栏入口共用。
+// 守卫拦截时会带 analysisLimit=1 回到工作台，这里只负责打开同一个提示框。
+const { checking, limit } = useAnalysisQuota()
 const isLimitDialogOpen = ref(false)
 
-async function onNewTask() {
-  if (await check()) {
-    router.push({ name: 'NewAnalysis' })
-  } else {
-    isLimitDialogOpen.value = true
-  }
+function onNewTask() {
+  void router.push({ name: 'NewAnalysis' })
 }
+
+watch(
+  () => route.query.analysisLimit,
+  (flagged) => {
+    if (!flagged) return
+    isLimitDialogOpen.value = true
+    const query = { ...route.query }
+    delete query.analysisLimit
+    // 清掉标记，刷新或返回时不再重复弹窗。
+    void router.replace({ query })
+  },
+  { immediate: true },
+)
 </script>
