@@ -330,13 +330,22 @@ test.describe.serial('Peak Alignment journey', { tag: '@chromium-only' }, () => 
     const completedRow = await completedProcessRow(page)
     await completedRow.getByRole('button', { name: 'View' }).click()
     await expect(page).toHaveURL(/\/vizworkbench/)
+    // 只等「Loading ion image」消失不够：首帧还没挂出加载文案时它会立即通过。
+    // 叠加通道复用 zarr store，必须等图像真正加载完成、选中 m/z 已渲染，
+    // 否则 Add m/z 可能仍处于 disabled（ready=false）而卡到动作超时。
+    await expect(page.getByTestId('ion-image-section')).toHaveAttribute('data-loading', 'false', {
+      timeout: 60_000,
+    })
+    await expect(page.getByTestId('selected-mz')).toBeVisible({ timeout: 60_000 })
     await expect(page.getByText(/^Loading ion image/)).not.toBeVisible({ timeout: 30_000 })
     await page.getByRole('button', { name: 'Toolbox', exact: true }).click()
 
     const overlayToggle = page.getByRole('button', { name: 'Multi-ion overlay', exact: true })
     const overlayHelp = page.getByRole('button', { name: 'About Multi-ion overlay', exact: true })
     await overlayHelp.click()
-    const helpText = page.getByRole('dialog', { name: 'Multi-ion overlay', exact: true })
+    // Popover 内容沿用了触发按钮的可访问名称（SectionHelp 的 aria-label 是
+    // "About {label}"），不是标题文字本身。
+    const helpText = page.getByRole('dialog', { name: 'About Multi-ion overlay', exact: true })
     await expect(helpText).toContainText('Each channel is normalized on its own range')
     await expect(overlayToggle).toHaveAttribute('aria-expanded', 'false')
     await page.keyboard.press('Escape')
@@ -360,7 +369,14 @@ test.describe.serial('Peak Alignment journey', { tag: '@chromium-only' }, () => 
 
     // 打开 Overlay mode，把当前选中的 m/z 加为第一个通道
     await page.locator('label:has-text("Overlay mode")').locator('input').check()
-    await page.getByRole('button', { name: /^Add m\/z / }).click()
+    const addChannel = page.getByRole('button', { name: /^Add m\/z / })
+    await expect(addChannel).toBeEnabled({ timeout: 30_000 })
+    await addChannel.click()
+    // 先确认通道真的进了列表，再等矩阵加载后的置灰状态；否则失败时只会看到
+    // Gamma 仍是 enabled，无法区分「没加上」和「加载没完成」。
+    await expect(page.getByRole('button', { name: /^Remove channel m\/z / })).toBeVisible({
+      timeout: 30_000,
+    })
 
     // 通道矩阵加载完成后 overlayActive 生效 → Gamma / Display Range 置灰
     // （矩阵是按 m/z 拉的离子图数据，给足等待）

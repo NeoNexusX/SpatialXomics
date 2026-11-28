@@ -125,7 +125,9 @@ SpatialXomics 将常用的 MSI 数据管理与分析功能整合到同一套 Web
 | [账户管理](./account-management) | 注册、登录、找回密码、个人资料与权限管理 |
 | [查找数据集](./finding-datasets) | 搜索、筛选、排序公开和私有数据集 |
 | [数据集总览](./dataset-overview) | 元数据字段、下载原始文件、生成分享链接 |
-| [数据可视化](./data-visualization) | 离子图、TIC 图、质谱、UMAP/KMeans、ROI、区域比较、注释匹配 |
+| [数据可视化](./data-visualization) | 离子强度图、像素谱图、区域比较 |
+| [数据注释](./data-annotation) | 注释库、注释条件、打分与 FDR、结果筛选与导出 |
+| [可视化工具箱](./visualization-toolbox) | Toolbox、强度设置、多离子叠加、聚类、ROI、区域掩膜 |
 | [SXO-Harness 助手](./sxo-harness) | 对话式数据集问答、连接与模型配置、可用工具与技能、对话管理 |
 | [上传数据集](./upload-data) | imzML/ibd 上传流程、元数据表单、查重、断点续传 |
 | [数据集分析](./dataset-analysis) | 选择兼容的预处理方法、参数配置、提交任务 |
